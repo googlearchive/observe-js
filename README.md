@@ -12,8 +12,8 @@ ChangeSummary uses Object.observe() under the covers and exposes a high-level AP
     var observer = new ChangeSummary(function(summaries) {
       summaries.forEach(function(summary) {
         summary.object; // The object to which this summary describes changes which occurred.
-        summary.newProperties; // An Array of property names which new since creation or the last callback.
-        summary.deletedProperties; // An Array of property names which have been deleted since creation or the last callback.
+        summary.newProperties; // An Array of property names which are new since creation, or the previous callback.
+        summary.deletedProperties; // An Array of property names which have been deleted since creation, or the previous callback.
         summary.arraySplices; // An Array of objects, each of which describes a "splice", if Array.isArray(summary.object).
         summary.pathValueChanged; // An Array of path strings, whose value has changed.
         summary.getOldPathValue(path); // A function which returns previous value of the changed path.
@@ -38,21 +38,46 @@ ChangeSummary uses Object.observe() under the covers and exposes a high-level AP
     observer.observePathValue(objGraph, 'foo.bar'); // Will report when the value at objGraph.foo.bar changes. If the value is ever
                                                     // unreachable, the value is considered to be undefined.
 
-Object.observe()
-----------------
-The proposed Object.observe() mechanism allows observation of mutations to JavaScript objects. It offers the following abilities:
+Array "splice" changes
+----------------------
+If you ask the ChangeSummary to observePropertySet on an Array object (Array.isArray(obj) === true), it will report changes to index properties (e.g. arr[1], arr[2], etc... as opposed to arr['foo'] or arr.bar) as series of "splice" changes which are contained in the summary.arraySplices array.
 
-* Find out when the value of a *data* property changes (changes accessor properties, e.g. getters/setters are not detected -- more on this below).
-* Find out when an object has new properties added and existing properties deleted.
-* Find out when existing properties are reconfigured.
+The reason for this is that, although JavaScript treats Arrays like a bag of properties, they are used very differently to regular objects. In particular, they represent an ordered sequence of elements. Consider the following:
 
-The basic pattern of interaction is:
+    var arr = [0, 1, 2, 3];
+    arr.unshift(-1); // arr === [-1, 0, 1, 2, 3];
 
-* Register an observer, which is just a function with Object.observe(myObj, callback). Sometime later, your callback will be invoked with an Array of change records, representing the in-order sequence of changes which occurred to myObj.
+In order to accomplish the unshift() operation, the JavaScript runtime is actually going to change the value of properties '0', '1', '2', '3' and then add a new property ('4') on arr. If you look at the output of Object.observe(arr) for the above operation, you will see this (in addition to the length property being changed). This isn't so useful. What's really wanted is to understand that a single element was inserted at position 0. That's what the splices tell you.
 
-"Sometime later?"
------------------
-Object.observe() in conceptually similar to DOM Mutation Observers (https://developer.mozilla.org/en-US/docs/DOM/DOM_Mutation_Observers), and delivery of change records happens with similar timing. The easiest way to think about this is that your change records will be delivered immediately after the current script invocation exits. In the browser context, this will be most often be after each event handler fires. Delivery continues until there are no more observers with pending change records.
+Any change to an array can be represented by a series of splices (usually just one). A splice is just what it sounds like: "at index i, a series elements were removed and a series of elements were inserted." A splice object looks like this
+
+    summary.arraySplices.forEach(function(splice) {
+      splice.index; // the position in the array the change occurred
+      splice.removed; // an array of elements which were removed from the array
+      splice.addedCount; // the number of elements which were inserted.
+    });
+
+To make this concrete, the following code transforms a copy of the old state of an array into it's current state, given the set of splices which were reported:
+
+    var arr = createRandomArray();
+    var copy = arr.slice();
+
+    var observer = new ChangeSummary(function(summaries) {
+      var arraySummary = summaries[0];
+      var splices = summaries[0].arraySplices;
+      splices.forEach(function(splice) {
+        var spliceArgs = [splice.index, splice.removed.length];
+        var addIndex = splice.index;
+        while (addIndex < splice.index + splice.addCount) {
+          spliceArgs.push(arr[addIndex]);
+          addIndex++;
+        }
+
+        Array.prototype.splice.apply(copy, spliceArgs);
+      });
+    });
+
+    observer.observePropertySet(arr);
 
 Observing accessor properties (getter/setters)
 ----------------------------------------------
@@ -80,3 +105,18 @@ It is up to the implementation of the accessor to notify when it's value has cha
       }
     })
 
+Object.observe()
+----------------
+The proposed Object.observe() mechanism allows observation of mutations to JavaScript objects. It offers the following abilities:
+
+* Find out when the value of a *data* property changes (changes accessor properties, e.g. getters/setters are not detected -- more on this below).
+* Find out when an object has new properties added and existing properties deleted.
+* Find out when existing properties are reconfigured.
+
+The basic pattern of interaction is:
+
+* Register an observer, which is just a function with Object.observe(myObj, callback). Sometime later, your callback will be invoked with an Array of change records, representing the in-order sequence of changes which occurred to myObj.
+
+"Sometime later?"
+-----------------
+Object.observe() in conceptually similar to DOM Mutation Observers (https://developer.mozilla.org/en-US/docs/DOM/DOM_Mutation_Observers), and delivery of change records happens with similar timing. The easiest way to think about this is that your change records will be delivered immediately after the current script invocation exits. In the browser context, this will be most often be after each event handler fires. Delivery continues until there are no more observers with pending change records.
