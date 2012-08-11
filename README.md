@@ -94,7 +94,7 @@ It is up to the implementation of the accessor to notify when its value has chan
     };
 
     var name_ = '';
-    Object.defineOwnProperty(obj. 'name', {
+    Object.defineOwnProperty(obj, 'name', {
       get: function() { return name_; },
       set: function(name) {
         if (name_ == name)
