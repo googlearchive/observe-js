@@ -5,7 +5,7 @@ A utility library which depends upon the ECMAScript Object.observe strawman and 
 
 * Object.observe strawman: http://wiki.ecmascript.org/doku.php?id=strawman:observe
 
-This library is only useful when run against an implemention of the Object.observe strawman. A branch of Google's v8 JavaScript engine which implements Object.observe() is here:
+This library is only useful when run against a JavaScript implemention which includes support for the Object.observe strawman. A branch of Google's v8 JavaScript engine which includes Object.observe() is here:
 
 * https://github.com/rafaelw/v8
 
