@@ -113,7 +113,7 @@ Background: Object.observe()
 ----------------------------
 The proposed Object.observe() mechanism allows observation of mutations to JavaScript objects. It offers the following abilities:
 
-* Find out when the value of a *data* property changes (changes accessor properties, e.g. getters/setters are not detected -- more on this below).
+* Find out when the value of a *data* property changes (changes accessor properties, e.g. getters/setters are not detected).
 * Find out when an object has new properties added and existing properties deleted.
 * Find out when existing properties are reconfigured.
 
