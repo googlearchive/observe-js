@@ -59,7 +59,7 @@ function assertSplicesEqual(expect, actual) {
     var actualSplice = actual[index];
     assertEquals(splice.index, actualSplice.index);
     assertArraysEquivalent(splice.removed, actualSplice.removed);
-    assertEquals(splice.addCount, actualSplice.addCount);
+    assertEquals(splice.addedCount, actualSplice.addedCount);
   });
 }
 
@@ -102,7 +102,7 @@ function applySplices(orig, copy) {
     splices.forEach(function(splice) {
       var spliceArgs = [splice.index, splice.removed.length];
       var addIndex = splice.index;
-      while (addIndex < splice.index + splice.addCount) {
+      while (addIndex < splice.index + splice.addedCount) {
         spliceArgs.push(orig[addIndex]);
         addIndex++;
       }
@@ -564,7 +564,7 @@ function testArray() {
     arraySplices: [{
       index: 0,
       removed: [0],
-      addCount: 1
+      addedCount: 1
     }]
   });
 
@@ -576,7 +576,7 @@ function testArray() {
     arraySplices: [{
       index: 1,
       removed: [1],
-      addCount: 1
+      addedCount: 1
     }]
   });
 }
@@ -595,7 +595,7 @@ function testArraySplice() {
     arraySplices: [{
       index: 1,
       removed: [1],
-      addCount: 2
+      addedCount: 2
     }]
   });
 
@@ -607,7 +607,7 @@ function testArraySplice() {
     arraySplices: [{
       index: 0,
       removed: [0],
-      addCount: 0
+      addedCount: 0
     }]
   });
 
@@ -628,7 +628,7 @@ function testArraySplice() {
     arraySplices: [{
       index: 1,
       removed: [],
-      addCount: 1
+      addedCount: 1
     }]
   });
 
@@ -640,7 +640,7 @@ function testArraySplice() {
     arraySplices: [{
       index: 3,
       removed: [],
-      addCount: 1
+      addedCount: 1
     }]
   });
 
@@ -652,7 +652,7 @@ function testArraySplice() {
     arraySplices: [{
       index: 0,
       removed: [2, 1.5, 3, 0],
-      addCount: 0
+      addedCount: 0
     }]
   });
 }
@@ -671,7 +671,7 @@ function testArraySpliceTruncateAndExpandWithLength() {
     arraySplices: [{
       index: 2,
       removed: ['c', 'd', 'e'],
-      addCount: 0
+      addedCount: 0
     }]
   });
 
@@ -684,7 +684,7 @@ function testArraySpliceTruncateAndExpandWithLength() {
     arraySplices: [{
       index: 2,
       removed: [],
-      addCount: 3
+      addedCount: 3
     }]
   });
 
@@ -703,7 +703,7 @@ function testArraySpliceDeleteTooMany() {
     arraySplices: [{
       index: 2,
       removed: ['c'],
-      addCount: 0
+      addedCount: 0
     }]
   });
 }
@@ -721,7 +721,7 @@ function testArrayLength() {
     arraySplices: [{
       index: 2,
       removed: [],
-      addCount: 3
+      addedCount: 3
     }]
   });
 
@@ -733,7 +733,7 @@ function testArrayLength() {
     arraySplices: [{
       index: 1,
       removed: [1, , , ,],
-      addCount: 0
+      addedCount: 0
     }]
   });
 
@@ -754,7 +754,7 @@ function testArrayPush() {
     arraySplices: [{
       index: 2,
       removed: [],
-      addCount: 2
+      addedCount: 2
     }]
   });
 
@@ -775,7 +775,7 @@ function testArrayPop() {
     arraySplices: [{
       index: 1,
       removed: [1],
-      addCount: 0
+      addedCount: 0
     }]
   });
 
@@ -787,7 +787,7 @@ function testArrayPop() {
     arraySplices: [{
       index: 0,
       removed: [0],
-      addCount: 0
+      addedCount: 0
     }]
   });
 
@@ -807,7 +807,7 @@ function testArrayShift() {
     arraySplices: [{
       index: 0,
       removed: [0],
-      addCount: 0
+      addedCount: 0
     }]
   });
 
@@ -819,7 +819,7 @@ function testArrayShift() {
     arraySplices: [{
       index: 0,
       removed: [1],
-      addCount: 0
+      addedCount: 0
     }]
   });
 
@@ -839,7 +839,7 @@ function testArrayUnshift() {
     arraySplices: [{
       index: 0,
       removed: [],
-      addCount: 1
+      addedCount: 1
     }]
   });
 
@@ -851,7 +851,7 @@ function testArrayUnshift() {
     arraySplices: [{
       index: 0,
       removed: [],
-      addCount: 2
+      addedCount: 2
     }]
   });
 
@@ -1052,7 +1052,7 @@ function assertEditDistance(tracker, distance) {
   var splices = tracker.splices || [];
   var calcDistance = 0;
   splices.forEach(function(splice) {
-    calcDistance += splice.addCount;
+    calcDistance += splice.addedCount;
     calcDistance += splice.deleteCount;
   });
 
@@ -1070,7 +1070,7 @@ function assertEditDistance(orig, expectDistance) {
     assertEquals(orig, summaries[0].object);
     var splices = summaries[0].arraySplices;
     splices.forEach(function(splice) {
-      actualDistance += splice.addCount += splice.removed.length;
+      actualDistance += splice.addedCount += splice.removed.length;
     });
   }
 

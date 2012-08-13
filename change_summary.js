@@ -226,7 +226,9 @@
 
         objectChangeRecordsMap.keys().forEach(function(object) {
           var records = objectChangeRecordsMap.get(object);
-          objectTrackers.get(object).process(objectTrackers, dirtyTrackers, records);
+          var tracker = objectTrackers.get(object);
+          if (tracker)
+            tracker.process(objectTrackers, dirtyTrackers, records);
         });
 
         summaries = undefined;
@@ -612,11 +614,11 @@
    * was transformed into a new array of items. Conceptually it is a list of
    * tuples of
    *
-   *   <index, removed, addCount>
+   *   <index, removed, addedCount>
    *
    * which are kept in ascending index order of. The tuple represents that at
    * the |index|, |removed| sequence of items were removed, and counting forward
-   * from |index|, |addCount| items were added.
+   * from |index|, |addedCount| items were added.
    */
 
   /**
@@ -635,11 +637,11 @@
     var ADD = 2;
     var DELETE = 3;
 
-    function newSplice(index, removed, addCount) {
+    function newSplice(index, removed, addedCount) {
       return {
         index: index,
         removed: Array.prototype.slice.apply(removed),
-        addCount: addCount
+        addedCount: addedCount
       };
     }
 
@@ -755,7 +757,7 @@
           if (!splice)
             splice = newSplice(currentIndex + index, [], 0);
 
-          splice.addCount++;
+          splice.addedCount++;
           index++;
 
           splice.removed.push(old[oldIndex]);
@@ -765,7 +767,7 @@
           if (!splice)
             splice = newSplice(currentIndex + index, [], 0);
 
-          splice.addCount++;
+          splice.addedCount++;
           index++;
           break;
         case DELETE:
