@@ -550,7 +550,7 @@ function testDeleteOfNonConfigurable() {
   assertNoSummary();
 }
 
-function testArrayModel() {
+function testArray() {
   var model = [0, 1];
 
   observer.observePropertySet(model);
@@ -581,7 +581,7 @@ function testArrayModel() {
   });
 }
 
-function testArrayModelSplice() {
+function testArraySplice() {
 
   var model = [0, 1]
 
@@ -657,7 +657,40 @@ function testArrayModelSplice() {
   });
 }
 
-function testArrayModelSpliceDeleteTooMany() {
+function testArraySpliceTruncateAndExpandWithLength() {
+  var model = ['a', 'b', 'c', 'd', 'e'];
+
+  observer.observePropertySet(model);
+
+  model.length = 2;
+
+  assertSummary({
+    object: model,
+    newProperties: [],
+    deletedProperties: [],
+    arraySplices: [{
+      index: 2,
+      removed: ['c', 'd', 'e'],
+      addCount: 0
+    }]
+  });
+
+  model.length = 5;
+
+  assertSummary({
+    object: model,
+    newProperties: [],
+    deletedProperties: [],
+    arraySplices: [{
+      index: 2,
+      removed: [],
+      addCount: 3
+    }]
+  });
+
+}
+
+function testArraySpliceDeleteTooMany() {
   var model = ['a', 'b', 'c'];
 
   observer.observePropertySet(model);
@@ -675,7 +708,7 @@ function testArrayModelSpliceDeleteTooMany() {
   });
 }
 
-function testArrayModelLength() {
+function testArrayLength() {
   var model = [0, 1];
 
   observer.observePropertySet(model);
@@ -708,7 +741,7 @@ function testArrayModelLength() {
   assertNoSummary();
 }
 
-function testArrayModelPush() {
+function testArrayPush() {
   var model = [0, 1];
 
   observer.observePropertySet(model);
@@ -729,7 +762,7 @@ function testArrayModelPush() {
   assertNoSummary();
 }
 
-function testArrayModelPop() {
+function testArrayPop() {
   var model = [0, 1];
 
   observer.observePropertySet(model);
@@ -762,7 +795,7 @@ function testArrayModelPop() {
   assertNoSummary();
 }
 
-function testArrayModelShift() {
+function testArrayShift() {
   var model = [0, 1];
 
   observer.observePropertySet(model);
@@ -794,7 +827,7 @@ function testArrayModelShift() {
   assertNoSummary();
 }
 
-function testArrayModelUnshift() {
+function testArrayUnshift() {
   var model = [0, 1];
 
   observer.observePropertySet(model);
