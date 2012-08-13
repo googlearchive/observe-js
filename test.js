@@ -988,9 +988,9 @@ function randomArrayOperations(arr, count) {
 }
 
 var valMax = 64;
-var arrayLengthMax = 128;
-var testCount = 64;
-var operationCount = 128;
+var arrayLengthMax = 64;
+var testCount = 32;
+var operationCount = 64;
 
 function testArrayTrackerFuzzer() {
   console.log('Fuzzing spliceProjection ' + testCount +
