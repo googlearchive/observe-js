@@ -93,7 +93,7 @@
     }
   }
 
-  var pathIndentPart = '[\$a-z_]+[\$a-z_\\d]*';
+  var pathIndentPart = '[\$a-z0-9_]+[\$a-z0-9_\\d]*';
   var pathRegExp = new RegExp('^' +
                               '(?:#?' + pathIndentPart + ')?' +
                               '(?:' +
