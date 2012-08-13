@@ -5,9 +5,14 @@ A utility library which depends upon the ECMAScript Object.observe strawman and 
 
 * Object.observe strawman: http://wiki.ecmascript.org/doku.php?id=strawman:observe
 
-This library is only useful when run against a JavaScript implemention which includes support for the Object.observe strawman. A branch of Google's v8 JavaScript engine which includes Object.observe() is here:
+Dependencies
+============
+
+This library is only useful when run against a JavaScript implemention which includes support for the Object.observe strawman. A branch of Google's v8 JavaScript engine which includes Object.observe() is here (binaries of Chromium Mac/Win available):
 
 * https://github.com/rafaelw/v8
+
+Also, this library uses ECMAScript Maps and Sets. (With the above Chromium binaries, go to about://flags and select "Enable Experimental JavaScript").
 
 Usage
 -----
