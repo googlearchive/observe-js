@@ -47,6 +47,9 @@ ChangeSummary uses Object.observe() under the covers and exposes a high-level AP
     observer.observePathValue(objGraph, 'foo.bar'); // Will report when the value at objGraph.foo.bar changes. If the value is ever
                                                     // unreachable, the value is considered to be undefined.
 
+    observer.observe(objGraph); // Equivalent of observePropertySet(obj) and observePathValue(obj, prop) for each added property and
+                                // unobservePathValue(obj, prop) for each deleted property.
+
 Array "splice" changes
 ----------------------
 If you ask the ChangeSummary to observePropertySet on an Array object (Array.isArray(obj) === true), it will report changes to index properties (e.g. arr[1], arr[2], etc... as opposed to arr['foo'] or arr.bar) as a series of "splice" changes which are contained in the summary.arraySplices array.
