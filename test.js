@@ -214,6 +214,99 @@ function testObjectDeleteAddDelete() {
   assertNoSummary();
 }
 
+function testObserveAll() {
+  var model = { foo: 1, bar: 2 };
+  observer.observe(model);
+  observer.observePathValue(model, 'foo');
+
+  model.foo = 2;
+  model.bar = 3;
+  assertSummary({
+    object: model,
+    newProperties: [],
+    deletedProperties: [],
+    pathValueChanged: ['bar', 'foo'],
+    oldPathValues: {
+      foo: 1,
+      bar: 2
+    },
+    newPathValues: {
+      foo: 2,
+      bar: 3
+    }
+  });
+
+  model.bar = 4;
+  assertSummary({
+    object: model,
+    newProperties: [],
+    deletedProperties: [],
+    pathValueChanged: ['bar'],
+    oldPathValues: {
+      bar: 3
+    },
+    newPathValues: {
+      bar: 4
+    }
+  });
+
+  model.foo = 5;
+  model.baz = 6;
+  assertSummary({
+    object: model,
+    newProperties: ['baz'],
+    deletedProperties: [],
+    pathValueChanged: ['foo'],
+    oldPathValues: {
+      foo: 2
+    },
+    newPathValues: {
+      foo: 5
+    }
+  });
+}
+
+function testPathValueSimple() {
+  var model = { };
+  observer.observePathValue(model, 'foo');
+
+  model.foo = 1;
+  assertSummary({
+    object: model,
+    pathValueChanged: ['foo'],
+    oldPathValues: {
+      foo: undefined
+    },
+    newPathValues: {
+      foo: 1
+    }
+  });
+
+  model.foo = 2;
+  assertSummary({
+    object: model,
+    pathValueChanged: ['foo'],
+    oldPathValues: {
+      foo: 1
+    },
+    newPathValues: {
+      foo: 2
+    }
+  });
+
+  delete model.foo;
+  assertSummary({
+    object: model,
+    pathValueChanged: ['foo'],
+    oldPathValues: {
+      foo: 2
+    },
+    newPathValues: {
+      foo: undefined
+    }
+  });
+}
+
 function testPathValueBreadthFirstNotification() {
   var model = {};
 
