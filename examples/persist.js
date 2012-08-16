@@ -177,7 +177,9 @@
 
   var maxIds = {};
 
-  global.retrieve = function(constructor) {
+  global.persistDB = {};
+
+  global.persistDB.retrieve = function(constructor) {
     var results = [];
     var instance = new constructor();
 

@@ -22,10 +22,12 @@ limitations under the License.
 <h1>Circles</h1>
 <div data-controller="CircleController">
   <template iterate>
-    <div>
-      radius: <input type="text" value="{{ radius }}"><br>
-      area: <input type="text" value="{{ area }}"><br>
-      circumference: <input type="text" value="{{ circumference }}"><br>
+    <div style="border: 1px solid black; margin: 8px">
+      <table>
+      <tr><td>radius:</td><td><input type="number" value="{{ radius }}"></td></tr>
+      <tr><td>area:</td><td><input type="number" value="{{ area }}"></td></tr>
+      <tr><td>circumference:</td><td><input type="number" value="{{ circumference }}"></td></tr>
+      </table>
       <button data-action="click:delete">Delete</button>
     </div>
   </template>
@@ -51,7 +53,7 @@ function Circle(radius) {
 }
 
 function CircleController(elm) {
-  this.circles = elm.model = retrieve(Circle);
+  this.circles = elm.model = persistDB.retrieve(Circle);
 }
 
 CircleController.prototype = {

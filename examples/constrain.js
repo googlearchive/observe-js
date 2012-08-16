@@ -13,6 +13,7 @@
 // limitations under the License.
 
 (function(global) {
+
   /* This is a very simple version of the QuickPlan algorithm for solving
   * mutli-variable contraints. (http://www.cs.utk.edu/~bvz/quickplan.html)
   * The implementation varies from the standard described approach in a few ways:
@@ -185,19 +186,31 @@
 
   function Planner(object) {
     this.object = object;
-    var properties = [];
+    this.properties = {};
+
+    var priority = [];
     var self = this;
 
     function callback(changeRecords) {
-      console.log('Resolving: ' + Object.getPrototypeOf(changeRecords[0].object).constructor.name);
+      var needsResolve = false;
+
       changeRecords.forEach(function(change) {
         var property = change.name;
-        var index = properties.indexOf(property);
-        if (index >= 0)
-          properties.splice(properties.indexOf(property), 1);
+        if (!(property in self.properties))
+          return;
 
-        properties.unshift(property);
+        var index = priority.indexOf(property);
+        if (index >= 0)
+          priority.splice(priority.indexOf(property), 1);
+
+        priority.unshift(property);
+        needsResolve = true;
       });
+
+      if (!needsResolve)
+        return;
+
+      console.log('Resolving: ' + Object.getPrototypeOf(changeRecords[0].object).constructor.name);
 
       Object.unobserve(self.object, callback);
       self.execute();
@@ -208,7 +221,7 @@
     this.stayFunc = function(property) {
       if (self.object[property] === undefined)
         return Infinity;
-      var index = properties.indexOf(property);
+      var index = priority.indexOf(property);
       return index >= 0 ? index : Infinity;
     }
 
@@ -219,6 +232,12 @@
     plan_: null,
 
     addConstraint: function(methods) {
+      methods.forEach(function(method) {
+        method.outputs.forEach(function(output) {
+          this.properties[output] = true;
+        }, this);
+      }, this);
+
       var constraint = new Constraint(methods);
 
       this.constraints = this.constraints || [];
