@@ -38,6 +38,36 @@
   * much at all =-).
   */
 
+  function Map() {
+    this.map_ = new global.Map;
+    this.keys_ = [];
+  }
+
+  Map.prototype = {
+    get: function(key) {
+      return this.map_.get(key);
+    },
+
+    set: function(key, value) {
+      if (!this.map_.has(key))
+        this.keys_.push(key);
+      return this.map_.set(key, value);
+    },
+
+    has: function(key) {
+      return this.map_.has(key);
+    },
+
+    delete: function(key) {
+      this.keys_.splice(this.keys_.indexOf(key), 1);
+      this.map_.delete(key);
+    },
+
+    keys: function() {
+      return this.keys_.slice();
+    }
+  }
+
   function Variable(property, stayFunc) {
     this.property = property;
     this.stayFunc = stayFunc || function() {
@@ -187,49 +217,48 @@
   function Planner(object) {
     this.object = object;
     this.properties = {};
-
-    var priority = [];
+    this.priority = []
     var self = this;
 
-    function callback(changeRecords) {
+    this.stayFunc = function(property) {
+      if (self.object[property] === undefined)
+        return Infinity;
+      var index = self.priority.indexOf(property);
+      return index >= 0 ? index : Infinity;
+    }
+
+    Object.observe(this.object, internalCallback);
+  };
+
+  Planner.prototype = {
+    plan_: null,
+
+    deliverChanged: function(changeRecords) {
       var needsResolve = false;
 
       changeRecords.forEach(function(change) {
         var property = change.name;
-        if (!(property in self.properties))
+        if (!(property in this.properties))
           return;
 
-        var index = priority.indexOf(property);
+        var index = this.priority.indexOf(property);
         if (index >= 0)
-          priority.splice(priority.indexOf(property), 1);
+          this.priority.splice(this.priority.indexOf(property), 1);
 
-        priority.unshift(property);
+        this.priority.unshift(property);
         needsResolve = true;
-      });
+      }, this);
 
       if (!needsResolve)
         return;
 
       console.log('Resolving: ' + Object.getPrototypeOf(changeRecords[0].object).constructor.name);
 
-      Object.unobserve(self.object, callback);
-      self.execute();
-      console.log('...Done: ' + JSON.stringify(self.object));
-      Object.observe(self.object, callback);
-    }
-
-    this.stayFunc = function(property) {
-      if (self.object[property] === undefined)
-        return Infinity;
-      var index = priority.indexOf(property);
-      return index >= 0 ? index : Infinity;
-    }
-
-    Object.observe(this.object, callback);
-  };
-
-  Planner.prototype = {
-    plan_: null,
+      Object.unobserve(this.object, internalCallback);
+      this.execute();
+      console.log('...Done: ' + JSON.stringify(this.object));
+      Object.observe(this.object, internalCallback);
+    },
 
     addConstraint: function(methods) {
       methods.forEach(function(method) {
@@ -332,6 +361,32 @@
   }
 
   var planners = new WeakMap;
+
+  function internalCallback(changeRecords) {
+    var changeMap = new Map;
+
+    changeRecords.forEach(function(change) {
+      if (!planners.has(change.object))
+        return;
+
+      var changes = changeMap.get(change.object);
+      if (!changes) {
+        changeMap.set(change.object, [change]);
+        return;
+      }
+
+      changes.push(change);
+    });
+
+    changeMap.keys().forEach(function(object) {
+      planners.get(object).deliverChanged(changeMap.get(object));
+    });
+  }
+
+  // Register callback to assign delivery order.
+  var register = {};
+  Object.observe(register, internalCallback);
+  Object.unobserve(register, internalCallback);
 
   global.constrain = function(obj, methodFunctions) {
     var planner = planners.get(obj);

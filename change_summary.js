@@ -262,6 +262,11 @@
       }
     }
 
+    // Register callback to assign delivery order.
+    var register = {};
+    Object.observe(register, internalCallback);
+    Object.unobserve(register, internalCallback);
+
     this.observe = function(obj) {
       if (!isObject(obj))
         throw Error('Invalid attempt to observe non-object: ' + obj);
