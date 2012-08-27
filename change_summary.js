@@ -254,8 +254,10 @@
         if (results.length)
           summaries = results;
 
-        if (!isDisconnecting && summaries)
+        if (!isDisconnecting && summaries) {
           callback(summaries);
+          summaries = undefined;
+        }
 
       } catch (ex) {
         console.error(ex);
@@ -386,7 +388,12 @@
       });
 
       observing = false;
-      return summaries;
+
+      if (!summaries)
+        return;
+      var retval = summaries;
+      summaries = undefined;
+      return retval;
     };
 
     this.reconnect = function() {

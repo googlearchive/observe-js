@@ -43,8 +43,8 @@ function setUp() {
 }
 
 function tearDown() {
-  observer.disconnect();
-  summaries = undefined;
+  summaries = observer.disconnect();
+  assertUndefined(summaries);
   callbackCount = 0;
   expectedCallbackCount = 0;
 }
