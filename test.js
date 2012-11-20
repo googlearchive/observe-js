@@ -314,8 +314,8 @@ function testPathValueBreadthFirstNotification() {
   function createCallback() {
     return function(obj) {
       notificationSequence += obj.val;
-    }
-  };
+    };
+  }
 
   observer.observePathValue(model, 'data.a.c');
   observer.observePathValue(model, 'data.a.d');
@@ -323,7 +323,7 @@ function testPathValueBreadthFirstNotification() {
   observer.observePathValue(model, 'data.b.f');
   observer.observePathValue(model, 'data.b');
   observer.observePathValue(model, 'data.a');
-  observer.observePathValue(model, 'data')
+  observer.observePathValue(model, 'data');
   observer.observePropertySet(model);
 
   model.data = {
@@ -335,7 +335,7 @@ function testPathValueBreadthFirstNotification() {
       e: 3,
       f: 4
     }
-  }
+  };
 
   assertSummary({
     object: model,
@@ -457,7 +457,7 @@ function testPathObservation() {
 
   // Try to stop observing at different path. Scopes are different,
   // so this should have no effect.
-  observer.unobservePathValue(model.a, 'b.c')
+  observer.unobservePathValue(model.a, 'b.c');
   model.a.b.c = 'hello. scopes are different';
   assertSummary({
     object: model,
