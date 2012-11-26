@@ -13,6 +13,7 @@
 // limitations under the License.
 
 (function(global) {
+  "use strict";
 
   function isIndex(s) {
     return +s === s >>> 0;
@@ -201,7 +202,6 @@
   */
 
   function ChangeSummary(callback) {
-
     var observing = true;
     var isDisconnecting = false;
     var summaries;
@@ -356,7 +356,7 @@
       if (!isObject(obj))
         throw Error('Invalid attempt to unobserve non-object: ' + obj);
 
-      path = new Path(pathString);
+      var path = new Path(pathString);
       if (path.length == 0)
         return;
 

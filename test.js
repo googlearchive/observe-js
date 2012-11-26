@@ -114,6 +114,20 @@ function applySplices(orig, copy) {
   assertArraysEquivalent(orig, copy);
 }
 
+function testNoDeliveryOnEval() {
+  var obj = {};
+  var count = 0;
+  function callback() {
+    count++;
+  }
+
+  Object.observe(obj, callback);
+  obj.id = 1;
+  Function('var i = 1;');
+  eval('var i = 1;');
+  assertEquals(0, count);
+}
+
 function testObjectPropertySet() {
   var model = {};
 
