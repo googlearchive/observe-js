@@ -1127,10 +1127,10 @@ function randomArrayOperations(arr, count) {
   }
 }
 
-var valMax = 64;
-var arrayLengthMax = 64;
+var valMax = 16;
+var arrayLengthMax = 16;
 var testCount = 32;
-var operationCount = 64;
+var operationCount = 16;
 
 function testArrayTrackerFuzzer() {
   console.log('Fuzzing spliceProjection ' + testCount +
@@ -1139,7 +1139,11 @@ function testArrayTrackerFuzzer() {
   console.time('fuzzer');
   tearDown();
   for (var i = 0; i < testCount; i++) {
+    console.log('pass: ' + i);
     var model = randArray();
+
+    randomArrayOperations(model, operationCount);
+
     var copy = model.slice();
 
     setUp();
