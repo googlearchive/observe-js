@@ -664,7 +664,7 @@
         continue;
       }
 
-      if (!(record.name in valueChanged) && record.type != 'new') {
+      if (!(record.name in valueChanged)) {
         valueChanged[record.name] = record.oldValue;
       }
 

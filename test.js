@@ -229,7 +229,7 @@ function testObjectDeleteAddDelete() {
 }
 
 function testObserveAll() {
-  var model = { foo: 1, bar: 2 };
+  var model = { foo: 1, bar: 2, bat: 3 };
   observer.observe(model);
   observer.observePathValue(model, 'foo');
 
@@ -266,15 +266,20 @@ function testObserveAll() {
 
   model.foo = 5;
   model.baz = 6;
+  delete model.bat;
   assertSummary({
     object: model,
     newProperties: ['baz'],
-    deletedProperties: [],
-    pathValueChanged: ['foo'],
+    deletedProperties: ['bat'],
+    pathValueChanged: ['bat', 'baz', 'foo'],
     oldPathValues: {
+      bat: 3,
+      baz: undefined,
       foo: 2
     },
     newPathValues: {
+      bat: undefined,
+      baz: 6,
       foo: 5
     }
   });
@@ -1067,6 +1072,29 @@ function testArrayTrackerUpdateDelete() {
   applySplices(model, copy);
 }
 
+function testArrayTrackerUpdateAfterDelete() {
+  var model = ['a', 'b', 'c', 'd'];
+  delete model[2];
+
+  var copy = model.slice();
+  observer.observePropertySet(model);
+
+  model[2] = 'e';
+
+  applySplices(model, copy);
+}
+
+function testArrayTrackerDeleteMidArray() {
+  var model = ['a', 'b', 'c', 'd'];
+
+  var copy = model.slice();
+  observer.observePropertySet(model);
+
+  delete model[2];
+
+  applySplices(model, copy);
+}
+
 function randInt(start, end) {
   return Math.round(Math.random()*(end-start) + start);
 }
@@ -1128,9 +1156,9 @@ function randomArrayOperations(arr, count) {
 }
 
 var valMax = 16;
-var arrayLengthMax = 16;
-var testCount = 32;
-var operationCount = 16;
+var arrayLengthMax = 32;
+var testCount = 64;
+var operationCount = 64;
 
 function testArrayTrackerFuzzer() {
   console.log('Fuzzing spliceProjection ' + testCount +
