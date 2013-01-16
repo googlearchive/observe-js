@@ -132,3 +132,4 @@ The basic pattern of interaction is:
 Details: "Sometime later?"
 -----------------
 Object.observe() in conceptually similar to DOM Mutation Observers (https://developer.mozilla.org/en-US/docs/DOM/DOM_Mutation_Observers), and delivery of change records happens with similar timing. The easiest way to think about this is that your change records will be delivered immediately after the current script invocation exits. In the browser context, this will most often be after each event handler fires. Delivery continues until there are no more observers with pending change records.
+
