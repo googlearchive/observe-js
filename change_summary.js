@@ -185,22 +185,6 @@
     }
   }
 
-  function collateRecords(changeRecords) {
-    var map = new Map;
-
-    changeRecords.forEach(function(record) {
-      var records = map.get(record.object);
-      if (records) {
-        records.push(record);
-        return;
-      }
-
-      map.set(record.object, [ record ]);
-    });
-
-    return map;
-  }
-
   /**
    * Callback looks like this
    *
@@ -243,8 +227,10 @@
     }
 
     function removeObjectTracker(obj) {
+      var tracker = objectTrackers.get(obj);
       objectTrackers.delete(obj);
       Object.unobserve(obj, internalCallback);
+      tracker.dead = true;
     }
 
     function internalCallback(records) {
@@ -254,33 +240,32 @@
       }
 
       try {
-        var objectChangeRecordsMap = collateRecords(records);
-        var dirtyTrackers = new Set;
-
-        objectChangeRecordsMap.keys().forEach(function(object) {
-          var records = objectChangeRecordsMap.get(object);
-          var tracker = objectTrackers.get(object);
-          if (tracker)
-            tracker.process(objectTrackers, dirtyTrackers, records);
+        var activeTrackers = new Set;
+        records.forEach(function(record) {
+          var tracker = objectTrackers.get(record.object);
+          tracker.addChangeRecord(record);
+          activeTrackers.add(tracker);
         });
 
-        summaries = undefined;
-        var results = [];
+        var dirtyTrackers = new Set;
+        activeTrackers.keys().forEach(function(tracker) {
+          tracker.process(objectTrackers, dirtyTrackers);
+        });
 
+        summaries = [];
         dirtyTrackers.keys().forEach(function(tracker) {
           var summary = tracker.produceSummary();
           if (summary)
-            results.push(summary);
+            summaries.push(summary);
         });
 
-        if (results.length)
-          summaries = results;
+        if (!summaries.length)
+          summaries = undefined;
 
         if (!isDisconnecting && summaries) {
           callback(summaries);
           summaries = undefined;
         }
-
       } catch (ex) {
         console.error(ex);
       }
@@ -433,6 +418,7 @@
   function ObjectTracker(obj) {
     this.object = obj;
     this.propertyObserverCount = 0;
+    this.changeRecords = [];
   }
 
   ObjectTracker.prototype = {
@@ -471,7 +457,16 @@
       this.propertyObserverCount--;
     },
 
-    process: function(objectTrackers, dirtyTrackers, changeRecords) {
+    addChangeRecord: function(changeRecord) {
+      this.changeRecords.push(changeRecord);
+    },
+
+    process: function(objectTrackers, dirtyTrackers) {
+      if (this.dead)
+        return;
+
+      var changeRecords = this.changeRecords;
+      this.changeRecords = [];
       var added = {};
       var deleted = {};
       var valueChanged = {};
