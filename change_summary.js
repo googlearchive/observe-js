@@ -170,10 +170,10 @@
       var records = map.get(record.object);
       if (records) {
         records.push(record);
-      } else {
-        records = [ record ];
-        map.set(record.object, records);
+        return;
       }
+
+      map.set(record.object, [ record ]);
     });
 
     return map;
@@ -871,59 +871,89 @@
     return splices;
   }
 
-  function projectArraySplices(valueChanged, array) {
+  function createInitialSplicesFromChanges(valueChanged, array) {
     var oldLength = 'length' in valueChanged ? toNumber(valueChanged.length) : array.length;
 
-    // FIXME: This is weak. If length was extended, synthesize "added properties"
-    if (array.length != oldLength) {
-      var from = oldLength < array.length ? oldLength : array.length;
-      var to = oldLength < array.length ? array.length : oldLength;
-      for (var i = from; i < to; i++) {
-        var p = String(i);
-        if (!(p in valueChanged))
-          valueChanged[p] = undefined;
-      }
+    var lengthChangeSplice;
+    if (array.length > oldLength) {
+      lengthChangeSplice = {
+        index: oldLength,
+        removed: [],
+        addedCount: array.length - oldLength
+      };
+    } else if (array.length < oldLength) {
+      lengthChangeSplice = {
+        index: array.length,
+        removed: new Array(oldLength - array.length),
+        addedCount: 0
+      };
     }
 
-    // FIXME: Shouldn't need this if length shortening mutations delete properties.
-    function lessThanMaxLength(i) {
-      return i < Math.max(oldLength, array.length);
-    }
+    var indicesChanged = [];
+    Object.keys(valueChanged).forEach(function(prop) {
+      var index = toNumber(prop);
+      if (isNaN(index) || index < 0 || index >= oldLength)
+        return;
 
-    function gt(a, b) { return a - b; }
+      var oldValue = valueChanged[index];
+      if (index < array.length)
+        indicesChanged[index] = oldValue;
+      else
+        lengthChangeSplice.removed[index - array.length] = valueChanged[index];
+    });
 
-    var indicesChanged = Object.keys(valueChanged).filter(isIndex).map(toNumber).filter(lessThanMaxLength).sort(gt);
     var splices = [];
-    var startIndex;
-    var removed;
+    var current;
 
-    for (var i = 0; i < indicesChanged.length; i++) {
-      var index = indicesChanged[i];
-      if (removed) {
-        if (startIndex + removed.length == index) {
-          removed.push(valueChanged[index]);
+    for (var index in indicesChanged) {
+      index = toNumber(index);
+
+      if (current) {
+        if (current.index + current.removed.length == index) {
+          current.removed.push(indicesChanged[index]);
           continue;
-        } else {
-          var currentLength = Math.min(array.length, startIndex + removed.length) - startIndex;
-          if (startIndex + removed.length > oldLength)
-            removed.length = oldLength - startIndex;
-          var newSplices = calcSplices(array, startIndex, currentLength, removed);
-          splices = splices.concat(newSplices);
-          removed = undefined;
         }
+
+        current.addedCount = Math.min(array.length, current.index + current.removed.length) - current.index;
+        splices.push(current);
+        current = undefined;
       }
 
-      startIndex = index;
-      removed = [valueChanged[index]];
+      current = {
+        index: index,
+        removed: [indicesChanged[index]]
+      }
     }
 
-    if (removed) {
-      var currentLength = Math.min(array.length, startIndex + removed.length) - startIndex;
-      if (startIndex + removed.length > oldLength)
-        removed.length = oldLength - startIndex;
-      var newSplices = calcSplices(array, startIndex, currentLength, removed);
-      splices = splices.concat(newSplices);
+    if (current) {
+      current.addedCount = Math.min(array.length, current.index + current.removed.length) - current.index;
+
+      if (lengthChangeSplice) {
+        if (current.index + current.removed.length == lengthChangeSplice.index) {
+          // Join splices
+          current.addedCount = current.addedCount + lengthChangeSplice.addedCount;
+          current.removed = current.removed.concat(lengthChangeSplice.removed);
+          splices.push(current);
+        } else {
+          splices.push(current);
+          splices.push(lengthChangeSplice);
+        }
+      } else {
+        splices.push(current)
+      }
+    } else if (lengthChangeSplice) {
+      splices.push(lengthChangeSplice);
     }
+
+    return splices;
+  }
+
+  function projectArraySplices(valueChanged, array) {
+    var splices = [];
+
+    createInitialSplicesFromChanges(valueChanged, array).forEach(function(splice) {
+      splices = splices.concat(calcSplices(array, splice.index, splice.addedCount, splice.removed));
+    });
 
     return splices;
   }
