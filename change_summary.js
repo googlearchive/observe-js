@@ -38,35 +38,49 @@
   }
 
   // FIXME: Use Map/Set iterators when available.
-  if (!global.Map || !global.Set)
-    throw Error('ChangeSummary requires harmony Maps and Sets');
-
-  var HarmonyMap = global.Map;
-  var HarmonySet = global.Set;
+  var HarmonyMap = global.Map ? global.Map : null;
+  var HarmonySet = global.Set ? global.Set : null;
 
   function Map() {
-    this.map_ = new HarmonyMap;
+    if (HarmonyMap)
+      this.map_ = new HarmonyMap;
+    else
+      this.values_ = [];
+
     this.keys_ = [];
   }
 
   Map.prototype = {
     get: function(key) {
-      return this.map_.get(key);
+      return this.map_ ? this.map_.get(key) : this.values_[this.keys_.indexOf(key)];
     },
 
     set: function(key, value) {
-      if (!this.map_.has(key))
-        this.keys_.push(key);
-      return this.map_.set(key, value);
+      if (this.map_) {
+        if (!this.map_.has(key))
+          this.keys_.push(key);
+        return this.map_.set(key, value);
+      }
+
+      var index = this.keys_.indexOf(key);
+      if (index < 0)
+        index = this.keys_.length;
+
+      this.keys_[index] = key;
+      this.values_[index] = value;
     },
 
     has: function(key) {
-      return this.map_.has(key);
+      return this.map_ ? this.map_.has(key) : this.keys_.indexOf(key) >= 0;
     },
 
     delete: function(key) {
-      this.keys_.splice(this.keys_.indexOf(key), 1);
-      this.map_.delete(key);
+      var index = this.keys_.indexOf(key);
+      this.keys_.splice(index, 1);
+      if (this.map_)
+        this.map_.delete(key);
+      else
+        this.values_.splice(index, 1);
     },
 
     keys: function() {
@@ -75,24 +89,32 @@
   }
 
   function Set() {
-    this.set_ = new HarmonySet;
+    if (HarmonySet)
+      this.set_ = new HarmonySet;
+
     this.keys_ = [];
   }
 
   Set.prototype = {
     add: function(key) {
-      if (!this.set_.has(key))
-        this.keys_.push(key);
-      return this.set_.add(key);
+      if ((this.set_ && this.set_.has(key)) || (!this.set_ && this.keys_.indexOf(key) >= 0))
+        return;
+
+      this.keys_.push(key);
+
+      if (this.set_)
+        this.set_.add(key);
     },
 
     has: function(key) {
-      return this.set_.has(key);
+      return this.set_ ? this.set_.has(key) : this.keys_.indexOf(key) >= 0;
     },
 
     delete: function(key) {
-      this.keys_.splice(this.keys_.indexOf(key), 1);
-      this.set_.delete(key);
+      var index = this.keys_.indexOf(key);
+      this.keys_.splice(index, 1);
+      if (this.set_)
+        this.set_.delete(key);
     },
 
     keys: function() {
