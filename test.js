@@ -186,7 +186,7 @@ function testNotify() {
     }
   });
 
-  observer.observePathValue(model, 'a.b');
+  observer.observePath(model, 'a.b');
   _b = 3; // won't be observed.
   assertNoSummary();
 
@@ -231,7 +231,7 @@ function testObjectDeleteAddDelete() {
 function testObserveAll() {
   var model = { foo: 1, bar: 2, bat: 3 };
   observer.observe(model);
-  observer.observePathValue(model, 'foo');
+  observer.observePath(model, 'foo');
 
   model.foo = 2;
   model.bar = 3;
@@ -287,7 +287,7 @@ function testObserveAll() {
 
 function testPathValueSimple() {
   var model = { };
-  observer.observePathValue(model, 'foo');
+  observer.observePath(model, 'foo');
 
   model.foo = 1;
   assertSummary({
@@ -336,13 +336,13 @@ function testPathValueBreadthFirstNotification() {
     };
   }
 
-  observer.observePathValue(model, 'data.a.c');
-  observer.observePathValue(model, 'data.a.d');
-  observer.observePathValue(model, 'data.b.e');
-  observer.observePathValue(model, 'data.b.f');
-  observer.observePathValue(model, 'data.b');
-  observer.observePathValue(model, 'data.a');
-  observer.observePathValue(model, 'data');
+  observer.observePath(model, 'data.a.c');
+  observer.observePath(model, 'data.a.d');
+  observer.observePath(model, 'data.b.e');
+  observer.observePath(model, 'data.b.f');
+  observer.observePath(model, 'data.b');
+  observer.observePath(model, 'data.a');
+  observer.observePath(model, 'data');
   observer.observePropertySet(model);
 
   model.data = {
@@ -397,7 +397,7 @@ function testPathObservation() {
     }
   };
 
-  observer.observePathValue(model, 'a.b.c');
+  observer.observePath(model, 'a.b.c');
 
   model.a.b.c = 'hello, mom';
   assertSummary({
@@ -454,13 +454,13 @@ function testPathObservation() {
   });
 
   // Stop observing
-  observer.unobservePathValue(model, 'a.b.c');
+  observer.unobservePath(model, 'a.b.c');
 
   model.a.b = {c: 'hello, back again -- but not observing'};
   assertNoSummary();
 
   // Resume observing
-  observer.observePathValue(model, 'a.b.c', observer);
+  observer.observePath(model, 'a.b.c', observer);
 
   model.a.b.c = 'hello. Back for reals';
   assertSummary({
@@ -476,7 +476,7 @@ function testPathObservation() {
 
   // Try to stop observing at different path. Scopes are different,
   // so this should have no effect.
-  observer.unobservePathValue(model.a, 'b.c');
+  observer.unobservePath(model.a, 'b.c');
   model.a.b.c = 'hello. scopes are different';
   assertSummary({
     object: model,
@@ -493,8 +493,8 @@ function testPathObservation() {
 function testMultipleObservationsAreCollapsed() {
   var model = {id: 1};
 
-  observer.observePathValue(model, 'id');
-  observer.observePathValue(model, 'id');
+  observer.observePath(model, 'id');
+  observer.observePath(model, 'id');
 
   model.id = 2;
 
@@ -561,7 +561,7 @@ function testSetToSameAsPrototype() {
     }
   };
 
-  observer.observePathValue(model, 'id');
+  observer.observePath(model, 'id');
   model.id = 1;
 
   assertNoSummary();
@@ -575,7 +575,7 @@ function testSetReadOnly() {
     value: 1
   });
 
-  observer.observePathValue(model, 'x');
+  observer.observePath(model, 'x');
   model.x = 2;
 
   assertNoSummary();
@@ -600,7 +600,7 @@ function testSetShadows() {
     }
   };
 
-  observer.observePathValue(model, 'x');
+  observer.observePath(model, 'x');
   model.x = 2;
   assertSummary({
     object: model,
@@ -622,7 +622,7 @@ function testDeleteWithSameValueOnPrototype() {
     x: 1
   };
 
-  observer.observePathValue(model, 'x');
+  observer.observePath(model, 'x');
   delete model.x;
   assertNoSummary();
 }
@@ -636,7 +636,7 @@ function testDeleteWithDifferentValueOnPrototype() {
     x: 2
   };
 
-  observer.observePathValue(model, 'x');
+  observer.observePath(model, 'x');
   delete model.x;
   assertSummary({
     object: model,
@@ -657,7 +657,7 @@ function testDeleteOfNonConfigurable() {
     value: 1
   });
 
-  observer.observePathValue(model, 'x');
+  observer.observePath(model, 'x');
   delete model.x;
   assertNoSummary();
 }
