@@ -164,26 +164,28 @@
 
     toString: function() {
       return this.join('.');
-    }
-  };
+    },
 
-  function walkPathValue(path, val, f, that) {
-    var caughtException;
-    for (var i = 0; i < path.length + 1; i++) {
-      f.call(that, val, i);
+    walkPropertiesFrom: function(val, f, that) {
+      var caughtException;
+      var prop;
+      for (var i = 0; i < this.length + 1; i++) {
+        prop = this[i];
+        f.call(that, prop, val, i);
 
-      if (isObject(val) && i < path.length && path[i] in val) {
-        try {
-          val = val[path[i]];
-        } catch (ex) {
+        if (isObject(val) && i < this.length && this[i] in val) {
+          try {
+            val = val[prop];
+          } catch (ex) {
+            val = undefined;
+            caughtException = ex;
+          }
+        } else {
           val = undefined;
-          caughtException = ex;
         }
-      } else {
-        val = undefined;
       }
     }
-  }
+  };
 
   /**
    * Callback looks like this
@@ -462,18 +464,16 @@
     },
 
     process: function(objectTrackers, dirtyTrackers) {
-      if (this.dead)
-        return;
-
       var changeRecords = this.changeRecords;
       this.changeRecords = [];
-      var added = {};
-      var deleted = {};
-      var valueChanged = {};
 
-      summarizePropertyChanges(changeRecords, added, deleted, valueChanged);
-      added = Object.keys(added).sort();
-      deleted = Object.keys(deleted).sort();
+      if (this.dead)  // observation stopped mid-process.
+        return;
+
+      var diff = diffObjectFromChangeRecords(changeRecords);
+      var valueChanged = diff.valueChanged;
+      var added = diff.added;
+      var deleted = diff.deleted;
 
       if (this.observeAll) {
         var ownPropertiesChanged = {};
@@ -500,7 +500,7 @@
           this.valueChanged = valueChanged;
 
         if (Array.isArray(this.object)) {
-          this.splices = projectArraySplices(valueChanged, this.object);
+          this.splices = projectArraySplices(this.object, valueChanged);
           this.added = this.added.filter(isNotIndex);
           this.deleted = this.deleted.filter(isNotIndex);
         }
@@ -512,7 +512,7 @@
       if (!this.propertyObservers)
         return;
 
-      var props = Object.keys(valueChanged).concat(added, deleted);
+      var props = Object.keys(valueChanged);
 
       for (var i = 0; i < props.length; i++) {
         var pathValues = this.propertyObservers[props[i]];
@@ -625,13 +625,13 @@
 
   function PathValue(internal, object, path) {
     this.path = path;
-    this.observed = new Array(path.length);
+    this.observed = new Array(path.length - 1);
 
     var self = this;
 
     this.reset = function() {
       var changed = false;
-      walkPathValue(self.path, object, function(value, i) {
+      self.path.walkPropertiesFrom(object, function(prop, value, i) {
         if (i == this.path.length) {
           if (this.value == value)
             return;
@@ -644,8 +644,6 @@
         var observed = this.observed[i];
         if (value === observed)
           return;
-
-        var prop = this.path[i];
 
         if (observed !== undefined) {
           internal.unobserveProperty(observed, prop, this);
@@ -670,7 +668,11 @@
     this.reset();
   }
 
-  function summarizePropertyChanges(changeRecords, added, deleted, valueChanged) {
+  function diffObjectFromChangeRecords(changeRecords) {
+    var added = {};
+    var deleted = {};
+    var valueChanged = {};
+
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
       if (record.type != 'new' &&
@@ -706,6 +708,12 @@
         deleted[record.name] = true;
       }
     }
+
+    return {
+      added: Object.keys(added).sort(),
+      deleted: Object.keys(deleted).sort(),
+      valueChanged: valueChanged
+    };
   }
 
   /**
@@ -888,7 +896,7 @@
     return splices;
   }
 
-  function createInitialSplicesFromChanges(valueChanged, array) {
+  function createInitialSplicesFromChanges(array, valueChanged) {
     var oldLength = 'length' in valueChanged ? toNumber(valueChanged.length) : array.length;
 
     var lengthChangeSplice;
@@ -965,10 +973,10 @@
     return splices;
   }
 
-  function projectArraySplices(valueChanged, array) {
+  function projectArraySplices(array, valueChanged) {
     var splices = [];
 
-    createInitialSplicesFromChanges(valueChanged, array).forEach(function(splice) {
+    createInitialSplicesFromChanges(array, valueChanged).forEach(function(splice) {
       splices = splices.concat(calcSplices(array, splice.index, splice.addedCount, splice.removed));
     });
 
