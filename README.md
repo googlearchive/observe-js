@@ -44,11 +44,11 @@ ChangeSummary uses Object.observe() under the covers and exposes a high-level AP
         bar: 2
       }
     };
-    observer.observePathValue(objGraph, 'foo.bar'); // Will report when the value at objGraph.foo.bar changes. If the value is ever
+    observer.observePath(objGraph, 'foo.bar'); // Will report when the value at objGraph.foo.bar changes. If the value is ever
                                                     // unreachable, the value is considered to be undefined.
 
-    observer.observe(objGraph); // Equivalent of observePropertySet(obj) and observePathValue(obj, prop) for each added property and
-                                // unobservePathValue(obj, prop) for each deleted property.
+    observer.observe(objGraph); // Equivalent of observePropertySet(obj) and observePath(obj, prop) for each added property and
+                                // unobservePath(obj, prop) for each deleted property.
 
 Array "splice" changes
 ----------------------

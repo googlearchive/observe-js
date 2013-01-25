@@ -337,7 +337,7 @@
       }
     };
 
-    this.observePathValue = function(obj, pathString) {
+    this.observePath = function(obj, pathString) {
       if (!isObject(obj))
         throw Error('Invalid attempt to unobserve non-object: ' + obj);
 
@@ -361,7 +361,7 @@
       return pathValue.value;
     };
 
-    this.unobservePathValue = function(obj, pathString) {
+    this.unobservePath = function(obj, pathString) {
       if (!isObject(obj))
         throw Error('Invalid attempt to unobserve non-object: ' + obj);
 
@@ -668,6 +668,12 @@
     this.reset();
   }
 
+  var knownRecordTypes = {
+    'new': true,
+    'updated': true,
+    'deleted': true
+  };
+
   function diffObjectFromChangeRecords(changeRecords) {
     var added = {};
     var deleted = {};
@@ -675,9 +681,7 @@
 
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
-      if (record.type != 'new' &&
-          record.type != 'updated' &&
-          record.type != 'deleted') {
+      if (!knownRecordTypes[record.type]) {
         console.error('Unknown changeRecord type: ' + record.type);
         console.error(record);
         continue;
