@@ -20,13 +20,13 @@ ChangeSummary uses Object.observe() under the covers and exposes a high-level AP
 
     var observer = new ChangeSummary(function(summaries) {
       summaries.forEach(function(summary) {
-        summary.object; // The object to which this summary describes changes which occurred.
-        summary.newProperties; // An Array of property names which are new since creation, or the previous callback.
-        summary.deletedProperties; // An Array of property names which have been deleted since creation, or the previous callback.
+        summary.object; // Object to which this summary describes changes which occurred.
+        summary.added; // Object map: added property => new value.
+        summary.removed // Object map: removed property => undefined.
+        summary.changed // Object map: property whose value changed => new value.
         summary.arraySplices; // An Array of objects, each of which describes a "splice", if Array.isArray(summary.object).
-        summary.pathValueChanged; // An Array of path strings, whose value has changed.
-        summary.getOldPathValue(path); // A function which returns previous value of the changed path.
-        summary.getNewPathValue(path); // A function which returns the new value (as of callback) of the changed path.
+        summary.pathChanged; // Object map: path whose value changed => new value.
+        summary.getOldValue(propertyOr{ath); // A function which returns previous value of the changed property or path.
       });
     })
 
@@ -34,21 +34,18 @@ ChangeSummary uses Object.observe() under the covers and exposes a high-level AP
       prop1: 1,
       prop2: 2
     };
-    observer.observePropertySet(obj); // Will report any newProperties or deletedProperties on obj.
+    observer.observeObject(obj); // Will report any added, removed or changed properties on obj.
 
     var arr = [0, 1, 2];
-    observer.observePropertySet(arr); // Will report "splice" mutations which represent changes to index properties of arr,
-                                      // as well as any newProperties or deletedProperties which occur with non-index properties.
+    observer.observeArray(arr); // Will report "splice" mutations which represent changes to index properties of arr.
+
     var objGraph = {
       foo: {
         bar: 2
       }
     };
-    observer.observePath(objGraph, 'foo.bar'); // Will report when the value at objGraph.foo.bar changes. If the value is ever
-                                                    // unreachable, the value is considered to be undefined.
-
-    observer.observe(objGraph); // Equivalent of observePropertySet(obj) and observePath(obj, prop) for each added property and
-                                // unobservePath(obj, prop) for each deleted property.
+    var currentValue = observer.observePath(objGraph, 'foo.bar'); // Will report when the value at objGraph.foo.bar changes. If the value is ever
+                                                                  // unreachable, the value is considered to be undefined.
 
 Array "splice" changes
 ----------------------

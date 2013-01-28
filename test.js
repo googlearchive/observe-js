@@ -31,6 +31,16 @@ function assertArraysEquivalent() {
   }
 }
 
+function assertObjectsEquivalent(a, b) {
+  var keys = Object.keys(a);
+
+  assertEquals(keys.length, Object.keys(b).length);
+  keys.forEach(function(prop) {
+    assertTrue(b.hasOwnProperty(prop));
+    assertEquals(a[prop], b[prop]);
+  });
+}
+
 var observer;
 var summaries;
 var callbackCount = 0;
@@ -66,24 +76,32 @@ function assertSplicesEqual(expect, actual) {
 function assertSummary(expect) {
   expectedCallbackCount++;
   observer.deliver();
+
   assertEquals(expectedCallbackCount, callbackCount);
+
   assertEquals(1, summaries.length);
   var summary = summaries[0];
   assertEquals(expect.object, summary.object);
-  assertArraysEquivalent(expect.newProperties, summary.newProperties);
-  assertArraysEquivalent(expect.deletedProperties, summary.deletedProperties);
-  assertSplicesEqual(expect.arraySplices, summary.arraySplices);
-  assertArraysEquivalent(expect.pathValueChanged, summary.pathValueChanged);
+  delete summary.object;
+
+  var getOldValue = summary.getOldValue;
+  delete summary.getOldValue;
+
+  Object.keys(summary).forEach(function(changeType) {
+    if (changeType == 'splices') {
+      assertSplicesEqual(expect.splices, summary.splices);
+      return;
+    }
+
+    var newValues = summary[changeType];
+    assertObjectsEquivalent(expect[changeType], summary[changeType]);
+
+    Object.keys(newValues).forEach(function(propOrPath) {
+      assertEquals(expect.oldValues[propOrPath], getOldValue(propOrPath));
+    });
+  });
 
   summaries = undefined;
-
-  if (!expect.pathValueChanged)
-    return;
-
-  expect.pathValueChanged.forEach(function(path) {
-    assertEquals(expect.oldPathValues[path], summary.getOldPathValue(path));
-    assertEquals(expect.newPathValues[path], summary.getNewPathValue(path));
-  });
 }
 
 function assertNoSummary() {
@@ -96,9 +114,9 @@ function applySplices(orig, copy) {
   summaries = undefined;
   observer.deliver();
   if (summaries && summaries.length &&
-      summaries[0].arraySplices && summaries[0].arraySplices.length) {
+      summaries[0].splices && summaries[0].splices.length) {
     assertEquals(orig, summaries[0].object);
-    var splices = summaries[0].arraySplices;
+    var splices = summaries[0].splices;
     splices.forEach(function(splice) {
       var spliceArgs = [splice.index, splice.removed.length];
       var addIndex = splice.index;
@@ -131,38 +149,51 @@ function testNoDeliveryOnEval() {
 function testObjectPropertySet() {
   var model = {};
 
-  var expect = {
-    propertyName: 'id'
-  };
-
-  observer.observePropertySet(model);
+  observer.observeObject(model);
   model.id = 0;
   assertSummary({
     object: model,
-    newProperties: ['id'],
-    deletedProperties: []
+    added: {
+      id: 0
+    },
+    removed: {},
+    changed: {},
+    oldValues: {
+      id: undefined
+    }
   });
 
   delete model.id;
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: ['id']
+    added: {},
+    removed: {
+      id: undefined
+    },
+    changed: {},
+    oldValues: {
+      id: 0
+    }
   });
 
   // Stop observing -- shouldn't see an event
-  observer.unobservePropertySet(model);
+  observer.unobserveObject(model);
   model.id = 101;
-  summaries = undefined;
   assertNoSummary();
 
   // Re-observe -- should see an new event again.
-  observer.observePropertySet(model);
+  observer.observeObject(model);
   model.id2 = 202;;
   assertSummary({
     object: model,
-    newProperties: ['id2'],
-    deletedProperties: []
+    added: {
+      id2: 202
+    },
+    removed: {},
+    changed: {},
+    oldValues: {
+      id2: undefined
+    }
   });
 }
 
@@ -193,33 +224,44 @@ function testNotify() {
   model.a.b = 4; // will be observed.
   assertSummary({
     object: model,
-    pathValueChanged: ['a.b'],
-    oldPathValues: {
+    pathChanged: {
+      'a.b': 4
+    },
+    oldValues: {
       'a.b': 2
     },
-    newPathValues: {
-      'a.b': 4
-    }
   });
 }
 
 function testObjectDeleteAddDelete() {
   var model = { id: 1 };
 
-  observer.observePropertySet(model);
+  observer.observeObject(model);
   // If mutation occurs in seperate "runs", two events fire.
   delete model.id;
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: ['id']
+    added: {},
+    removed: {
+      id: undefined
+    },
+    changed: {},
+    oldValues: {
+      id: 1
+    }
   });
 
   model.id = 1;
   assertSummary({
     object: model,
-    newProperties: ['id'],
-    deletedProperties: []
+    added: {
+      id: 1
+    },
+    removed: {},
+    changed: {},
+    oldValues: {
+      id: undefined
+    }
   });
 
   // If mutation occurs in the same "run", no events fire (nothing changed).
@@ -230,37 +272,39 @@ function testObjectDeleteAddDelete() {
 
 function testObserveAll() {
   var model = { foo: 1, bar: 2, bat: 3 };
-  observer.observe(model);
+  observer.observeObject(model);
   observer.observePath(model, 'foo');
 
   model.foo = 2;
   model.bar = 3;
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    pathValueChanged: ['bar', 'foo'],
-    oldPathValues: {
-      foo: 1,
-      bar: 2
-    },
-    newPathValues: {
+    added: {},
+    removed: {},
+    changed: {
       foo: 2,
       bar: 3
+    },
+    pathChanged: {
+      foo: 2
+    },
+    oldValues: {
+      foo: 1,
+      bar: 2
     }
   });
 
   model.bar = 4;
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    pathValueChanged: ['bar'],
-    oldPathValues: {
-      bar: 3
-    },
-    newPathValues: {
+    added: {},
+    removed: {},
+    changed: {
       bar: 4
+    },
+    pathChanged: {},
+    oldValues: {
+      bar: 3
     }
   });
 
@@ -269,19 +313,23 @@ function testObserveAll() {
   delete model.bat;
   assertSummary({
     object: model,
-    newProperties: ['baz'],
-    deletedProperties: ['bat'],
-    pathValueChanged: ['bat', 'baz', 'foo'],
-    oldPathValues: {
+    added: {
+      baz: 6
+    },
+    removed: {
+      bat: undefined
+    },
+    changed: {
+      foo: 5
+    },
+    pathChanged: {
+      foo: 5
+    },
+    oldValues: {
       bat: 3,
       baz: undefined,
       foo: 2
     },
-    newPathValues: {
-      bat: undefined,
-      baz: 6,
-      foo: 5
-    }
   });
 }
 
@@ -292,36 +340,33 @@ function testPathValueSimple() {
   model.foo = 1;
   assertSummary({
     object: model,
-    pathValueChanged: ['foo'],
-    oldPathValues: {
-      foo: undefined
-    },
-    newPathValues: {
+    pathChanged: {
       foo: 1
+    },
+    oldValues: {
+      foo: undefined
     }
   });
 
   model.foo = 2;
   assertSummary({
     object: model,
-    pathValueChanged: ['foo'],
-    oldPathValues: {
-      foo: 1
-    },
-    newPathValues: {
+    pathChanged: {
       foo: 2
+    },
+    oldValues: {
+      foo: 1
     }
   });
 
   delete model.foo;
   assertSummary({
     object: model,
-    pathValueChanged: ['foo'],
-    oldPathValues: {
-      foo: 2
-    },
-    newPathValues: {
+    pathChanged: {
       foo: undefined
+    },
+    oldValues: {
+      foo: 2
     }
   });
 }
@@ -343,7 +388,7 @@ function testPathValueBreadthFirstNotification() {
   observer.observePath(model, 'data.b');
   observer.observePath(model, 'data.a');
   observer.observePath(model, 'data');
-  observer.observePropertySet(model);
+  observer.observeObject(model);
 
   model.data = {
     a: {
@@ -358,16 +403,21 @@ function testPathValueBreadthFirstNotification() {
 
   assertSummary({
     object: model,
-    newProperties: ['data'],
-    deletedProperties: [],
-    pathValueChanged: ['data',
-                       'data.a',
-                       'data.b',
-                       'data.a.c',
-                       'data.a.d',
-                       'data.b.e',
-                       'data.b.f'],
-    oldPathValues: {
+    added: {
+      data: model.data
+    },
+    removed: {},
+    changed: {},
+    pathChanged: {
+      'data': model.data,
+      'data.a': model.data.a,
+      'data.b': model.data.b,
+      'data.a.c': 1,
+      'data.a.d': 2,
+      'data.b.e': 3,
+      'data.b.f': 4
+    },
+    oldValues: {
       'data': undefined,
       'data.a': undefined,
       'data.b': undefined,
@@ -376,15 +426,6 @@ function testPathValueBreadthFirstNotification() {
       'data.b.e': undefined,
       'data.b.f': undefined
     },
-    newPathValues: {
-      'data': model.data,
-      'data.a': model.data.a,
-      'data.b': model.data.b,
-      'data.a.c': 1,
-      'data.a.d': 2,
-      'data.b.e': 3,
-      'data.b.f': 4
-    }
   });
 }
 
@@ -402,12 +443,11 @@ function testPathObservation() {
   model.a.b.c = 'hello, mom';
   assertSummary({
     object: model,
-    pathValueChanged: ['a.b.c'],
-    oldPathValues: {
-      'a.b.c': 'hello, world'
-    },
-    newPathValues: {
+    pathChanged: {
       'a.b.c': 'hello, mom'
+    },
+    oldValues: {
+      'a.b.c': 'hello, world'
     }
   });
 
@@ -416,12 +456,11 @@ function testPathObservation() {
   };
   assertSummary({
     object: model,
-    pathValueChanged: ['a.b.c'],
-    oldPathValues: {
-      'a.b.c': 'hello, mom'
-    },
-    newPathValues: {
+    pathChanged: {
       'a.b.c': 'hello, dad'
+    },
+    oldValues: {
+      'a.b.c': 'hello, mom'
     }
   });
 
@@ -432,24 +471,22 @@ function testPathObservation() {
   };
   assertSummary({
     object: model,
-    pathValueChanged: ['a.b.c'],
-    oldPathValues: {
-      'a.b.c': 'hello, dad'
-    },
-    newPathValues: {
+    pathChanged: {
       'a.b.c': 'hello, you'
+    },
+    oldValues: {
+      'a.b.c': 'hello, dad'
     }
   });
 
   model.a.b = 1;
   assertSummary({
     object: model,
-    pathValueChanged: ['a.b.c'],
-    oldPathValues: {
-      'a.b.c': 'hello, you'
-    },
-    newPathValues: {
+    pathChanged: {
       'a.b.c': undefined
+    },
+    oldValues: {
+      'a.b.c': 'hello, you'
     }
   });
 
@@ -465,12 +502,11 @@ function testPathObservation() {
   model.a.b.c = 'hello. Back for reals';
   assertSummary({
     object: model,
-    pathValueChanged: ['a.b.c'],
-    oldPathValues: {
-      'a.b.c': 'hello, back again -- but not observing',
-    },
-    newPathValues: {
+    pathChanged: {
       'a.b.c': 'hello. Back for reals'
+    },
+    oldValues: {
+      'a.b.c': 'hello, back again -- but not observing',
     }
   });
 
@@ -480,12 +516,11 @@ function testPathObservation() {
   model.a.b.c = 'hello. scopes are different';
   assertSummary({
     object: model,
-    pathValueChanged: ['a.b.c'],
-    oldPathValues: {
-      'a.b.c': 'hello. Back for reals'
-    },
-    newPathValues: {
+    pathChanged: {
       'a.b.c': 'hello. scopes are different'
+    },
+    oldValues: {
+      'a.b.c': 'hello. Back for reals'
     }
   });
 }
@@ -500,12 +535,11 @@ function testMultipleObservationsAreCollapsed() {
 
   assertSummary({
     object: model,
-    pathValueChanged: ['id'],
-    oldPathValues: {
-      'id': 1
-    },
-    newPathValues: {
+    pathChanged: {
       'id': 2
+    },
+    oldValues: {
+      'id': 1
     }
   });
 }
@@ -514,25 +548,25 @@ function testExceptionDoesntStopNotification() {
   var model = { id: 1 };
   var count = 0;
 
-  observer.observePropertySet(model);
+  observer.observeObject(model);
 
   var observer2 = new ChangeSummary(function() {
     callbackCount++;
     throw 'Bad';
   });
-  observer2.observePropertySet(model);
+  observer2.observeObject(model);
 
   var observer3 = new ChangeSummary(function() {
     callbackCount++;
     throw 'Bad';
   });
-  observer3.observePropertySet(model);
+  observer3.observeObject(model);
 
   var observer4 = new ChangeSummary(function() {
     callbackCount++;
     throw 'Bad';
   });
-  observer4.observePropertySet(model);
+  observer4.observeObject(model);
 
   model.id = 2;
   model.id2 = 2;
@@ -546,10 +580,10 @@ function testExceptionDoesntStopNotification() {
 }
 
 function testSetSame() {
-  var model = {id: 1};
+  var model = [1];
 
-  observer.observePropertySet(model);
-  model.id = 1;
+  observer.observeArray(model);
+  model[0] = 1;
 
   assertNoSummary();
 }
@@ -584,14 +618,21 @@ function testSetReadOnly() {
 function testSetUndefined() {
   var model = {};
 
-  observer.observePropertySet(model);
+  observer.observeObject(model);
 
   model.x = undefined;
   assertSummary({
     object: model,
-    newProperties: ['x'],
-    deletedProperties: []
-  });}
+    added: {
+      x: undefined
+    },
+    removed: {},
+    changed: {},
+    oldValues: {
+      x: undefined
+    }
+  });
+}
 
 function testSetShadows() {
   var model = {
@@ -604,12 +645,11 @@ function testSetShadows() {
   model.x = 2;
   assertSummary({
     object: model,
-    pathValueChanged: ['x'],
-    oldPathValues: {
-      'x': 1
+    pathChanged: {
+      x: 2
     },
-    newPathValues: {
-      'x': 2
+    oldValues: {
+      x: 1
     }
   });
 }
@@ -640,12 +680,11 @@ function testDeleteWithDifferentValueOnPrototype() {
   delete model.x;
   assertSummary({
     object: model,
-    pathValueChanged: ['x'],
-    oldPathValues: {
-      'x': 2
-    },
-    newPathValues: {
+    pathChanged: {
       'x': 1
+    },
+    oldValues: {
+      'x': 2
     }
   });
 }
@@ -665,15 +704,13 @@ function testDeleteOfNonConfigurable() {
 function testArray() {
   var model = [0, 1];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model[0] = 2;
 
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [0],
       addedCount: 1
@@ -683,9 +720,7 @@ function testArray() {
   model[1] = 3;
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 1,
       removed: [1],
       addedCount: 1
@@ -697,14 +732,12 @@ function testArraySplice() {
 
   var model = [0, 1]
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(1, 1, 2, 3); // [0, 2, 3]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 1,
       removed: [1],
       addedCount: 2
@@ -714,9 +747,7 @@ function testArraySplice() {
   model.splice(0, 1); // [2, 3]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [0],
       addedCount: 0
@@ -735,9 +766,7 @@ function testArraySplice() {
   model.splice(-1, 0, 1.5); // [2, 1.5, 3]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 1,
       removed: [],
       addedCount: 1
@@ -747,9 +776,7 @@ function testArraySplice() {
   model.splice(3, 0, 0); // [2, 1.5, 3, 0]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 3,
       removed: [],
       addedCount: 1
@@ -759,9 +786,7 @@ function testArraySplice() {
   model.splice(0); // []
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [2, 1.5, 3, 0],
       addedCount: 0
@@ -772,15 +797,13 @@ function testArraySplice() {
 function testArraySpliceTruncateAndExpandWithLength() {
   var model = ['a', 'b', 'c', 'd', 'e'];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.length = 2;
 
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 2,
       removed: ['c', 'd', 'e'],
       addedCount: 0
@@ -791,9 +814,7 @@ function testArraySpliceTruncateAndExpandWithLength() {
 
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 2,
       removed: [],
       addedCount: 3
@@ -805,14 +826,12 @@ function testArraySpliceTruncateAndExpandWithLength() {
 function testArraySpliceDeleteTooMany() {
   var model = ['a', 'b', 'c'];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(2, 3); // ['a', 'b']
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 2,
       removed: ['c'],
       addedCount: 0
@@ -823,14 +842,12 @@ function testArraySpliceDeleteTooMany() {
 function testArrayLength() {
   var model = [0, 1];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.length = 5; // [0, 1, , , ,];
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 2,
       removed: [],
       addedCount: 3
@@ -840,9 +857,7 @@ function testArrayLength() {
   model.length = 1;
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 1,
       removed: [1, , , ,],
       addedCount: 0
@@ -856,14 +871,12 @@ function testArrayLength() {
 function testArrayPush() {
   var model = [0, 1];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.push(2, 3); // [0, 1, 2, 3]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 2,
       removed: [],
       addedCount: 2
@@ -877,14 +890,12 @@ function testArrayPush() {
 function testArrayPop() {
   var model = [0, 1];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.pop(); // [0]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 1,
       removed: [1],
       addedCount: 0
@@ -894,9 +905,7 @@ function testArrayPop() {
   model.pop(); // []
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [0],
       addedCount: 0
@@ -910,13 +919,11 @@ function testArrayPop() {
 function testArrayShift() {
   var model = [0, 1];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
   model.shift(); // [1]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [0],
       addedCount: 0
@@ -926,9 +933,7 @@ function testArrayShift() {
   model.shift(); // []
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [1],
       addedCount: 0
@@ -942,13 +947,11 @@ function testArrayShift() {
 function testArrayUnshift() {
   var model = [0, 1];
 
-  observer.observePropertySet(model);
+  observer.observeArray(model);
   model.unshift(-1); // [-1, 0, 1]
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [],
       addedCount: 1
@@ -958,9 +961,7 @@ function testArrayUnshift() {
   model.unshift(-3, -2); // []
   assertSummary({
     object: model,
-    newProperties: [],
-    deletedProperties: [],
-    arraySplices: [{
+    splices: [{
       index: 0,
       removed: [],
       addedCount: 2
@@ -974,7 +975,7 @@ function testArrayUnshift() {
 function testArrayTrackerContained() {
   var model = ['a', 'b'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(1, 1);
   model.unshift('c', 'd', 'e');
@@ -986,7 +987,7 @@ function testArrayTrackerContained() {
 function testArrayTrackerDeleteEmpty() {
   var model = [];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   delete model[0];
   model.splice(0, 0, 'a', 'b', 'c');
@@ -997,7 +998,7 @@ function testArrayTrackerDeleteEmpty() {
 function testArrayTrackerRightNonOverlap() {
   var model = ['a', 'b', 'c', 'd'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(0, 1, 'e');
   model.splice(2, 1, 'f', 'g');
@@ -1008,7 +1009,7 @@ function testArrayTrackerRightNonOverlap() {
 function testArrayTrackerLeftNonOverlap() {
   var model = ['a', 'b', 'c', 'd'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(3, 1, 'f', 'g');
   model.splice(0, 1, 'e');
@@ -1019,7 +1020,7 @@ function testArrayTrackerLeftNonOverlap() {
 function testArrayTrackerRightAdjacent() {
   var model = ['a', 'b', 'c', 'd'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(1, 1, 'e');
   model.splice(2, 1, 'f', 'g');
@@ -1030,7 +1031,7 @@ function testArrayTrackerRightAdjacent() {
 function testArrayTrackerLeftAdjacent() {
   var model = ['a', 'b', 'c', 'd'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(2, 2, 'e');
   model.splice(1, 1, 'f', 'g');
@@ -1041,7 +1042,7 @@ function testArrayTrackerLeftAdjacent() {
 function testArrayTrackerRightOverlap() {
   var model = ['a', 'b', 'c', 'd'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(1, 1, 'e');
   model.splice(1, 1, 'f', 'g');
@@ -1052,7 +1053,7 @@ function testArrayTrackerRightOverlap() {
 function testArrayTrackerLeftOverlap() {
   var model = ['a', 'b', 'c', 'd'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(2, 1, 'e', 'f', 'g');  // a b [e f g] d
   model.splice(1, 2, 'h', 'i', 'j'); // a [h i j] f g d
@@ -1063,7 +1064,7 @@ function testArrayTrackerLeftOverlap() {
 function testArrayTrackerUpdateDelete() {
   var model = ['a', 'b', 'c', 'd'];
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model.splice(2, 1, 'e', 'f', 'g');  // a b [e f g] d
   model[0] = 'h';
@@ -1077,7 +1078,7 @@ function testArrayTrackerUpdateAfterDelete() {
   delete model[2];
 
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   model[2] = 'e';
 
@@ -1088,7 +1089,7 @@ function testArrayTrackerDeleteMidArray() {
   var model = ['a', 'b', 'c', 'd'];
 
   var copy = model.slice();
-  observer.observePropertySet(model);
+  observer.observeArray(model);
 
   delete model[2];
 
@@ -1157,8 +1158,8 @@ function randomArrayOperations(arr, count) {
 
 var valMax = 16;
 var arrayLengthMax = 32;
-var testCount = 64;
-var operationCount = 64;
+var testCount = 32;
+var operationCount = 32;
 
 function testArrayTrackerFuzzer() {
   console.log('Fuzzing spliceProjection ' + testCount +
@@ -1175,7 +1176,7 @@ function testArrayTrackerFuzzer() {
     var copy = model.slice();
 
     setUp();
-    observer.observePropertySet(model);
+    observer.observeArray(model);
 
     randomArrayOperations(model, operationCount);
 
@@ -1204,10 +1205,10 @@ function assertEditDistance(orig, expectDistance) {
   var actualDistance = 0;
 
   if (summaries && summaries.length &&
-      summaries[0].arraySplices && summaries[0].arraySplices.length) {
+      summaries[0].splices && summaries[0].splices.length) {
 
     assertEquals(orig, summaries[0].object);
-    var splices = summaries[0].arraySplices;
+    var splices = summaries[0].splices;
     splices.forEach(function(splice) {
       actualDistance += splice.addedCount += splice.removed.length;
     });
@@ -1218,23 +1219,23 @@ function assertEditDistance(orig, expectDistance) {
 
 function testArrayTrackerNoProxiesEdits() {
   model = [];
-  observer.observePropertySet(model);
+  observer.observeArray(model);
   model.length = 0;
   model.push(1, 2, 3);
   assertEditDistance(model, 3);
-  observer.unobservePropertySet(model);
+  observer.unobserveArray(model);
 
   model = ['x', 'x', 'x', 'x', '1', '2', '3'];
-  observer.observePropertySet(model);
+  observer.observeArray(model);
   model.length = 0;
   model.push('1', '2', '3', 'y', 'y', 'y', 'y');
   assertEditDistance(model, 8);
-  observer.unobservePropertySet(model);
+  observer.unobserveArray(model);
 
   model = ['1', '2', '3', '4', '5'];
-  observer.observePropertySet(model);
+  observer.observeArray(model);
   model.length = 0;
   model.push('a', '2', 'y', 'y', '4', '5', 'z', 'z');
   assertEditDistance(model, 7);
-  observer.unobservePropertySet(model);
+  observer.unobserveArray(model);
 }

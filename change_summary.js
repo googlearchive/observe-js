@@ -192,19 +192,19 @@
    *
   function callback(summaries) {
     summaries.forEach(function(summary) {
-      summary.newProperties; // [ Array of String (propertyName) ]
-      summary.deletedProperties; // [ Array of String (propertyName) ]
-      summary.arraySplices; // [ Array of
-                            //   {
-                            //     index: [ Number ]
-                            //     removed: [ Number ]
-                            //     addedCount: [ Number ]
-                            //   }
-                            // ]
+      summary.added;   // { prop => newValue }
+      summary.removed; // { prop => newValue }
+      summary.changed; // { prop => newValue }
+      summary.splices; // [ Array of
+                       //   {
+                       //     index: [ Number ]
+                       //     removed: [ Array of values ]
+                       //     addedCount: [ Count ]
+                       //   }
+                       // ]
 
-      summary.pathValueChanged; // [Array of String (path) ]
-      summary.getOldPathValue(path) = function() {};
-      summary.getNewPathValue(path) = function() {};
+      summary.pathChanged; // { path => newValue }
+      summary.getOldValue(propOrPath) = function() {};
     });
   }
   */
@@ -249,13 +249,12 @@
           activeTrackers.add(tracker);
         });
 
-        var dirtyTrackers = new Set;
         activeTrackers.keys().forEach(function(tracker) {
-          tracker.process(objectTrackers, dirtyTrackers);
+          tracker.process(objectTrackers, activeTrackers);
         });
 
         summaries = [];
-        dirtyTrackers.keys().forEach(function(tracker) {
+        activeTrackers.keys().forEach(function(tracker) {
           var summary = tracker.produceSummary();
           if (summary)
             summaries.push(summary);
@@ -278,14 +277,14 @@
     Object.observe(register, internalCallback);
     Object.unobserve(register, internalCallback);
 
-    this.observe = function(obj) {
+    this.observeObject = function(obj) {
       if (!isObject(obj))
         throw Error('Invalid attempt to observe non-object: ' + obj);
 
-      getObjectTracker(obj).observeAll = true;
+      getObjectTracker(obj).observeObject = true;
     };
 
-    this.unobserve = function(obj) {
+    this.unobserveObject = function(obj) {
       if (!isObject(obj))
         throw Error('Invalid attempt to unobserve non-object: ' + obj);
 
@@ -293,29 +292,29 @@
       if (!tracker)
         return;
 
-      tracker.observeAll = undefined;
-      if (!tracker.observePropertySet && !tracker.propertyObserverCount)
+      tracker.observeObject = undefined;
+      if (!tracker.observeArray && !tracker.propertyObserverCount)
         removeObjectTracker(obj);
     };
 
-    this.observePropertySet = function(obj) {
-      if (!isObject(obj))
-        throw Error('Invalid attempt to observe non-object: ' + obj);
+    this.observeArray = function(arr) {
+      if (!Array.isArray(arr))
+        throw Error('Invalid attempt to observe non-array: ' + arr);
 
-      getObjectTracker(obj).observePropertySet = true;
+      getObjectTracker(arr).observeArray = true;
     };
 
-    this.unobservePropertySet = function(obj) {
-      if (!isObject(obj))
-        throw Error('Invalid attempt to unobserve non-object: ' + obj);
+    this.unobserveArray = function(arr) {
+      if (!Array.isArray(arr))
+        return;
 
-      var tracker = objectTrackers.get(obj);
+      var tracker = objectTrackers.get(arr);
       if (!tracker)
         return;
 
-      tracker.observePropertySet = undefined;
-      if (!tracker.observeAll && !tracker.propertyObserverCount)
-        removeObjectTracker(obj);
+      tracker.observeArray = undefined;
+      if (!tracker.observeObject && !tracker.propertyObserverCount)
+        removeObjectTracker(arr);
     };
 
     // FIXME: Notate and check all places where model values are retrieved and script may run.
@@ -332,7 +331,7 @@
           return;
 
         tracker.unobserveProperty(prop, pathValue);
-        if (!tracker.propertyObserverCount && !tracker.observePropertySet && !tracker.observeAll)
+        if (!tracker.propertyObserverCount && !tracker.observeArray && !tracker.observeObject)
           removeObjectTracker(obj);
       }
     };
@@ -420,7 +419,6 @@
   function ObjectTracker(obj) {
     this.object = obj;
     this.propertyObserverCount = 0;
-    this.changeRecords = [];
   }
 
   ObjectTracker.prototype = {
@@ -460,60 +458,34 @@
     },
 
     addChangeRecord: function(changeRecord) {
+      if (!this.changeRecords)
+        this.changeRecords = [];
+
       this.changeRecords.push(changeRecord);
     },
 
-    process: function(objectTrackers, dirtyTrackers) {
+    process: function(objectTrackers, activeTrackers) {
       var changeRecords = this.changeRecords;
-      this.changeRecords = [];
+      this.changeRecords = undefined;
 
-      if (this.dead)  // observation stopped mid-process.
+      if (this.dead)  // observation stopped mid-process. FIXME: Is this really possible?
         return;
 
-      var diff = diffObjectFromChangeRecords(changeRecords);
-      var valueChanged = diff.valueChanged;
-      var added = diff.added;
-      var deleted = diff.deleted;
+      var diff = diffObjectFromChangeRecords(this.object, changeRecords);
+      this.diff = diff;
 
-      if (this.observeAll) {
-        var ownPropertiesChanged = {};
-
-        var props = Object.keys(valueChanged);
-        if (Array.isArray(this.object))
-          props = props.filter(isNotIndex);
-
-        props.forEach(function(prop) {
-          ownPropertiesChanged[prop] = valueChanged[prop];
-        }, this);
-
-        if (Object.keys(ownPropertiesChanged).length) {
-          this.ownPropertiesChanged = ownPropertiesChanged;
-          dirtyTrackers.add(this);
-        }
-      }
-
-      if (this.observePropertySet || this.observeAll) {
-        this.added = added;
-        this.deleted = deleted;
-
-        if (this.observeAll)
-          this.valueChanged = valueChanged;
-
-        if (Array.isArray(this.object)) {
-          this.splices = projectArraySplices(this.object, valueChanged);
-          this.added = this.added.filter(isNotIndex);
-          this.deleted = this.deleted.filter(isNotIndex);
-        }
-
-        if (this.added.length || this.deleted.length || (this.splices && this.splices.length))
-          dirtyTrackers.add(this);
-      }
+      if (this.observeArray)
+        diff.splices = projectArraySplices(this.object, diff);
 
       if (!this.propertyObservers)
         return;
 
-      var props = Object.keys(valueChanged);
+      this.addDirtyPathValues(Object.keys(diff.added), objectTrackers, activeTrackers);
+      this.addDirtyPathValues(Object.keys(diff.removed), objectTrackers, activeTrackers);
+      this.addDirtyPathValues(Object.keys(diff.changed), objectTrackers, activeTrackers);
+    },
 
+    addDirtyPathValues: function(props, objectTrackers, activeTrackers) {
       for (var i = 0; i < props.length; i++) {
         var pathValues = this.propertyObservers[props[i]];
         if (!pathValues)
@@ -525,103 +497,74 @@
           if (!tracker.dirtyPathValues)
             tracker.dirtyPathValues = new Set;
           tracker.dirtyPathValues.add(pathValue);
-          dirtyTrackers.add(tracker)
+          activeTrackers.add(tracker)
         });
       }
     },
 
     produceSummary: function() {
-      var anyChanges = false;
+      var diff = this.diff || { added: {}, removed: {}, changed: {}, oldValues: {} }; // FIXME: SLOW?
+      this.diff = undefined;
+      var oldValues = diff.oldValues;
+      diff.oldValues = undefined;
 
-      var summary = {
-        object: this.object
+      var objectChanges = false;
+      if (this.observeObject) {
+        // FIXME: Slow
+        objectChanges = Object.keys(diff.added).length ||
+                        Object.keys(diff.removed).length ||
+                        Object.keys(diff.changed).length;
       }
 
-      if (this.observePropertySet || this.observeAll) {
-        summary.newProperties = this.added;
-        summary.deletedProperties = this.deleted;
+      var spliceChanges = this.observeArray && diff.splices.length;
 
-        anyChanges |= summary.newProperties.length || summary.deletedProperties.length;
+      var pathChanges = false;
+      if (this.dirtyPathValues) {
+        var dirtyPathValues = this.dirtyPathValues.keys();
+        this.dirtyPathValues = undefined;
 
-        this.added = undefined;
-        this.deleted = undefined;
-
-        if (this.splices) {
-          summary.arraySplices = this.splices;
-          anyChanges |= summary.arraySplices.length;
-          this.splices = undefined;
-        }
-      };
-
-      var dirtyPathValues = this.dirtyPathValues ? this.dirtyPathValues.keys() : [];
-      dirtyPathValues.sort(pathValueSort);
-      this.dirtyPathValues = undefined;
-
-      var oldValues = {};
-      var newValues = {};
-
-      dirtyPathValues.forEach(function(pathValue) {
-        var oldValue = pathValue.value;
-        if (pathValue.reset()) {
-          var pathString = pathValue.path.toString();
-          oldValues[pathString] = oldValue;
-          newValues[pathString] = pathValue.value;
-
-          if (!summary.pathValueChanged)
-            summary.pathValueChanged = [];
-          summary.pathValueChanged.push(pathString);
-          if (this.ownPropertiesChanged && this.ownPropertiesChanged.hasOwnProperty(pathString))
-            delete this.ownPropertiesChanged[pathString];
-        }
-      }, this);
-
-      if (this.observeAll && this.ownPropertiesChanged) {
-        var ownPathValueChanged = [];
-
-        Object.keys(this.ownPropertiesChanged).forEach(function(prop) {
-          var oldValue = this.ownPropertiesChanged[prop];
-          var newValue = this.object[prop];
-          if (oldValue !== newValue) {
-            ownPathValueChanged.push(prop);
-            oldValues[prop] = oldValue;
-            newValues[prop] = newValue;
+        diff.pathChanged = {};
+        dirtyPathValues.forEach(function(pathValue) {
+          var oldValue = pathValue.value;
+          if (pathValue.reset()) {
+            var pathString = pathValue.path.toString();
+            oldValues[pathString] = oldValue;
+            diff.pathChanged[pathString] = pathValue.value;
           }
         }, this);
 
-        if (ownPathValueChanged.length) {
-          summary.pathValueChanged = summary.pathValueChanged || [];
-          summary.pathValueChanged = ownPathValueChanged.sort().concat(summary.pathValueChanged);
-        }
+        pathChanges = !!Object.keys(diff.pathChanged).length;
       }
 
-      if (summary.pathValueChanged) {
-        anyChanges = true;
+      if (!objectChanges && !spliceChanges && !pathChanges)
+        return;
 
-        // Fixme: what if path strings are different, e.g. [] vs .
-        summary.getOldPathValue = function(string) {
-          return oldValues[string];
-        };
+      var summary = {
+        object: this.object
+      };
 
-        summary.getNewPathValue = function(string) {
-          return newValues[string];
-        };
+      var getOldValue = function(propOrPath) {
+        return oldValues[propOrPath];
+      };
+
+      if (objectChanges) {
+        summary.added = diff.added;
+        summary.removed = diff.removed;
+        summary.changed = diff.changed;
+        summary.getOldValue = getOldValue;
       }
 
-      return anyChanges ? summary : undefined;
+      if (spliceChanges)
+        summary.splices = diff.splices;
+
+      if (pathChanges) {
+        summary.pathChanged = diff.pathChanged;
+        summary.getOldValue = getOldValue;
+      }
+
+      return summary;
     }
   };
-
-  function pathValueSort(a, b) {
-    if (a.path.length < b.path.length)
-      return -1;
-    if (a.path.length > b.path.length)
-      return 1;
-
-    var aStr = a.path.toString();
-    var bStr = b.path.toString();
-
-    return aStr < bStr ? -1 : (aStr > bStr ? 1 : 0);
-  }
 
   function PathValue(internal, object, path) {
     this.path = path;
@@ -674,10 +617,10 @@
     'deleted': true
   };
 
-  function diffObjectFromChangeRecords(changeRecords) {
+  function diffObjectFromChangeRecords(object, changeRecords) {
     var added = {};
-    var deleted = {};
-    var valueChanged = {};
+    var removed = {};
+    var oldValues = {};
 
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
@@ -687,36 +630,51 @@
         continue;
       }
 
-      if (!(record.name in valueChanged)) {
-        valueChanged[record.name] = record.oldValue;
-      }
+      if (!(record.name in oldValues))
+        oldValues[record.name] = record.oldValue;
 
-      if (record.type == 'updated') {
+      if (record.type == 'updated')
         continue;
-      }
 
       if (record.type == 'new') {
-        if (record.name in deleted) {
-          delete deleted[record.name];
-        } else {
+        if (record.name in removed)
+          delete removed[record.name];
+        else
           added[record.name] = true;
-        }
+
         continue;
       }
 
-      // Deleted
+      // type = 'deleted'
       if (record.name in added) {
         delete added[record.name];
-        delete valueChanged[record.name];
+        delete oldValues[record.name];
       } else {
-        deleted[record.name] = true;
+        removed[record.name] = true;
       }
     }
 
+    for (var prop in added)
+      added[prop] = object[prop];
+
+    for (var prop in removed)
+      removed[prop] = undefined;
+
+    var changed = {};
+    for (var prop in oldValues) {
+      if (added.hasOwnProperty(prop) || removed.hasOwnProperty(prop))
+        continue;
+
+      var newValue = object[prop];
+      if (oldValues[prop] !== newValue)
+        changed[prop] = newValue;
+    }
+
     return {
-      added: Object.keys(added).sort(),
-      deleted: Object.keys(deleted).sort(),
-      valueChanged: valueChanged
+      added: added,
+      removed: removed,
+      changed: changed,
+      oldValues: oldValues
     };
   }
 
@@ -900,8 +858,8 @@
     return splices;
   }
 
-  function createInitialSplicesFromChanges(array, valueChanged) {
-    var oldLength = 'length' in valueChanged ? toNumber(valueChanged.length) : array.length;
+  function createInitialSplicesFromDiff(array, diff) {
+    var oldLength = 'length' in diff.oldValues ? toNumber(diff.oldValues.length) : array.length;
 
     var lengthChangeSplice;
     if (array.length > oldLength) {
@@ -919,17 +877,23 @@
     }
 
     var indicesChanged = [];
-    Object.keys(valueChanged).forEach(function(prop) {
-      var index = toNumber(prop);
-      if (isNaN(index) || index < 0 || index >= oldLength)
-        return;
+    function addProperties(properties, oldValues) {
+      Object.keys(properties).forEach(function(prop) {
+        var index = toNumber(prop);
+        if (isNaN(index) || index < 0 || index >= oldLength)
+          return;
 
-      var oldValue = valueChanged[index];
-      if (index < array.length)
-        indicesChanged[index] = oldValue;
-      else
-        lengthChangeSplice.removed[index - array.length] = valueChanged[index];
-    });
+        var oldValue = oldValues[index];
+        if (index < array.length)
+          indicesChanged[index] = oldValue;
+        else
+          lengthChangeSplice.removed[index - array.length] = diff.oldValues[index];
+      });
+    }
+
+    addProperties(diff.added, diff.oldValues);
+    addProperties(diff.removed, diff.oldValues);
+    addProperties(diff.changed, diff.oldValues);
 
     var splices = [];
     var current;
@@ -977,10 +941,10 @@
     return splices;
   }
 
-  function projectArraySplices(array, valueChanged) {
+  function projectArraySplices(array, diff) {
     var splices = [];
 
-    createInitialSplicesFromChanges(array, valueChanged).forEach(function(splice) {
+    createInitialSplicesFromDiff(array, diff).forEach(function(splice) {
       splices = splices.concat(calcSplices(array, splice.index, splice.addedCount, splice.removed));
     });
 
