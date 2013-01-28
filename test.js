@@ -133,6 +133,9 @@ function applySplices(orig, copy) {
 }
 
 function testNoDeliveryOnEval() {
+  if (typeof Object.observe !== 'function')
+    return;
+
   var obj = {};
   var count = 0;
   function callback() {
@@ -198,6 +201,9 @@ function testObjectPropertySet() {
 }
 
 function testNotify() {
+  if (typeof Object.getNotifier !== 'function')
+    return;
+
   var model = {
     a: {}
   }
@@ -1157,9 +1163,9 @@ function randomArrayOperations(arr, count) {
 }
 
 var valMax = 16;
-var arrayLengthMax = 32;
-var testCount = 32;
-var operationCount = 32;
+var arrayLengthMax = 64;
+var testCount = 256;
+var operationCount = 16;
 
 function testArrayTrackerFuzzer() {
   console.log('Fuzzing spliceProjection ' + testCount +
