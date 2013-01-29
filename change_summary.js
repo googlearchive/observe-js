@@ -631,7 +631,7 @@
       var changed = false;
       self.path.walkPropertiesFrom(object, function(prop, value, i) {
         if (i == this.path.length) {
-          if (this.value == value)
+          if (this.value === value)
             return;
 
           changed = true;

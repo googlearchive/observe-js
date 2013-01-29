@@ -339,6 +339,33 @@ function testObserveAll() {
   });
 }
 
+function testPathValueTripleEquals() {
+  var model = { };
+  observer.observePath(model, 'foo');
+
+  model.foo = null;
+  assertSummary({
+    object: model,
+    pathChanged: {
+      foo: null
+    },
+    oldValues: {
+      foo: undefined
+    }
+  });
+
+  model.foo = undefined;
+  assertSummary({
+    object: model,
+    pathChanged: {
+      foo: undefined
+    },
+    oldValues: {
+      foo: null
+    }
+  });
+}
+
 function testPathValueSimple() {
   var model = { };
   observer.observePath(model, 'foo');
