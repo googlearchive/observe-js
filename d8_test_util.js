@@ -22,8 +22,16 @@
 this.console = this.console || {};
 this.console.log = print;
 this.console.error = print;
-this.console.time = print;
-this.console.timeEnd = print;
+var timeMap = {};
+this.console.time = function(what) {
+  timeMap[what] = new Date();
+};
+this.console.timeEnd = function(what) {
+  if (!timeMap[what])
+    return;
+  print(what + ": " + (new Date().getTime() - timeMap[what].getTime()) + 'ms');
+  timeMap[what] = undefined;
+};
 this.output = print;
 
 /*
