@@ -149,7 +149,31 @@ function testNoDeliveryOnEval() {
   assertEquals(0, count);
 }
 
-function testObjectPropertySet() {
+function testDegenerateValues() {
+  assertEquals(null, observer.observePath(null, ''));
+  assertEquals(null, ChangeSummary.getValueAtPath(null, ''));
+  observer.unobservePath(null, ''); // shouldn't throw
+
+  var foo = {};
+  assertEquals(foo, observer.observePath(foo, ''));
+  assertEquals(foo, ChangeSummary.getValueAtPath(foo, ''));
+  observer.unobservePath(foo, ''); // shouldn't throw
+
+  assertEquals(3, observer.observePath(3, ''));
+  assertEquals(3, ChangeSummary.getValueAtPath(3, ''));
+  observer.unobservePath(3, ''); // shouldn't throw
+
+  assertEquals(undefined, observer.observePath(undefined, 'a'));
+  assertEquals(undefined, ChangeSummary.getValueAtPath(undefined, 'a'));
+  observer.unobservePath(undefined, ''); // shouldn't throw
+
+  var bar = { id: 23 };
+  assertEquals(undefined, observer.observePath(bar, 'a/3!'));
+  assertEquals(undefined, ChangeSummary.getValueAtPath(bar, 'a/3!'));
+  observer.unobservePath(undefined, 'a/3!'); // shouldn't throw
+}
+
+function testObserveObject() {
   var model = {};
 
   observer.observeObject(model);

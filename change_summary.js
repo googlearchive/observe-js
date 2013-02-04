@@ -29,7 +29,7 @@
     return obj === Object(obj);
   }
 
-  // FIXME: Use Map/Set iterators when available.
+  // TODO(rafaelw): Use Map/Set iterators when available.
   var HarmonyMap = global.Map ? global.Map : null;
   var HarmonySet = global.Set ? global.Set : null;
 
@@ -123,6 +123,18 @@
     return set;
   }
 
+
+  /*
+   * TODO(rafaelw): Need rigorous definitions for path and "value at path".
+   * Cases to consider:
+   *   Path:
+   *     -empty string (currently a path with 0 property componets)
+   *     -index operators, e.g. "foo[2].baz" (currently not supported)
+   *   Value at Path:
+   *     -empty string path (the value is the model itself)
+   *     -non-object model (valid, if path is non-empty, value is undefined)
+   */
+
   var pathIndentPart = '[\$a-z0-9_]+[\$a-z0-9_\\d]*';
   var pathRegExp = new RegExp('^' +
                               '(?:#?' + pathIndentPart + ')?' +
@@ -135,8 +147,9 @@
     if (typeof s != 'string')
       return false;
     s = s.replace(/\s/g, '');
+
     if (s == '')
-      return false;
+      return true;
 
     if (s[0] == '.')
       return false;
@@ -145,7 +158,7 @@
   }
 
   function Path(s) {
-    if (!isPathValid(s))
+    if (s.trim() == '')
       return this;
 
     if (isIndex(s)) {
@@ -334,8 +347,8 @@
         removeObjectTracker(arr);
     };
 
-    // FIXME: Notate and check all places where model values are retrieved and script may run.
-    // FIXME: Think about how things will react if observe/unobserve are called during processing.
+    // TODO(rafaelw): Notate and check all places where model values are retrieved and script may run.
+    // TODO(rafaelw): Think about how things will react if observe/unobserve are called during processing.
     internal.observeProperty = function(obj, prop, pathValue) {
       getObjectTracker(obj).observeProperty(prop, pathValue);
     },
@@ -351,12 +364,15 @@
     };
 
     this.observePath = function(obj, pathString) {
-      if (!isObject(obj))
-        throw Error('Invalid attempt to unobserve non-object: ' + obj);
+      if (!isPathValid(pathString))
+        return undefined;
 
       var path = new Path(pathString);
-      if (path.length == 0)
-        throw Error('Invalid path: ' + pathString);
+      if (!path.length)
+        return obj;
+
+      if (!isObject(obj))
+        return undefined;
 
       var tracker = getObjectTracker(obj);
       if (!tracker.pathValues)
@@ -375,11 +391,14 @@
     };
 
     this.unobservePath = function(obj, pathString) {
-      if (!isObject(obj))
-        throw Error('Invalid attempt to unobserve non-object: ' + obj);
+      if (!isPathValid(pathString))
+        return;
 
       var path = new Path(pathString);
-      if (path.length == 0)
+      if (!path.length)
+        return;
+
+      if (!isObject(obj))
         return;
 
       var tracker = objectTrackers.get(obj);
@@ -431,6 +450,28 @@
 
       observing = true;
     };
+  }
+
+  ChangeSummary.isPathValid = isPathValid;
+
+  ChangeSummary.getValueAtPath = function(obj, pathString) {
+    if (!isPathValid(pathString))
+      return undefined;
+
+    var path = new Path(pathString);
+    if (!path.length)
+      return obj;
+
+    if (!isObject(obj))
+      return;
+
+    var retval;
+    path.walkPropertiesFrom(obj, function(prop, value, i) {
+      if (i == this.length)
+        retval = value;
+    }, path);
+
+    return retval;
   }
 
   function ObjectTracker(internal, object) {
@@ -515,7 +556,7 @@
     },
 
     process: function(activeTrackers) {
-      if (!this.internal)  // observation stopped mid-process. FIXME: Is this really possible?
+      if (!this.internal)  // observation stopped mid-process. TODO(rafaelw): Is this really possible?
         return;
 
       var diff;
@@ -558,14 +599,14 @@
     },
 
     produceSummary: function() {
-      var diff = this.diff || { added: {}, removed: {}, changed: {}, oldValues: {} }; // FIXME: SLOW?
+      var diff = this.diff || { added: {}, removed: {}, changed: {}, oldValues: {} }; // TODO(rafaelw): SLOW?
       this.diff = undefined;
       var oldValues = diff.oldValues;
       diff.oldValues = undefined;
 
       var objectChanges = false;
       if (this.observeObject) {
-        // FIXME: Slow
+        // TODO(rafaelw): Slow
         objectChanges = Object.keys(diff.added).length ||
                         Object.keys(diff.removed).length ||
                         Object.keys(diff.changed).length;
