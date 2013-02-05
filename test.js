@@ -173,6 +173,20 @@ function testDegenerateValues() {
   observer.unobservePath(undefined, 'a/3!'); // shouldn't throw
 }
 
+function testSetValues() {
+  var obj = {};
+  ChangeSummary.setValueAtPath(obj, 'foo', 3);
+  assertEquals(3, obj.foo);
+
+  var bar = { baz: 3 };
+
+  ChangeSummary.setValueAtPath(obj, 'bar', bar);
+  assertEquals(bar, obj.bar);
+
+  ChangeSummary.setValueAtPath(obj, 'bar.baz.bat', 'not here');
+  assertEquals(undefined, ChangeSummary.getValueAtPath(obj, 'bar.baz.bat'));
+}
+
 function testObserveObject() {
   var model = {};
 

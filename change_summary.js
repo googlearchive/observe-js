@@ -474,6 +474,24 @@
     return retval;
   }
 
+  // TODO(rafaelw): This needs to update the old value if this path is observed.
+  ChangeSummary.setValueAtPath = function(obj, pathString, value) {
+    if (!isPathValid(pathString))
+      return;
+
+    var path = new Path(pathString);
+    if (!path.length)
+      return;
+
+    if (!isObject(obj))
+      return;
+
+    path.walkPropertiesFrom(obj, function(prop, m, i) {
+      if (isObject(m) && i == path.length - 1)
+        m[prop] = value;
+    });
+  };
+
   function ObjectTracker(internal, object) {
     this.internal = internal;
     this.object = object;
