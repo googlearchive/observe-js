@@ -357,6 +357,7 @@
   function ChangeSummary(callback) {
     var observing = true;
     var isDisconnecting = false;
+    var changesDelivered = false;
     var summaries;
 
     var internal = {};
@@ -399,14 +400,19 @@
       }
     };
 
+    var MAX_DIRTY_CHECK_CYCLES = 1000;
+
     internal.dirtyCheck = function() {
-      try {
+      var cycles = 0;
 
-        internal.deliverSummaries(valueSet(objectTrackers));
-
-      } catch (ex) {
-        console.error(ex);
-      }
+      do {
+        try {
+          cycles++;
+          internal.deliverSummaries(valueSet(objectTrackers));
+        } catch (ex) {
+          console.error(ex);
+        }
+      } while (changesDelivered && cycles < MAX_DIRTY_CHECK_CYCLES)
     }
 
     internal.deliverSummaries = function(activeTrackers) {
@@ -425,10 +431,14 @@
       if (!summaries.length)
         summaries = undefined;
 
-      if (!isDisconnecting && summaries) {
-        callback(summaries);
-        summaries = undefined;
+      if (isDisconnecting || !summaries) {
+        changesDelivered = false;
+        return;
       }
+
+      callback(summaries);
+      summaries = undefined;
+      changesDelivered = true;
     }
 
     // Register callback to assign delivery order.
@@ -1229,7 +1239,7 @@
 
   function CallbackRouter() {
 
-    var callbacksMap = new Map;
+    var callbacksMap = typeof WeakMap == 'function' ? new WeakMap : new Map;
 
     function invokeCallbacks(summary) {
       var callbacks = callbacksMap.get(summary.object);

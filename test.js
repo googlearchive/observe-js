@@ -149,6 +149,24 @@ function testNoDeliveryOnEval() {
   assertEquals(0, count);
 }
 
+function testDeliveryUntilNoChanges() {
+  tearDown();
+
+  var arr = [0, 1, 2, 3, 4];
+  var callbackCount = 0;
+  observer = new ChangeSummary(function() {
+    callbackCount++;
+    arr.shift();
+  });
+
+  observer.observeArray(arr);
+  arr.shift();
+  observer.deliver();
+
+  assertEquals(5, callbackCount);
+  setUp();
+}
+
 function testDegenerateValues() {
   assertEquals(null, observer.observePath(null, ''));
   assertEquals(null, ChangeSummary.getValueAtPath(null, ''));
