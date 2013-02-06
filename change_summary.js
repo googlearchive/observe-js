@@ -13,7 +13,7 @@
 // limitations under the License.
 
 (function(global) {
-  "use strict";
+  'use strict';
 
   var hasObserve = typeof Object.observe == 'function';
 
@@ -29,100 +29,231 @@
     return obj === Object(obj);
   }
 
-  // TODO(rafaelw): Use Map/Set iterators when available.
-  var HarmonyMap = global.Map ? global.Map : null;
-  var HarmonySet = global.Set ? global.Set : null;
+  function ensureMapSetForEach() {
+    // Included inline from from https://github.com/arv/map-set-for-each.
+    if (Map.prototype.forEach && Set.prototype.forEach)
+      return;
 
-  function Map() {
-    if (HarmonyMap)
-      this.map_ = new HarmonyMap;
-    else
-      this.values_ = [];
+    // We use an object to keep the ordering
+    var keyMap = new WeakMap;
 
-    this.keys_ = [];
-  }
-
-  Map.prototype = {
-    get: function(key) {
-      return this.map_ ? this.map_.get(key) : this.values_[this.keys_.indexOf(key)];
-    },
-
-    set: function(key, value) {
-      if (this.map_) {
-        if (!this.map_.has(key))
-          this.keys_.push(key);
-        return this.map_.set(key, value);
+    function getKeyMap(obj) {
+      var map = keyMap.get(obj);
+      if (!map) {
+        map = Object.create(null);
+        keyMap.set(obj, map);
       }
+      return map;
+    }
 
-      var index = this.keys_.indexOf(key);
-      if (index < 0)
-        index = this.keys_.length;
+    // These maps are used to map a value to a unique ID.
+    var objectKeys = new WeakMap;
+    var numberKeys = Object.create(null);
+    var stringKeys = Object.create(null);
 
-      this.keys_[index] = key;
-      this.values_[index] = value;
-    },
+    var uidCounter = 4;  // 0 - 3 are used for null, undefined, false and true
 
-    has: function(key) {
-      return this.map_ ? this.map_.has(key) : this.keys_.indexOf(key) >= 0;
-    },
+    /**
+     * @param {*} key
+     * @return {string} A unique ID for a given key (of any type). This unique ID
+     *    is a non numeric string since strings that can be used as array indexes
+     *    causes different enumeration order.
+     */
+    function getUid(key) {
+      if (key === null)
+        return '$0';
 
-    delete: function(key) {
-      var index = this.keys_.indexOf(key);
-      this.keys_.splice(index, 1);
-      if (this.map_)
-        this.map_.delete(key);
-      else
+      var keys, uid;
+
+      switch (typeof key) {
+        case 'undefined':
+          return '$1';
+        case 'boolean':
+          // 2 & 3
+          return '$' + (key + 2);
+        case 'object':
+        case 'function':
+          uid = objectKeys.get(key);
+          if (!uid) {
+            uid = '$' + uidCounter++;
+            objectKeys.set(key, uid);
+          }
+          return uid;
+        case 'number':
+          keys = numberKeys;
+          break;
+        case 'string':
+          keys = stringKeys;
+          break;
+      }
+      uid = keys[key];
+      if (!uid) {
+        uid = '$' + uidCounter++;
+        keys[key] = uid;
+      }
+      return uid;
+    }
+
+    var MapSet = Map.prototype.set;
+    var MapDelete = Map.prototype.delete;
+    var SetAdd = Set.prototype.add;
+    var SetDelete = Set.prototype.delete;
+
+    Map.prototype.set = function(key, value) {
+      var uid = getUid(key);
+      var keyMap = getKeyMap(this);
+      keyMap[uid] = key;
+      return MapSet.call(this, key, value);
+    };
+
+    Map.prototype.delete = function(key) {
+      var uid = getUid(key);
+      var keyMap = getKeyMap(this);
+      delete keyMap[uid];
+      return MapDelete.call(this, key);
+    };
+
+    /**
+     * For each key and value in the map call a function that takes the key and
+     * the value (as well as the map).
+     * @param {function(*, *, Map} f
+     * @param {Object} opt_this The object to use as this in the callback.
+     *     Defaults to the map itself.
+     */
+    Map.prototype.forEach = function(f, opt_this) {
+      var keyMap = getKeyMap(this);
+      for (var uid in keyMap) {
+        var key = keyMap[uid]
+        var value = this.get(key);
+        f.call(opt_this || this, value, key, this);
+      }
+    };
+
+    Set.prototype.add = function(key) {
+      var uid = getUid(key);
+      var keyMap = getKeyMap(this);
+      keyMap[uid] = key;
+      return SetAdd.call(this, key);
+    };
+
+    Set.prototype.delete = function(key) {
+      var uid = getUid(key);
+      var keyMap = getKeyMap(this);
+      delete keyMap[uid];
+      return SetDelete.call(this, key);
+    };
+
+    /**
+     * For each value in the set call a function that takes the value and
+     * the value (again) (as well as the set).
+     * @param {function(*, *, Set} f
+     * @param {Object} opt_this The object to use as this in the callback.
+     *     Defaults to the set itself.
+     */
+    Set.prototype.forEach = function(f, opt_this) {
+      var keyMap = getKeyMap(this);
+      for (var uid in keyMap) {
+        var key = keyMap[uid]
+        f.call(opt_this || this, key, key, this);
+      }
+    };
+  }
+
+  function polyfillMapSet(global) {
+    function Map() {
+      this.values_ = [];
+      this.keys_ = [];
+    }
+
+    Map.prototype = {
+      get: function(key) {
+        return this.values_[this.keys_.indexOf(key)];
+      },
+
+      set: function(key, value) {
+        var index = this.keys_.indexOf(key);
+        if (index < 0)
+          index = this.keys_.length;
+
+        this.keys_[index] = key;
+        this.values_[index] = value;
+      },
+
+      has: function(key) {
+        return this.keys_.indexOf(key) >= 0;
+      },
+
+      delete: function(key) {
+        var index = this.keys_.indexOf(key);
+        if (index < 0)
+          return false;
+
+        this.keys_.splice(index, 1);
         this.values_.splice(index, 1);
-    },
+        return true;
+      },
 
-    keys: function() {
-      return this.keys_.slice();
+      forEach: function(f, opt_this) {
+        for (var i = 0; i < this.keys_.length; i++)
+          f.call(opt_this || this, this.values_[i], this.keys_[i], this);
+      },
+
+      get size() {
+        return this.keys_.length;
+      }
     }
-  }
 
-  function Set() {
-    if (HarmonySet)
-      this.set_ = new HarmonySet;
-
-    this.keys_ = [];
-  }
-
-  Set.prototype = {
-    add: function(key) {
-      if ((this.set_ && this.set_.has(key)) || (!this.set_ && this.keys_.indexOf(key) >= 0))
-        return;
-
-      this.keys_.push(key);
-
-      if (this.set_)
-        this.set_.add(key);
-    },
-
-    has: function(key) {
-      return this.set_ ? this.set_.has(key) : this.keys_.indexOf(key) >= 0;
-    },
-
-    delete: function(key) {
-      var index = this.keys_.indexOf(key);
-      this.keys_.splice(index, 1);
-      if (this.set_)
-        this.set_.delete(key);
-    },
-
-    keys: function() {
-      return this.keys_.slice();
+    function Set() {
+      this.keys_ = [];
     }
+
+    Set.prototype = {
+      add: function(key) {
+        if (this.keys_.indexOf(key) < 0)
+          this.keys_.push(key);
+      },
+
+      has: function(key) {
+        return this.keys_.indexOf(key) >= 0;
+      },
+
+      delete: function(key) {
+        var index = this.keys_.indexOf(key);
+        if (index < 0)
+          return false;
+
+        this.keys_.splice(index, 1);
+        return true;
+      },
+
+      forEach: function(f, opt_this) {
+        for (var i = 0; i < this.keys_.length; i++)
+          f.call(opt_this || this, this.keys_[i], this.keys_[i], this);
+      },
+
+      get size() {
+        return this.keys_.length;
+      }
+    }
+
+    global.Map = Map;
+    global.Set = Set;
   }
+
+  if (typeof Map === 'function' &&
+      typeof Set === 'function' &&
+      typeof WeakMap === 'function')
+    ensureMapSetForEach();
+  else
+    polyfillMapSet(global);
 
   function valueSet(map) {
     var set = new Set;
-    map.keys().forEach(function(key) {
-      set.add(map.get(key));
+    map.forEach(function(value, key) {
+      set.add(value);
     })
-
     return set;
   }
-
 
   /*
    * TODO(rafaelw): Need rigorous definitions for path and "value at path".
@@ -281,11 +412,11 @@
     internal.deliverSummaries = function(activeTrackers) {
       summaries = [];
 
-      activeTrackers.keys().forEach(function(tracker) {
+      activeTrackers.forEach(function(tracker) {
         tracker.process(activeTrackers);
       });
 
-      activeTrackers.keys().forEach(function(tracker) {
+      activeTrackers.forEach(function(tracker) {
         var summary = tracker.produceSummary();
         if (summary)
           summaries.push(summary);
@@ -427,8 +558,8 @@
       this.deliver();
       isDisconnecting = false;
 
-      objectTrackers.keys().forEach(function(object) {
-        objectTrackers.get(object).endObservation();
+      objectTrackers.forEach(function(tracker, object) {
+        tracker.endObservation();
       });
 
       observing = false;
@@ -444,7 +575,7 @@
       if (observing)
         return;
 
-      objectTrackers.keys().forEach(function(tracker) {
+      objectTrackers.forEach(function(tracker) {
         tracker.startObservation();
       });
 
@@ -561,7 +692,7 @@
         return;
 
       pathValueMap.delete(pathValue);
-      if (pathValueMap.keys().length == 0)
+      if (!pathValueMap.size)
         this.propertyObservers[name] = undefined;
       this.propertyObserverCount--;
     },
@@ -605,7 +736,7 @@
         if (!pathValues)
           continue;
 
-        pathValues.keys().forEach(function(pathValue) {
+        pathValues.forEach(function(pathValue) {
           var observed = pathValue.observed[0];
           var tracker = this.internal.objectTrackers.get(observed);
           if (!tracker.dirtyPathValues)
@@ -634,7 +765,7 @@
 
       var pathChanges = false;
       if (this.dirtyPathValues) {
-        var dirtyPathValues = this.dirtyPathValues.keys();
+        var dirtyPathValues = this.dirtyPathValues;
         this.dirtyPathValues = undefined;
 
         diff.pathChanged = {};
