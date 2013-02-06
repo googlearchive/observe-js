@@ -583,8 +583,6 @@
     };
   }
 
-  ChangeSummary.isPathValid = isPathValid;
-
   ChangeSummary.getValueAtPath = function(obj, pathString) {
     if (!isPathValid(pathString))
       return undefined;
@@ -605,7 +603,6 @@
     return retval;
   }
 
-  // TODO(rafaelw): This needs to update the old value if this path is observed.
   ChangeSummary.setValueAtPath = function(obj, pathString, value) {
     if (!isPathValid(pathString))
       return;
@@ -1229,4 +1226,148 @@
   }
 
   global.ChangeSummary = ChangeSummary;
+
+  function CallbackRouter() {
+
+    var callbacksMap = new Map;
+
+    function invokeCallbacks(summary) {
+      var callbacks = callbacksMap.get(summary.object);
+      if (!callbacks)
+        return;
+
+      if (callbacks.array) {
+        if (!summary.splices)
+          return;
+        callbacks.array.forEach(function(callback) {
+          try {
+            callback(summary.splices, summary.object);
+          } catch (ex) {
+            console.log('Exception thrown during callback: ' + ex);
+          }
+        });
+      }
+
+      if (callbacks.path) {
+        if (!summary.pathChanged)
+          return;
+
+        Object.keys(callbacks.path).forEach(function(path) {
+          if (!summary.pathChanged.hasOwnProperty(path))
+            return;
+
+          callbacks.path[path].forEach(function(callback) {
+            try {
+              callback(summary.pathChanged[path], summary.getOldValue(path), summary.object, path);
+            } catch (ex) {
+              console.log('Exception thrown during callback: ' + ex);
+            }
+          });
+        });
+      }
+    }
+
+    var observer = new ChangeSummary(function(summaries) {
+      summaries.forEach(invokeCallbacks);
+    });
+
+    this.observeArray = function(array, callback) {
+      if (!Array.isArray(array))
+        throw Error('Invalid attempt to observe non-array: ' + arr);
+
+      var callbacks = callbacksMap.get(array)
+      if (!callbacks) {
+        callbacks = {};
+        callbacksMap.set(array, callbacks);
+      }
+      if (!callbacks.array) {
+        callbacks.array = new Set;
+        observer.observeArray(array);
+      }
+
+      callbacks.array.add(callback);
+    };
+
+    this.unobserveArray = function(array, callback) {
+      if (!Array.isArray(array))
+        return;
+
+      var callbacks = callbacksMap.get(array)
+      if (!callbacks || !callbacks.array)
+        return;
+
+      callbacks.array.delete(callback)
+
+      if (!callbacks.array.keys().length) {
+        observe.unobserveArray(array);
+        callbacks.array = undefined;
+      }
+
+      if (!callbacks.array && !callbacks.path)
+        callbacksMap.delete(array);
+    };
+
+    this.observePath = function(object, path, callback) {
+      if (!isPathValid(path))
+        return undefined;
+
+      if (path.trim() == '')
+        return object;
+
+      if (!isObject(object))
+        return undefined;
+
+      var callbacks = callbacksMap.get(object)
+      if (!callbacks) {
+        callbacks = {};
+        callbacksMap.set(object, callbacks);
+      }
+
+      if (!callbacks.path)
+        callbacks.path = {};
+
+      var pathCallbacks = callbacks.path[path];
+      var retval;
+      if (!pathCallbacks) {
+        pathCallbacks = new Set;
+        callbacks.path[path] = pathCallbacks;
+        retval = observer.observePath(object, path);
+      } else {
+        retval = Model.getValueAtPath(object, path);
+      }
+
+      pathCallbacks.add(callback);
+      return retval;
+    };
+
+    this.unobservePath = function(object, path, callback) {
+      if (!isPathValid(path) || !isObject(object))
+        return;
+
+      var callbacks = callbacksMap.get(object)
+      if (!callbacks || !callbacks.path)
+        return;
+
+      var pathCallbacks = callbacks.path[path];
+      if (!pathCallbacks)
+        return;
+
+      pathCallbacks.delete(callback);
+
+      if (!pathCallbacks.size) {
+        observer.unobservePath(object, path);
+        delete callbacks.path[path];
+      }
+
+      if (!Object.keys(callbacks.path).length)
+        callbacks.path = undefined;
+
+      if (!callbacks.array && !callbacks.path)
+        callbacksMap.delete(object);
+    };
+
+    this.deliver = observer.deliver.bind(observer);
+  }
+
+  global.ChangeSummary.CallbackRouter = CallbackRouter;
 })(this);
