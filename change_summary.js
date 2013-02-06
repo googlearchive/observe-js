@@ -1236,9 +1236,17 @@
       if (!callbacks)
         return;
 
-      if (callbacks.array) {
-        if (!summary.splices)
-          return;
+      if (callbacks.object && (summary.added || summary.removed || summary.changed)) {
+        callbacks.object.forEach(function(callback) {
+          try {
+            callback(summary.added, summary.removed, summary.changed, summary.getOldValue, summary.object);
+          } catch (ex) {
+            console.log('Exception thrown during callback: ' + ex);
+          }
+        });
+      }
+
+      if (callbacks.array && summary.splices) {
         callbacks.array.forEach(function(callback) {
           try {
             callback(summary.splices, summary.object);
@@ -1248,10 +1256,7 @@
         });
       }
 
-      if (callbacks.path) {
-        if (!summary.pathChanged)
-          return;
-
+      if (callbacks.path && summary.pathChanged) {
         Object.keys(callbacks.path).forEach(function(path) {
           if (!summary.pathChanged.hasOwnProperty(path))
             return;
@@ -1270,6 +1275,36 @@
     var observer = new ChangeSummary(function(summaries) {
       summaries.forEach(invokeCallbacks);
     });
+
+    this.observeObject = function(object, callback) {
+      var callbacks = callbacksMap.get(object)
+      if (!callbacks) {
+        callbacks = {};
+        callbacksMap.set(object, callbacks);
+      }
+      if (!callbacks.object) {
+        callbacks.object = new Set;
+        observer.observeObject(object);
+      }
+
+      callbacks.object.add(callback);
+    };
+
+    this.unobserveObject = function(object, callback) {
+      var callbacks = callbacksMap.get(object)
+      if (!callbacks || !callbacks.object)
+        return;
+
+      callbacks.object.delete(callback)
+
+      if (!callbacks.object.size) {
+        observe.unobserveArray(object);
+        callbacks.object = undefined;
+      }
+
+      if (!callbacks.object && !callbacks.array && !callbacks.path)
+        callbacksMap.delete(object);
+    };
 
     this.observeArray = function(array, callback) {
       if (!Array.isArray(array))
@@ -1298,12 +1333,12 @@
 
       callbacks.array.delete(callback)
 
-      if (!callbacks.array.keys().length) {
+      if (!callbacks.array.size) {
         observe.unobserveArray(array);
         callbacks.array = undefined;
       }
 
-      if (!callbacks.array && !callbacks.path)
+      if (!callbacks.object && !callbacks.array && !callbacks.path)
         callbacksMap.delete(array);
     };
 
@@ -1362,7 +1397,7 @@
       if (!Object.keys(callbacks.path).length)
         callbacks.path = undefined;
 
-      if (!callbacks.array && !callbacks.path)
+      if (!callbacks.object && !callbacks.array && !callbacks.path)
         callbacksMap.delete(object);
     };
 
