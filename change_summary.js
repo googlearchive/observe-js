@@ -157,6 +157,15 @@
         f.call(opt_this || this, key, key, this);
       }
     };
+
+
+    Map.getValueSet = function(map) {
+      var set = new Set;
+      map.forEach(function(value, key) {
+        set.add(value);
+      })
+      return set;
+    }
   }
 
   function polyfillMapSet(global) {
@@ -236,6 +245,12 @@
       }
     }
 
+    Map.getValueSet = function(map) {
+      var set = new Set;
+      set.keys_ = map.values_.slice();
+      return set;
+    }
+
     global.Map = Map;
     global.Set = Set;
   }
@@ -246,14 +261,6 @@
     ensureMapSetForEach();
   else
     polyfillMapSet(global);
-
-  function valueSet(map) {
-    var set = new Set;
-    map.forEach(function(value, key) {
-      set.add(value);
-    })
-    return set;
-  }
 
   /*
    * TODO(rafaelw): Need rigorous definitions for path and "value at path".
@@ -318,16 +325,10 @@
         prop = this[i];
         f.call(that, prop, val, i);
 
-        if (isObject(val) && i < this.length && this[i] in val) {
-          try {
-            val = val[prop];
-          } catch (ex) {
-            val = undefined;
-            caughtException = ex;
-          }
-        } else {
+        if (i == this.length || val === null || val === undefined)
           val = undefined;
-        }
+        else
+          val = val[prop];
       }
     }
   };
@@ -408,7 +409,7 @@
       do {
         try {
           cycles++;
-          internal.deliverSummaries(valueSet(objectTrackers));
+          internal.deliverSummaries(Map.getValueSet(objectTrackers));
         } catch (ex) {
           console.error(ex);
         }
@@ -638,6 +639,8 @@
   }
 
   function copyObject(object) {
+    // TODO(rafaelw): If only Array observation is needed, object.slice()
+    // will be faster than this.
     var copy = Array.isArray(object) ? new Array(object.length) : {};
     for (var prop in object) {
       if (object.hasOwnProperty(prop))
@@ -652,6 +655,8 @@
         Object.observe(this.object, this.internal.callback);
         return;
       } else {
+        // TODO(rafaelw): If only path observation is needed, we never need a
+        // copy of the object.
         this.oldObject = copyObject(this.object);
       }
     },
@@ -715,6 +720,9 @@
       if (!this.internal)  // observation stopped mid-process. TODO(rafaelw): Is this really possible?
         return;
 
+      if (!hasObserve && !this.observeObject && !this.observeArray)
+        return;
+
       var diff;
       if (hasObserve) {
         diff = diffObjectFromChangeRecords(this.object, this.changeRecords);
@@ -726,11 +734,17 @@
 
       this.diff = diff;
 
+      // TODO(rafaelw): If !this.observeObject, we don't need to produce the
+      // diff initially, we can just project directly from the original Array.
+      // Note that naively doing this will actually slow down common cases
+      // as the array has rarely changed and we can detect this in O(N) time.
+      // Look into limiting the scope of the edit distance matrix as an
+      // optimization
       if (this.observeArray)
         diff.splices = projectArraySplices(this.object, diff);
 
-      if (!this.propertyObservers)
-        return;
+      if (!hasObserve || !this.propertyObservers)
+        return; // All pathValues are dirty-checked in non-Object.observe mode.
 
       this.addDirtyPathValues(Object.keys(diff.added), activeTrackers);
       this.addDirtyPathValues(Object.keys(diff.removed), activeTrackers);
@@ -754,67 +768,77 @@
       }
     },
 
+    checkPathValues: function(pathValues, diff, oldValues) {
+      if (!pathValues)
+        return false;
+
+      diff.pathChanged = diff.pathChanged || {};
+      var anyChanged = false;
+      pathValues.forEach(function(pathValue) {
+        var oldValue = pathValue.value;
+        if (pathValue.reset()) {
+          anyChanged = true;
+          var pathString = pathValue.path.toString();
+          oldValues[pathString] = oldValue;
+          diff.pathChanged[pathString] = pathValue.value;
+        }
+      }, this);
+
+      return anyChanged;
+    },
+
+    checkAllPathValues: function(diff, oldValues) {
+      if (!this.propertyObservers)
+        return false;
+
+      var anyChanged = false;
+      for (var prop in this.propertyObservers) {
+        anyChanged = anyChanged ||
+            this.checkPathValues(this.propertyObservers[prop], diff, oldValues);
+      }
+      return anyChanged;
+    },
+
     produceSummary: function() {
-      var diff = this.diff || { added: {}, removed: {}, changed: {}, oldValues: {} }; // TODO(rafaelw): SLOW?
+      var diff = this.diff || {};
+      var oldValues = diff.oldValues || {};
       this.diff = undefined;
-      var oldValues = diff.oldValues;
-      diff.oldValues = undefined;
-
-      var objectChanges = false;
-      if (this.observeObject) {
-        // TODO(rafaelw): Slow
-        objectChanges = Object.keys(diff.added).length ||
-                        Object.keys(diff.removed).length ||
-                        Object.keys(diff.changed).length;
-      }
-
-      var spliceChanges = this.observeArray && diff.splices.length;
-
-      var pathChanges = false;
-      if (this.dirtyPathValues) {
-        var dirtyPathValues = this.dirtyPathValues;
-        this.dirtyPathValues = undefined;
-
-        diff.pathChanged = {};
-        dirtyPathValues.forEach(function(pathValue) {
-          var oldValue = pathValue.value;
-          if (pathValue.reset()) {
-            var pathString = pathValue.path.toString();
-            oldValues[pathString] = oldValue;
-            diff.pathChanged[pathString] = pathValue.value;
-          }
-        }, this);
-
-        pathChanges = !!Object.keys(diff.pathChanged).length;
-      }
-
-      if (!objectChanges && !spliceChanges && !pathChanges)
-        return;
 
       var summary = {
         object: this.object
       };
-
       var getOldValue = function(propOrPath) {
         return oldValues[propOrPath];
       };
 
-      if (objectChanges) {
-        summary.added = diff.added;
-        summary.removed = diff.removed;
-        summary.changed = diff.changed;
+      var objectChanges = false;
+      if (this.observeObject) {
+        summary.added = diff.added || {};
+        summary.removed = diff.removed || {};
+        summary.changed = diff.changed || {};
         summary.getOldValue = getOldValue;
+
+        objectChanges = Object.keys(summary.added).length ||
+                        Object.keys(summary.removed).length ||
+                        Object.keys(summary.changed).length;
       }
 
-      if (spliceChanges)
+      if (this.observeArray && diff.splices.length)
         summary.splices = diff.splices;
+
+      var pathChanges = hasObserve ?
+          this.checkPathValues(this.dirtyPathValues, diff, oldValues) :
+          this.checkAllPathValues(diff, oldValues);
+
+      this.dirtyPathValues = undefined;
 
       if (pathChanges) {
         summary.pathChanged = diff.pathChanged;
         summary.getOldValue = getOldValue;
       }
 
-      return summary;
+      if (objectChanges || pathChanges || summary.splices)
+        return summary;
     }
   };
 
