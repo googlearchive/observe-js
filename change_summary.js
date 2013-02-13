@@ -29,6 +29,20 @@
     return obj === Object(obj);
   }
 
+  var createObject = ('__proto__' in {}) ?
+    function(obj) { return obj; } :
+    function(obj) {
+      var proto = obj.__proto__;
+      if (!proto)
+        return obj;
+      var newObject = Object.create(proto);
+      Object.getOwnPropertyNames(obj).forEach(function(name) {
+        Object.defineProperty(newObject, name,
+                             Object.getOwnPropertyDescriptor(obj, name));
+      });
+      return newObject;
+    };
+
   function ensureMapSetForEach() {
     // Included inline from from https://github.com/arv/map-set-for-each.
     if (Map.prototype.forEach && Set.prototype.forEach)
@@ -311,7 +325,7 @@
     }, this);
   }
 
-  Path.prototype = {
+  Path.prototype = createObject({
     __proto__: [],
 
     toString: function() {
@@ -331,7 +345,7 @@
           val = val[prop];
       }
     }
-  };
+  });
 
   /**
    * Callback looks like this
