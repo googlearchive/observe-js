@@ -1328,3 +1328,29 @@ function testArrayTrackerNoProxiesEdits() {
   assertEditDistance(model, 7);
   observer.unobserveArray(model);
 }
+
+function testMultipleChangesAtOnce() {
+  var model = {
+    a: {b: 'ab'},
+    c: {d: 'cd'}
+  };
+
+  observer.observePath(model, 'a.b');
+  observer.observePath(model, 'c.d');
+  observer.deliver();
+
+  model.a = {b: 1};
+  model.c = {d: 2};
+
+  assertSummary({
+    object: model,
+    pathChanged: {
+      'a.b': 1,
+      'c.d': 2
+    },
+    oldValues: {
+      'a.b': 'ab',
+      'c.d': 'cd'
+    },
+  });
+}
