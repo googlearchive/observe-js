@@ -453,7 +453,11 @@
       if (!isObject(obj))
         throw Error('Invalid attempt to observe non-object: ' + obj);
 
-      getObjectTracker(obj).observeObject = true;
+      var tracker = getObjectTracker(obj);
+      if (tracker.observeArray)
+        throw Error('Not implemented: observeArray and observeObject on same object');
+
+      tracker.observeObject = true;
     };
 
     this.unobserveObject = function(obj) {
@@ -473,7 +477,11 @@
       if (!Array.isArray(arr))
         throw Error('Invalid attempt to observe non-array: ' + arr);
 
-      getObjectTracker(arr).observeArray = true;
+      var tracker = getObjectTracker(arr);
+      if (tracker.observeObject)
+        throw Error('Not implemented: observeArray and observeObject on same object');
+
+      tracker.observeArray = true;
     };
 
     this.unobserveArray = function(arr) {
@@ -639,13 +647,13 @@
   }
 
   function copyObject(object) {
-    // TODO(rafaelw): If only Array observation is needed, object.slice()
-    // will be faster than this.
-    var copy = Array.isArray(object) ? new Array(object.length) : {};
-    for (var prop in object) {
-      if (object.hasOwnProperty(prop))
-        copy[prop] = object[prop];
-    }
+    if (Array.isArray(object))
+      return object.slice();
+
+    var copy = {};
+    Object.getOwnPropertyNames(object).forEach(function(prop) {
+      copy[prop] = object[prop];
+    });
     return copy;
   }
 
@@ -729,7 +737,8 @@
         this.changeRecords = undefined;
       } else {
         diff = diffObjectFromOldObject(this.object, this.oldObject);
-        this.oldObject = copyObject(this.object);
+        if (!diff.isEmpty)
+          this.oldObject = copyObject(this.object);
       }
 
       this.diff = diff;
@@ -818,9 +827,7 @@
         summary.changed = diff.changed || {};
         summary.getOldValue = getOldValue;
 
-        objectChanges = Object.keys(summary.added).length ||
-                        Object.keys(summary.removed).length ||
-                        Object.keys(summary.changed).length;
+        objectChanges = !diff.isEmpty;
       }
 
       if (this.observeArray && diff.splices.length)
@@ -893,6 +900,19 @@
     'deleted': true
   };
 
+  function objectIsEmpty(object) {
+    for (var prop in object)
+      return false;
+    return true;
+  }
+
+  function checkDiffForEmpty(diff) {
+    diff.isEmpty = objectIsEmpty(diff.added) &&
+                   objectIsEmpty(diff.removed) &&
+                   objectIsEmpty(diff.changed);
+    return diff;
+  }
+
   function diffObjectFromOldObject(object, oldObject) {
     var added = {};
     var removed = {};
@@ -909,20 +929,21 @@
         changed[prop] = newValue;
     }
 
-    for (var prop in object) {
-      if (object.hasOwnProperty(prop) && !oldObject.hasOwnProperty(prop))
-        added[prop] = object[prop];
-    }
+    Object.getOwnPropertyNames(object).forEach(function(prop) {
+      if (prop in oldObject)
+        return;
+      added[prop] = object[prop];
+    });
 
     if (Array.isArray(object) && object.length !== oldObject.length)
       changed.length = object.length;
 
-    return {
+    return checkDiffForEmpty({
       added: added,
       removed: removed,
       changed: changed,
       oldValues: oldObject
-    };
+    });
   }
 
   function diffObjectFromChangeRecords(object, changeRecords) {
@@ -978,12 +999,12 @@
         changed[prop] = newValue;
     }
 
-    return {
+    return checkDiffForEmpty({
       added: added,
       removed: removed,
       changed: changed,
       oldValues: oldValues
-    };
+    });
   }
 
   /**
