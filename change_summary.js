@@ -816,8 +816,9 @@
 
       var anyChanged = false;
       for (var prop in this.propertyObservers) {
-        anyChanged = anyChanged ||
-            this.checkPathValues(this.propertyObservers[prop], diff, oldValues);
+        anyChanged = this.checkPathValues(this.propertyObservers[prop],
+                                          diff,
+                                          oldValues) || anyChanged;
       }
       return anyChanged;
     },
