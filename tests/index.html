@@ -15,14 +15,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <head>
-<title>ChangeSummary test</title>
+<title>ChangeSummary Tests</title>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../third_party/mocha/mocha.css">
+<script src="../third_party/chai/chai.js"></script>
+<script src="../third_party/mocha/mocha.js"></script>
+<script src="../change_summary.js"></script>
+<script>
+mocha.setup({
+  ui: 'tdd',
+  ignoreLeaks: true
+});
+
+var assert = chai.assert;
+</script>
 </head>
 <body>
-<script src="http://closure-library.googlecode.com/svn/trunk/closure/goog/base.js"></script>
-<script src="change_summary.js"></script>
-<script src='test.js'></script>
-</body>
+<script src="array_fuzzer.js"></script>
+<script src="test.js"></script>
+<div id="mocha"></div>
 <script>
-goog.require('goog.testing.jsunit');
+mocha.run();
 </script>
+</body>
 </html>

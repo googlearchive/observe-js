@@ -653,6 +653,19 @@
     });
   };
 
+  ChangeSummary.applySplices = function(previous, current, splices) {
+    splices.forEach(function(splice) {
+      var spliceArgs = [splice.index, splice.removed.length];
+      var addIndex = splice.index;
+      while (addIndex < splice.index + splice.addedCount) {
+        spliceArgs.push(current[addIndex]);
+        addIndex++;
+      }
+
+      Array.prototype.splice.apply(previous, spliceArgs);
+    });
+  };
+
   function ObjectTracker(internal, object) {
     this.internal = internal;
     this.object = object;
@@ -823,6 +836,8 @@
       return anyChanged;
     },
 
+    // TODO(rafaelw): Summary should have a fixed shape based only on what is observed:
+    // https://github.com/rafaelw/ChangeSummary/issues/5
     produceSummary: function() {
       var diff = this.diff || {};
       var oldValues = diff.oldValues || {};
