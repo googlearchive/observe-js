@@ -29,7 +29,6 @@ suite('Basic Tests', function() {
     summaries = observer.disconnect();
     assert.isUndefined(summaries);
     callbackCount = 0;
-    expectedCallbackCount = 0;
   }
   teardown(doTeardown);
 
@@ -43,7 +42,6 @@ suite('Basic Tests', function() {
   }
 
   function assertSummary(expect) {
-    expectedCallbackCount++;
     observer.deliver();
 
     var summary = summaries[0];
@@ -70,11 +68,12 @@ suite('Basic Tests', function() {
       expect.splices.forEach(function(splice) { ensureNonSparse(splice.removed); });
 
     summaries = undefined;
+    callbackCount = 0;
   }
 
   function assertNoSummary() {
     observer.deliver();
-    assert.equal(expectedCallbackCount, callbackCount);
+    assert.equal(0, callbackCount);
     summaries = undefined;
   }
 
