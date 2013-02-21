@@ -1,4 +1,4 @@
-// Copyright 2012 Google Inc.
+// Copyright 2013 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,26 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Run ArrayFuzzer under d8, e.g.
-// path/to/d8 change_summary.js tests/array_fuzzer.js tests/d8_array_fuzzer.js (--harmony)
-
-function checkEqual(arr1, arr2) {
-  if (arr1.length != arr2.length)
-    throw 'Lengths not equal: ' + arr1.length + ', ' + arr2.length;
-  for (var i = 0; i < arr1.length; i++) {
-    if (arr1[i] !== arr2[i])
-      throw 'Value at i: ' + i + ' not equal: ' + arr1[i] + ', ' + arr2[i];
-  }
-}
-
-print(typeof Object.observe);
+createAndObservePaths();
 
 var t1 = new Date();
-for (var i = 0; i < 256; i++) {
-	print('pass: ' + i);
-  var fuzzer = new ArrayFuzzer();
-  fuzzer.go();
-  checkEqual(fuzzer.arr, fuzzer.copy);
-}
+mutatePathsAndDeliver(10);
 var t2 = new Date();
 print('Finished in: ' + (t2.getTime() - t1.getTime()) + 'ms');

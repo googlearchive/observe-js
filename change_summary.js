@@ -376,39 +376,46 @@
     var summaries;
 
     var internal = {};
-    var objectTrackers = internal.objectTrackers = new Map;
 
-    function getObjectTracker(obj) {
-      var tracker = objectTrackers.get(obj);
-      if (!tracker) {
-        tracker = new ObjectTracker(internal, obj);
-        objectTrackers.set(obj, tracker);
+    var objectObservers = internal.objectObservers = new Map;
+
+    function getObjectObserver(obj) {
+      var observer = objectObservers.get(obj);
+      if (!observer) {
+        observer = new ObjectObserver(internal, obj);
+        objectObservers.set(obj, observer);
       }
 
-      return tracker;
+      return observer;
     }
 
-    function removeObjectTracker(obj) {
-      var tracker = objectTrackers.get(obj);
-      tracker.destroy();
-      objectTrackers.delete(obj);
+    function maybeRemoveObjectObserver(observer) {
+      if (observer.observeObject ||
+          observer.observeArray ||
+          observer.pathTrackers)
+        return;
+
+      observer.destroy();
+      objectObservers.delete(observer.object);
     }
 
     internal.callback = function(records) {
+      // console.log(records.length);
       if (!records || !records.length) {
         console.error('Object.observe callback called with no records');
         return;
       }
 
       try {
-        var activeTrackers = new Set;
+        internal.activeObservers = new Set;
+
         records.forEach(function(record) {
-          var tracker = objectTrackers.get(record.object);
-          tracker.addChangeRecord(record);
-          activeTrackers.add(tracker);
+          var observer = objectObservers.get(record.object);
+          observer.addChangeRecord(record);
+          internal.activeObservers.add(observer);
         });
 
-        internal.deliverSummaries(activeTrackers);
+        internal.deliverSummaries();
 
       } catch (ex) {
         console.error(ex);
@@ -423,25 +430,29 @@
       do {
         try {
           cycles++;
-          internal.deliverSummaries(Map.getValueSet(objectTrackers));
+          internal.activeObservers = Map.getValueSet(objectObservers);
+          internal.deliverSummaries();
         } catch (ex) {
           console.error(ex);
         }
       } while (changesDelivered && cycles < MAX_DIRTY_CHECK_CYCLES)
     }
 
-    internal.deliverSummaries = function(activeTrackers) {
+    internal.deliverSummaries = function() {
       summaries = [];
 
-      activeTrackers.forEach(function(tracker) {
-        tracker.process(activeTrackers);
+      internal.activeObservers.forEach(function(observer) {
+        observer.process();
       });
 
-      activeTrackers.forEach(function(tracker) {
-        var summary = tracker.produceSummary();
+      internal.activeObservers.forEach(function(observer) {
+        var summary = observer.produceSummary();
+        observer.reset();
         if (summary)
           summaries.push(summary);
       });
+
+      internal.activeObservers = undefined;
 
       if (!summaries.length)
         summaries = undefined;
@@ -467,64 +478,69 @@
       if (!isObject(obj))
         throw Error('Invalid attempt to observe non-object: ' + obj);
 
-      var tracker = getObjectTracker(obj);
-      if (tracker.observeArray)
-        throw Error('Not implemented: observeArray and observeObject on same object');
-
-      tracker.observeObject = true;
+      var observer = getObjectObserver(obj);
+      observer.observeObject = new ObjectTracker(obj);
     };
 
     this.unobserveObject = function(obj) {
       if (!isObject(obj))
         throw Error('Invalid attempt to unobserve non-object: ' + obj);
 
-      var tracker = objectTrackers.get(obj);
-      if (!tracker)
+      var observer = objectObservers.get(obj);
+      if (!observer)
         return;
 
-      tracker.observeObject = undefined;
-      if (!tracker.observeArray && !tracker.propertyObserverCount)
-        removeObjectTracker(obj);
+      observer.observeObject = undefined;
+      maybeRemoveObjectObserver(observer);
     };
 
     this.observeArray = function(arr) {
       if (!Array.isArray(arr))
         throw Error('Invalid attempt to observe non-array: ' + arr);
 
-      var tracker = getObjectTracker(arr);
-      if (tracker.observeObject)
-        throw Error('Not implemented: observeArray and observeObject on same object');
-
-      tracker.observeArray = true;
+      var observer = getObjectObserver(arr);
+      observer.observeArray = new ArrayTracker(arr);
     };
 
     this.unobserveArray = function(arr) {
       if (!Array.isArray(arr))
         return;
 
-      var tracker = objectTrackers.get(arr);
-      if (!tracker)
+      var observer = objectObservers.get(arr);
+      if (!observer)
         return;
 
-      tracker.observeArray = undefined;
-      if (!tracker.observeObject && !tracker.propertyObserverCount)
-        removeObjectTracker(arr);
+      observer.observeArray = undefined;
+      maybeRemoveObjectObserver(observer);
     };
 
     // TODO(rafaelw): Notate and check all places where model values are retrieved and script may run.
     // TODO(rafaelw): Think about how things will react if observe/unobserve are called during processing.
-    internal.observeProperty = function(obj, prop, pathValue) {
-      getObjectTracker(obj).observeProperty(prop, pathValue);
+    internal.addPathTracker = function(obj, pathTracker) {
+      var observer = getObjectObserver(obj);
+
+      if (!observer.pathTrackers) {
+        observer.pathTrackers = [];
+        observer.pathTrackerMap = {};
+      }
+
+      observer.pathTrackers.push(pathTracker);
     },
 
-    internal.unobserveProperty = function(obj, prop, pathValue) {
-      var tracker = objectTrackers.get(obj);
-      if (!tracker)
+    internal.removePathTracker = function(obj, pathTracker) {
+      var observer = objectObservers.get(obj);
+      if (!observer)
         return;
 
-      tracker.unobserveProperty(prop, pathValue);
-      if (!tracker.propertyObserverCount && !tracker.observeArray && !tracker.observeObject)
-        removeObjectTracker(obj);
+      var observer = objectObservers.get(obj);
+      if (!observer || !observer.pathTrackers)
+        return;
+
+      observer.pathTrackers.splice(observer.pathTrackers.indexOf(pathTracker), 1);
+      if (!observer.pathTrackers.length)
+        observer.pathTrackers = undefined;
+
+      maybeRemoveObjectObserver(observer);
     };
 
     this.observePath = function(obj, pathString) {
@@ -534,24 +550,29 @@
       var path = new Path(pathString);
       if (!path.length)
         return obj;
+      pathString = path.toString();
 
       if (!isObject(obj))
         return undefined;
 
-      var tracker = getObjectTracker(obj);
-      if (!tracker.pathValues)
-        tracker.pathValues = {};
+      var observer = getObjectObserver(obj);
 
-      var pathValue = tracker.pathValues[path.toString()];
-
-      if (pathValue) {
-        pathValue.reset();
-      } else {
-        pathValue = new PathValue(internal, obj, path);
-        tracker.pathValues[path.toString()] = pathValue;
+      if (!observer.pathTrackers) {
+        observer.pathTrackers = [];
+        observer.pathTrackerMap = {};
       }
 
-      return pathValue.value;
+      var pathTracker = observer.pathTrackerMap[pathString];
+
+      if (pathTracker) {
+        pathTracker.reset();
+      } else {
+        pathTracker = new PathTracker(obj, path, pathString, internal);
+        observer.pathTrackers.push(pathTracker);
+        observer.pathTrackerMap[pathString] = pathTracker;
+      }
+
+      return pathTracker.value;
     };
 
     this.unobservePath = function(obj, pathString) {
@@ -561,20 +582,28 @@
       var path = new Path(pathString);
       if (!path.length)
         return;
+      pathString = path.toString();
 
       if (!isObject(obj))
         return;
 
-      var tracker = objectTrackers.get(obj);
-      if (!tracker || !tracker.pathValues)
+      var observer = objectObservers.get(obj);
+      if (!observer || !observer.pathTrackers)
         return;
 
-      var pathValue = tracker.pathValues[path.toString()];
-      if (!pathValue)
+      var pathTracker = observer.pathTrackerMap[pathString];
+      if (!pathTracker)
         return;
+      pathTracker.destroy();
 
-      tracker.pathValues[path.toString()] = undefined;
-      pathValue.clear();
+      observer.pathTrackerMap[pathString] = undefined;
+      if (!Object.keys(observer.pathTrackerMap).length)
+        observer.pathTrackerMap = undefined;
+
+      observer.pathTrackers.splice(observer.pathTrackers.indexOf(pathTracker), 1);
+      if (!observer.pathTrackers.length)
+        observer.pathTrackers = undefined;
+      maybeRemoveObjectObserver(observer);
     };
 
     this.deliver = function() {
@@ -591,8 +620,8 @@
       this.deliver();
       isDisconnecting = false;
 
-      objectTrackers.forEach(function(tracker, object) {
-        tracker.endObservation();
+      objectObservers.forEach(function(observer, object) {
+        observer.disconnect();
       });
 
       observing = false;
@@ -608,8 +637,8 @@
       if (observing)
         return;
 
-      objectTrackers.forEach(function(tracker) {
-        tracker.startObservation();
+      objectObservers.forEach(function(observer) {
+        observer.connect();
       });
 
       observing = true;
@@ -666,82 +695,300 @@
     });
   };
 
-  function ObjectTracker(internal, object) {
-    this.internal = internal;
-    this.object = object;
-    this.propertyObserverCount = 0;
-    this.startObservation();
+  function objectIsEmpty(object) {
+    for (var prop in object)
+      return false;
+    return true;
   }
 
-  function copyObject(object) {
-    if (Array.isArray(object))
-      return object.slice();
+  function diffIsEmpty(diff) {
+    return objectIsEmpty(diff.added) &&
+           objectIsEmpty(diff.removed) &&
+           objectIsEmpty(diff.changed);
+  }
 
-    var copy = {};
-    Object.getOwnPropertyNames(object).forEach(function(prop) {
+  function diffObjectFromOldObject(object, oldObject) {
+    var added = {};
+    var removed = {};
+    var changed = {};
+    var oldObjectHas = {};
+
+    for (var prop in oldObject) {
+      var newValue = object[prop];
+
+      if (newValue !== undefined && newValue === oldObject[prop])
+        continue;
+
+      if (!(prop in object)) {
+        removed[prop] = undefined;
+        continue;
+      }
+
+      if (newValue !== oldObject[prop])
+        changed[prop] = newValue;
+    }
+
+    for (var prop in object) {
+      if (prop in oldObject)
+        continue;
+
+      added[prop] = object[prop];
+    }
+
+    if (Array.isArray(object) && object.length !== oldObject.length)
+      changed.length = object.length;
+
+    return {
+      added: added,
+      removed: removed,
+      changed: changed
+    };
+  }
+
+  function copyObject(object, opt_copy) {
+    var copy = opt_copy || {};
+    for (var prop in object) {
       copy[prop] = object[prop];
-    });
+    };
+
     return copy;
   }
 
+  function ObjectTracker(object) {
+    this.object = object;
+    this.changed = false;
+    this.diff = undefined;
+    this.oldValues = undefined;
+
+    this.reset(true);
+  }
+
   ObjectTracker.prototype = {
-    startObservation: function() {
-      if (hasObserve) {
-        Object.observe(this.object, this.internal.callback);
-        return;
+    check: function(changeRecords) {
+      var diff;
+      var oldValues;
+      if (changeRecords) {
+        oldValues = {};
+        diff = diffObjectFromChangeRecords(this.object, changeRecords, oldValues);
       } else {
-        // TODO(rafaelw): If only path observation is needed, we never need a
-        // copy of the object.
-        this.oldObject = copyObject(this.object);
+        oldValues = this.oldObject;
+        diff = diffObjectFromOldObject(this.object, this.oldObject);
       }
+
+      if (diffIsEmpty(diff))
+        return false;
+
+      this.diff = diff;
+      this.oldValues = oldValues;
+      this.changed = true;
+      return true;
     },
 
-    endObservation: function() {
-      if (hasObserve) {
-        Object.unobserve(this.object, this.internal.callback);
-        return;
+    summarize: function(summary, oldValues) {
+      summary.added = this.changed ? this.diff.added : {};
+      summary.removed = this.changed ? this.diff.removed : {};
+      summary.changed = this.changed ? this.diff.changed : {};
+
+      copyObject(this.oldValues, oldValues);
+    },
+
+    reset: function(force) {
+      if (!hasObserve && (force || this.diff))
+        this.oldObject = copyObject(this.object);
+      this.changed = false;
+      this.diff = undefined;
+      this.oldValues = undefined;
+    }
+  }
+
+  function ArrayTracker(array) {
+    this.array = array;
+    this.changed = false;
+    this.splices = undefined;
+    this.reset(true);
+  }
+
+  ArrayTracker.prototype = {
+    check: function(changeRecords) {
+      var diff;
+      var oldValues;
+      if (changeRecords) {
+        oldValues = {};
+        diff = diffObjectFromChangeRecords(this.array, changeRecords, oldValues);
       } else {
-        this.oldObject = undefined;
+        oldValues = this.oldArray;
+        diff = diffObjectFromOldObject(this.array, this.oldArray);
       }
+
+      if (diffIsEmpty(diff))
+        return false;
+
+      var splices = projectArraySplices(this.array, diff, oldValues);
+      if (!splices.length)
+        return false;
+
+      this.splices = splices;
+      this.changed = true;
+      return true;
+    },
+
+    summarize: function(summary) {
+      summary.splices = this.splices ? this.splices : [];
+    },
+
+    reset: function(force) {
+      if (!hasObserve && (force || this.splices))
+        this.oldArray = this.array.slice();
+      this.changed = false;
+      this.splices = undefined;
+    }
+  }
+
+  function PathTracker(object, path, pathString, internal) {
+    this.object = object;
+    this.path = path;
+    this.pathString = pathString;
+    this.observed = path.length > 1 ? new Array(path.length - 2) : undefined;
+    this.changed = false;
+    this.newValue = undefined;
+
+    this.internal = internal;
+
+    this.reset(true);
+  }
+
+  var hasEval = false;
+  try {
+    var f = new Function('', 'return true;');
+    hasEval = f();
+  } catch (ex) {
+  }
+
+  var pathTrackerCheck;
+
+  if (hasObserve) {
+    pathTrackerCheck = function() {
+      this.path.walkPropertiesFrom(this.object, function(prop, value, i) {
+        if (i === this.path.length) {
+          this.newValue = value;
+          return;
+        }
+
+        if (i === 0)
+          return;
+
+        var observed = this.observed[i - 1];
+        if (value === observed)
+          return;
+
+        if (observed !== undefined) {
+          this.observed[i - 1] = observed = undefined;
+          var stillObserving = false;
+          for (var j = 0; j < this.observed.length; j++) {
+            if (this.observed[j] === observed) {
+              stillObserving = true;
+              break;
+            }
+          }
+
+          if (!stillObserving)
+            this.internal.removePathTracker(observed, this);
+        }
+
+        if (!isObject(value))
+          return;
+
+        this.observed[i - 1] = observed = value;
+        this.internal.addPathTracker(observed, this);
+      }, this);
+
+      return this.changed = this.value !== this.newValue;
+    };
+  } else if (hasEval) {
+    pathTrackerCheck = function() {
+      if (!this.checkFunc) {
+        var str = '';
+        var partStr = 'obj';
+        var length = this.path.length;
+        str += 'if (obj'
+        for (var i = 0; i < (length - 1); i++) {
+          var part = '.' + this.path[i];
+          partStr += part;
+          str += ' && ' + partStr;
+        }
+        str += ') ';
+
+        partStr += '.' + this.path[length - 1];
+
+        str += 'return ' + partStr + '; else return undefined;';
+
+        this.checkFunc = new Function('obj', str);
+      }
+
+      this.newValue = this.checkFunc(this.object);
+      return this.changed = this.value !== this.newValue;
+    };
+
+  } else {
+    pathTrackerCheck = function() {
+      this.path.walkPropertiesFrom(this.object, function(prop, value, i) {
+        if (i === this.path.length)
+          this.newValue = value;
+      }, this);
+
+      return this.changed = this.value !== this.newValue;
+    };
+  }
+
+  PathTracker.prototype = {
+    check: pathTrackerCheck,
+
+    summarize: function(summary, oldValues) {
+      summary.pathChanged[this.pathString] = this.newValue;
+      oldValues[this.pathString] = this.value;
+    },
+
+    reset: function(force) {
+      if (force)
+        this.check();
+      this.value = this.newValue;
+      this.newValue = undefined;
+      this.changed = false;
     },
 
     destroy: function() {
-      this.endObservation();
+      this.object = undefined;
+      this.reset(true);
+    }
+  }
+
+  function ObjectObserver(internal, object) {
+    this.internal = internal;
+    this.object = object;
+    this.observeObject = undefined;
+    this.observeArray = undefined;
+    this.pathTrackers = undefined;
+    this.changeRecords = undefined;
+    this.dirtyPathTrackers = undefined;
+
+    this.connect();
+  }
+
+  ObjectObserver.prototype = {
+    connect: function() {
+      if (hasObserve)
+        Object.observe(this.object, this.internal.callback);
+      // TODO(rafaelw): Implement and test disconnecting, then connecting for dirty check.
+    },
+
+    disconnect: function() {
+      if (hasObserve)
+        Object.unobserve(this.object, this.internal.callback);
+    },
+
+    destroy: function() {
+      this.disconnect();
       this.internal = undefined;
-    },
-
-    observeProperty: function(name, pathValue) {
-      if (!this.propertyObservers)
-        this.propertyObservers = {};
-
-      var pathValueMap = this.propertyObservers[name];
-      if (!pathValueMap) {
-        pathValueMap = new Set;
-        this.propertyObservers[name] = pathValueMap;
-      }
-
-      if (pathValueMap.has(pathValue))
-        return;
-
-      pathValueMap.add(pathValue);
-      this.propertyObserverCount++;
-    },
-
-    unobserveProperty: function(name, pathValue) {
-      if (!this.propertyObservers)
-        return;
-
-      var pathValueMap = this.propertyObservers[name];
-      if (!pathValueMap)
-        return;
-
-      if (!pathValueMap.has(pathValue))
-        return;
-
-      pathValueMap.delete(pathValue);
-      if (!pathValueMap.size)
-        this.propertyObservers[name] = undefined;
-      this.propertyObserverCount--;
     },
 
     addChangeRecord: function(changeRecord) {
@@ -751,178 +998,86 @@
       this.changeRecords.push(changeRecord);
     },
 
-    process: function(activeTrackers) {
+    process: function() {
       if (!this.internal)  // observation stopped mid-process. TODO(rafaelw): Is this really possible?
         return;
 
-      if (!hasObserve && !this.observeObject && !this.observeArray)
+      if (this.observeObject)
+        this.observeObject.check(this.changeRecords);
+      if (this.observeArray)
+        this.observeArray.check(this.changeRecords);
+
+      this.checkPathTrackers(this.changeRecords);
+    },
+
+    checkPathTrackers: function() {
+      if (!this.pathTrackers)
         return;
 
-      var diff;
-      if (hasObserve) {
-        diff = diffObjectFromChangeRecords(this.object, this.changeRecords);
-        this.changeRecords = undefined;
-      } else {
-        diff = diffObjectFromOldObject(this.object, this.oldObject);
-        if (!diff.isEmpty)
-          this.oldObject = copyObject(this.object);
-      }
-
-      this.diff = diff;
-
-      // TODO(rafaelw): If !this.observeObject, we don't need to produce the
-      // diff initially, we can just project directly from the original Array.
-      // Note that naively doing this will actually slow down common cases
-      // as the array has rarely changed and we can detect this in O(N) time.
-      // Look into limiting the scope of the edit distance matrix as an
-      // optimization
-      if (this.observeArray)
-        diff.splices = projectArraySplices(this.object, diff);
-
-      if (!hasObserve || !this.propertyObservers)
-        return; // All pathValues are dirty-checked in non-Object.observe mode.
-
-      this.addDirtyPathValues(Object.keys(diff.added), activeTrackers);
-      this.addDirtyPathValues(Object.keys(diff.removed), activeTrackers);
-      this.addDirtyPathValues(Object.keys(diff.changed), activeTrackers);
-    },
-
-    addDirtyPathValues: function(props, activeTrackers) {
-      for (var i = 0; i < props.length; i++) {
-        var pathValues = this.propertyObservers[props[i]];
-        if (!pathValues)
-          continue;
-
-        pathValues.forEach(function(pathValue) {
-          var observed = pathValue.observed[0];
-          var tracker = this.internal.objectTrackers.get(observed);
-          if (!tracker.dirtyPathValues)
-            tracker.dirtyPathValues = new Set;
-          tracker.dirtyPathValues.add(pathValue);
-          activeTrackers.add(tracker)
-        }, this);
-      }
-    },
-
-    checkPathValues: function(pathValues, diff, oldValues) {
-      if (!pathValues)
-        return false;
-
-      diff.pathChanged = diff.pathChanged || {};
-      var anyChanged = false;
-      pathValues.forEach(function(pathValue) {
-        var oldValue = pathValue.value;
-        if (pathValue.reset()) {
-          anyChanged = true;
-          var pathString = pathValue.path.toString();
-          oldValues[pathString] = oldValue;
-          diff.pathChanged[pathString] = pathValue.value;
+      for (var i = 0; i < this.pathTrackers.length; i++) {
+        var pathTracker = this.pathTrackers[i];
+        if (pathTracker.check()) {
+          var isThis = this.object === pathTracker.object;
+          var observer = isThis ? this : this.internal.objectObservers.get(pathTracker.object);
+          observer.addDirtyPath(pathTracker);
+          if (!isThis)
+            this.internal.activeObservers.add(observer);
         }
-      }, this);
-
-      return anyChanged;
+      }
     },
 
-    checkAllPathValues: function(diff, oldValues) {
-      if (!this.propertyObservers)
-        return false;
-
-      var anyChanged = false;
-      for (var prop in this.propertyObservers) {
-        anyChanged = this.checkPathValues(this.propertyObservers[prop],
-                                          diff,
-                                          oldValues) || anyChanged;
-      }
-      return anyChanged;
+    addDirtyPath: function(pathTracker) {
+      if (!this.dirtyPathTrackers)
+        this.dirtyPathTrackers = new Set;
+      this.dirtyPathTrackers.add(pathTracker);
     },
 
     // TODO(rafaelw): Summary should have a fixed shape based only on what is observed:
     // https://github.com/rafaelw/ChangeSummary/issues/5
     produceSummary: function() {
-      var diff = this.diff || {};
-      var oldValues = diff.oldValues || {};
-      this.diff = undefined;
+      if ((!this.observeObject || !this.observeObject.changed) &&
+          (!this.observeArray || !this.observeArray.changed) &&
+          (!this.dirtyPathTrackers))
+        return;
 
+      var oldValues;
       var summary = {
         object: this.object
       };
-      var getOldValue = function(propOrPath) {
-        return oldValues[propOrPath];
-      };
+      if (this.observeObject || this.pathTrackerMap) {
+        oldValues = {};
+        summary.getOldValue = function(propOrPath) {
+          return oldValues[propOrPath];
+        };
+      }
+      if (this.pathTrackerMap)
+        summary.pathChanged = {};
 
-      var objectChanges = false;
-      if (this.observeObject) {
-        summary.added = diff.added || {};
-        summary.removed = diff.removed || {};
-        summary.changed = diff.changed || {};
-        summary.getOldValue = getOldValue;
-
-        objectChanges = !diff.isEmpty;
+      if (this.observeObject)
+        this.observeObject.summarize(summary, oldValues);
+      if (this.observeArray)
+        this.observeArray.summarize(summary);
+      if (this.dirtyPathTrackers) {
+        this.dirtyPathTrackers.forEach(function(pathTracker) {
+          pathTracker.summarize(summary, oldValues);
+        });
       }
 
-      if (this.observeArray && diff.splices.length)
-        summary.splices = diff.splices;
+      return summary;
+    },
 
-      var pathChanges = hasObserve ?
-          this.checkPathValues(this.dirtyPathValues, diff, oldValues) :
-          this.checkAllPathValues(diff, oldValues);
+    reset: function() {
+      if (this.observeObject)
+        this.observeObject.reset();
+      if (this.observeArray)
+        this.observeArray.reset();
+      if (this.dirtyPathTrackers)
+        this.dirtyPathTrackers.forEach(function(pathTracker) { pathTracker.reset(); });
 
-      this.dirtyPathValues = undefined;
-
-      if (pathChanges) {
-        summary.pathChanged = diff.pathChanged;
-        summary.getOldValue = getOldValue;
-      }
-
-      if (objectChanges || pathChanges || summary.splices)
-        return summary;
+      this.changeRecords = undefined;
+      this.dirtyPathTrackers = undefined;
     }
   };
-
-  function PathValue(internal, object, path) {
-    this.path = path;
-    this.observed = new Array(path.length - 1);
-
-    var self = this;
-
-    this.reset = function() {
-      var changed = false;
-      self.path.walkPropertiesFrom(object, function(prop, value, i) {
-        if (i == this.path.length) {
-          if (this.value === value)
-            return;
-
-          changed = true;
-          this.value = value;
-          return;
-        }
-
-        var observed = this.observed[i];
-        if (value === observed)
-          return;
-
-        if (observed !== undefined) {
-          internal.unobserveProperty(observed, prop, this);
-          this.observed[i] = observed = undefined;
-        }
-
-        if (!isObject(value))
-          return;
-
-        this.observed[i] = observed = value;
-        internal.observeProperty(observed, prop, this);
-      }, self);
-
-      return changed;
-    };
-
-    this.clear = function() {
-      object = undefined;
-      self.reset();
-    };
-
-    this.reset();
-  }
 
   var knownRecordTypes = {
     'new': true,
@@ -930,56 +1085,9 @@
     'deleted': true
   };
 
-  function objectIsEmpty(object) {
-    for (var prop in object)
-      return false;
-    return true;
-  }
-
-  function checkDiffForEmpty(diff) {
-    diff.isEmpty = objectIsEmpty(diff.added) &&
-                   objectIsEmpty(diff.removed) &&
-                   objectIsEmpty(diff.changed);
-    return diff;
-  }
-
-  function diffObjectFromOldObject(object, oldObject) {
+  function diffObjectFromChangeRecords(object, changeRecords, oldValues) {
     var added = {};
     var removed = {};
-    var changed = {};
-
-    for (var prop in oldObject) {
-      if (!object.hasOwnProperty(prop)) {
-        removed[prop] = undefined;
-        continue;
-      }
-
-      var newValue = object[prop];
-      if (newValue !== oldObject[prop])
-        changed[prop] = newValue;
-    }
-
-    Object.getOwnPropertyNames(object).forEach(function(prop) {
-      if (prop in oldObject)
-        return;
-      added[prop] = object[prop];
-    });
-
-    if (Array.isArray(object) && object.length !== oldObject.length)
-      changed.length = object.length;
-
-    return checkDiffForEmpty({
-      added: added,
-      removed: removed,
-      changed: changed,
-      oldValues: oldObject
-    });
-  }
-
-  function diffObjectFromChangeRecords(object, changeRecords) {
-    var added = {};
-    var removed = {};
-    var oldValues = {};
 
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
@@ -1021,7 +1129,7 @@
 
     var changed = {};
     for (var prop in oldValues) {
-      if (added.hasOwnProperty(prop) || removed.hasOwnProperty(prop))
+      if (prop in added || prop in removed)
         continue;
 
       var newValue = object[prop];
@@ -1029,12 +1137,11 @@
         changed[prop] = newValue;
     }
 
-    return checkDiffForEmpty({
+    return {
       added: added,
       removed: removed,
-      changed: changed,
-      oldValues: oldValues
-    });
+      changed: changed
+    };
   }
 
   /**
@@ -1217,8 +1324,8 @@
     return splices;
   }
 
-  function createInitialSplicesFromDiff(array, diff) {
-    var oldLength = 'length' in diff.oldValues ? toNumber(diff.oldValues.length) : array.length;
+  function createInitialSplicesFromDiff(array, diff, oldValues) {
+    var oldLength = 'length' in oldValues ? toNumber(oldValues.length) : array.length;
 
     var lengthChangeSplice;
     if (array.length > oldLength) {
@@ -1246,13 +1353,13 @@
         if (index < array.length)
           indicesChanged[index] = oldValue;
         else
-          lengthChangeSplice.removed[index - array.length] = diff.oldValues[index];
+          lengthChangeSplice.removed[index - array.length] = oldValues[index];
       });
     }
 
-    addProperties(diff.added, diff.oldValues);
-    addProperties(diff.removed, diff.oldValues);
-    addProperties(diff.changed, diff.oldValues);
+    addProperties(diff.added, oldValues);
+    addProperties(diff.removed, oldValues);
+    addProperties(diff.changed, oldValues);
 
     var splices = [];
     var current;
@@ -1300,10 +1407,10 @@
     return splices;
   }
 
-  function projectArraySplices(array, diff) {
+  function projectArraySplices(array, diff, oldValues) {
     var splices = [];
 
-    createInitialSplicesFromDiff(array, diff).forEach(function(splice) {
+    createInitialSplicesFromDiff(array, diff, oldValues).forEach(function(splice) {
       splices = splices.concat(calcSplices(array, splice.index, splice.addedCount, splice.removed));
     });
 
