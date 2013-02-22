@@ -1817,6 +1817,14 @@
         callbacksMap.delete(object);
     };
 
+    this.bind = function(obj1, path1, obj2, path2) {
+      observer.bind(obj1, path1, obj2, path2);
+    };
+
+    this.unbind = function(obj1, path1, obj2, path2) {
+      observer.unbind(obj1, path1, obj2, path2);
+    };
+
     this.deliver = observer.deliver.bind(observer);
   }
 
