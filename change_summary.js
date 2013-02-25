@@ -890,22 +890,45 @@
     this.reset(true);
   }
 
+  function sharedPrefix(arr1, arr2) {
+    var searchLength = Math.min(arr1.length, arr2.length);
+    for (var i = 0; i < searchLength; i++)
+      if (arr1[i] !== arr2[i])
+        return i;
+    return searchLength;
+  }
+
+  function sharedSuffix(arr1, arr2, prefixMatched) {
+    if (!arr1.length || !arr2.length)
+      return 0;
+
+    var arr1Index = arr1.length;
+    var arr2Index = arr2.length;
+    var count = 0;
+    while (arr1Index-- > prefixMatched && arr2Index-- > prefixMatched) {
+      if (arr1[arr1Index] !== arr2[arr2Index])
+        return count;
+      count++;
+    }
+
+    return count;
+  }
+
   ArrayTracker.prototype = {
     check: function(changeRecords) {
       var diff;
       var oldValues;
-      if (changeRecords) {
-        oldValues = {};
-        diff = diffObjectFromChangeRecords(this.array, changeRecords, oldValues);
-      } else {
-        oldValues = this.oldArray;
-        diff = diffObjectFromOldObject(this.array, this.oldArray);
-      }
+      if (changeRecords)
+        throw Error('Not implemented');
 
-      if (diffIsEmpty(diff))
-        return false;
+      var prefixCount = sharedPrefix(this.array, this.oldArray);
+      var suffixCount = sharedSuffix(this.array, this.oldArray, prefixCount);
+      if (this.array.length == this.oldArray.length &&
+          this.array.length == prefixCount + suffixCount)
+        return false; // Arrays are indentical
 
-      var splices = projectArraySplices(this.array, diff, oldValues);
+      var splices = calcSplices(this.array, prefixCount, this.array.length - suffixCount,
+                                this.oldArray, prefixCount, this.oldArray.length - suffixCount);
       if (!splices.length)
         return false;
 
@@ -1382,8 +1405,8 @@
   function calcEditDistances(current, currentStart, currentLength,
                              old, oldStart, oldLength) {
     // "Deletion" columns
-    var rowCount = oldLength + 1;
-    var columnCount = currentLength + 1;
+    var rowCount = oldLength + 1 - currentStart;
+    var columnCount = currentLength + 1 - oldStart;
     var distances = new Array(rowCount);
 
     // "Addition" rows. Initialize null column.
@@ -1442,13 +1465,25 @@
     var ADD = 2;
     var DELETE = 3;
 
+    if (currentStart == currentLength && oldStart == oldLength)
+      return [];
+
     function newSplice(index, removed, addedCount) {
       return {
         index: index,
-        removed: Array.prototype.slice.apply(removed),
+        removed: removed,
         addedCount: addedCount
       };
     }
+
+    if (currentStart == currentLength) {
+      var splice = newSplice(currentStart, [], 0);
+      while (oldStart < oldLength)
+        splice.removed.push(old[oldStart++]);
+
+      return [ splice ];
+    } else if (oldStart == oldLength)
+      return [ newSplice(currentStart, [], currentLength - currentStart) ];
 
     // This starts at the final weight, and walks "backward" by finding
     // the minimum previous weight recursively until the origin of the weight
@@ -1551,7 +1586,6 @@
     if (splice) {
       splices.push(splice);
     }
-
     return splices;
   }
 

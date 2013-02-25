@@ -14,7 +14,7 @@
 
 
 (function(global) {
-  var objectCount = 100;
+  var objectCount = 5000;
   var dirtyCheckTimes = 100;
   var arrays;
   var observer = new ChangeSummary(function() {});
