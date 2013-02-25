@@ -40,6 +40,11 @@
     }
   }
 
+  function unobserveObjects() {
+    for (var i = 0; i < objectCount; i++)
+      observer.unobserveObject(objects[i]);
+  }
+
   function mutateObjectsAndDeliver(mutationFreq) {
     var modVal = mutationFreq ? Math.floor(100/mutationFreq) : 0;
     var modChar = mutationFreq ? Math.max(1, Math.floor(propertyCount * (mutationFreq / 100))) : 0;
@@ -60,5 +65,6 @@
   }
 
   global.createAndObserveObjects = createAndObserveObjects;
+  global.unobserveObjects = unobserveObjects;
   global.mutateObjectsAndDeliver = mutateObjectsAndDeliver;
 })(this);

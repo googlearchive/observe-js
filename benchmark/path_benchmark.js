@@ -38,6 +38,12 @@
     }
   }
 
+  function unobservePaths() {
+    for (var i = 0; i < objectCount; i++) {
+      observer.unobservePath(objects[i], 'foo.bar.baz');
+    }
+  }
+
   function mutatePathsAndDeliver(mutationFreq) {
     var modVal = mutationFreq ? Math.floor(100/mutationFreq) : 0;
     for (var i = 0; i < dirtyCheckTimes; i++) {
@@ -53,5 +59,6 @@
   }
 
   global.createAndObservePaths = createAndObservePaths;
+  global.unobservePaths = unobservePaths;
   global.mutatePathsAndDeliver = mutatePathsAndDeliver;
 })(this);

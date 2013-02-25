@@ -15,7 +15,7 @@
 
 (function(global) {
   var objectCount = 100;
-  var dirtyCheckTimes = 50;
+  var dirtyCheckTimes = 100;
   var arrays;
   var observer = new ChangeSummary(function() {});
   var elementCount = 100;
@@ -30,6 +30,11 @@
       observer.observeArray(array);
       arrays.push(array);
     }
+  }
+
+  function unobserveArrays() {
+    for (var i = 0; i < objectCount; i++)
+      observer.unobserveArray(arrays[i]);
   }
 
   function mutateArraysAndDeliver(mutationFreq, op, undoOp) {
@@ -56,5 +61,6 @@
   }
 
   global.createAndObserveArrays = createAndObserveArrays;
+  global.unobserveArrays = unobserveArrays;
   global.mutateArraysAndDeliver = mutateArraysAndDeliver;
 })(this);
