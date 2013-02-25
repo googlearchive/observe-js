@@ -1381,27 +1381,29 @@
   // leaves the substring '123' intact.
   function calcEditDistances(current, currentIndex, currentLength, old) {
     // "Deletion" columns
-    var distances = new Array(old.length + 1);
+    var rowCount = old.length + 1;
+    var columnCount = currentLength + 1;
+    var distances = new Array(rowCount);
 
     // "Addition" rows. Initialize null column.
-    for (var i = 0; i < distances.length; i++) {
-      distances[i] = new Array(currentLength + 1)
+    for (var i = 0; i < rowCount; i++) {
+      distances[i] = new Array(columnCount);
       distances[i][0] = i;
     }
 
     // Initialize null row
-    for (var j = 0; j < distances[0].length; j++) {
+    for (var j = 0; j < columnCount; j++)
       distances[0][j] = j;
-    }
 
-    for (var i = 1; i < distances.length; i++) {
-      for (var j = 1; j < distances[i].length; j++) {
+    for (var i = 1; i < rowCount; i++) {
+      for (var j = 1; j < columnCount; j++) {
         if (old[i - 1] === current[currentIndex + j - 1])
           distances[i][j] = distances[i - 1][j - 1];
-        else
-          distances[i][j] = Math.min(distances[i - 1][j] + 1,      // 1 Edit
-                                     distances[i][j - 1] + 1,      // 1 Edit
-                                     distances[i - 1][j - 1] + 2); // 2 Edits
+        else {
+          var north = distances[i - 1][j] + 1;
+          var west = distances[i][j - 1] + 1;
+          distances[i][j] = north < west ? north : west;
+        }
       }
     }
 
@@ -1452,7 +1454,7 @@
     function operations(distances) {
       var i = distances.length - 1;
       var j = distances[0].length - 1;
-      var last = distances[i][j];
+      var current = distances[i][j];
       var edits = [];
       while (i > 0 || j > 0) {
         if (i == 0) {
@@ -1465,28 +1467,33 @@
           i--;
           continue;
         }
-        var updateOrNoop = distances[i - 1][j - 1];
-        var deletion = distances[i - 1][j];
-        var addition = distances[i][j - 1];
+        var northWest = distances[i - 1][j - 1];
+        var west = distances[i - 1][j];
+        var north = distances[i][j - 1];
 
-        var min = Math.min(updateOrNoop, deletion, addition);
-        if (min == updateOrNoop) {
-          if (updateOrNoop == last) {
+        var min;
+        if (west < north)
+          min = west < northWest ? west : northWest;
+        else
+          min = north < northWest ? north : northWest;
+
+        if (min == northWest) {
+          if (northWest == current) {
             edits.push(LEAVE);
           } else {
             edits.push(UPDATE);
-            last = updateOrNoop;
+            current = northWest;
           }
           i--;
           j--;
-        } else if (min == deletion) {
+        } else if (min == west) {
           edits.push(DELETE);
           i--;
-          last = deletion;
+          current = west;
         } else {
           edits.push(ADD);
           j--;
-          last = addition;
+          current = north;
         }
       }
 
