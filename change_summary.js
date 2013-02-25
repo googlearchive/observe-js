@@ -1379,9 +1379,10 @@
   // With 1-edit updates, the shortest path would be just to update all seven
   // characters. With 2-edit updates, we delete 4, leave 3, and add 4. This
   // leaves the substring '123' intact.
-  function calcEditDistances(current, currentIndex, currentLength, old) {
+  function calcEditDistances(current, currentStart, currentLength,
+                             old, oldStart, oldLength) {
     // "Deletion" columns
-    var rowCount = old.length + 1;
+    var rowCount = oldLength + 1;
     var columnCount = currentLength + 1;
     var distances = new Array(rowCount);
 
@@ -1397,7 +1398,7 @@
 
     for (var i = 1; i < rowCount; i++) {
       for (var j = 1; j < columnCount; j++) {
-        if (old[i - 1] === current[currentIndex + j - 1])
+        if (old[oldStart + i - 1] === current[currentStart + j - 1])
           distances[i][j] = distances[i - 1][j - 1];
         else {
           var north = distances[i - 1][j] + 1;
@@ -1434,7 +1435,8 @@
    *   l: The length of the current array
    *   p: The length of the old array
    */
-  function calcSplices(current, currentIndex, currentLength, old) {
+  function calcSplices(current, currentStart, currentLength,
+                      old, oldStart, oldLength) {
     var LEAVE = 0;
     var UPDATE = 1;
     var ADD = 2;
@@ -1501,15 +1503,13 @@
       return edits;
     }
 
-    var ops = operations(calcEditDistances(current,
-                                           currentIndex,
-                                           currentLength,
-                                           old));
+    var ops = operations(calcEditDistances(current, currentStart, currentLength,
+                                           old, oldStart, oldLength));
 
     var splice = undefined;
     var splices = [];
-    var index = 0;
-    var oldIndex = 0;
+    var index = currentStart;
+    var oldIndex = oldStart;
     for (var i = 0; i < ops.length; i++) {
       switch(ops[i]) {
         case LEAVE:
@@ -1523,7 +1523,7 @@
           break;
         case UPDATE:
           if (!splice)
-            splice = newSplice(currentIndex + index, [], 0);
+            splice = newSplice(index, [], 0);
 
           splice.addedCount++;
           index++;
@@ -1533,14 +1533,14 @@
           break;
         case ADD:
           if (!splice)
-            splice = newSplice(currentIndex + index, [], 0);
+            splice = newSplice(index, [], 0);
 
           splice.addedCount++;
           index++;
           break;
         case DELETE:
           if (!splice)
-            splice = newSplice(currentIndex + index, [], 0);
+            splice = newSplice(index, [], 0);
 
           splice.removed.push(old[oldIndex]);
           oldIndex++;
@@ -1642,7 +1642,7 @@
     var splices = [];
 
     createInitialSplicesFromDiff(array, diff, oldValues).forEach(function(splice) {
-      splices = splices.concat(calcSplices(array, splice.index, splice.addedCount, splice.removed));
+      splices = splices.concat(calcSplices(array, splice.index, splice.addedCount, splice.removed, 0, splice.removed.length));
     });
 
     return splices;
