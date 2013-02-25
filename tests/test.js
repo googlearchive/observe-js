@@ -1223,6 +1223,17 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
+  test('ArrayTrackerPrefixAndSuffixOneIn', function() {
+    var model = ['a', 'b', 'c', 'd'];
+    var copy = model.slice();
+    observer.observeArray(model);
+
+    model.unshift('z');
+    model.push('z');
+
+    applySplicesAndAssertDeepEqual(model, copy);
+  });
+
   test('ArrayTrackerUpdateDelete', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
