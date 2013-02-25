@@ -1368,6 +1368,46 @@
     };
   }
 
+  // Note: This function is *based* on the computation of the Levenshtein
+  // "edit" distance. The one change is that "updates" are treated as two
+  // edits - not one. With Array splices, an update is really a delete
+  // followed by an add. By retaining this, we optimize for "keeping" the
+  // maximum array items in the original array. For example:
+  //
+  //   'xxxx123' -> '123yyyy'
+  //
+  // With 1-edit updates, the shortest path would be just to update all seven
+  // characters. With 2-edit updates, we delete 4, leave 3, and add 4. This
+  // leaves the substring '123' intact.
+  function calcEditDistances(current, currentIndex, currentLength, old) {
+    // "Deletion" columns
+    var distances = new Array(old.length + 1);
+
+    // "Addition" rows. Initialize null column.
+    for (var i = 0; i < distances.length; i++) {
+      distances[i] = new Array(currentLength + 1)
+      distances[i][0] = i;
+    }
+
+    // Initialize null row
+    for (var j = 0; j < distances[0].length; j++) {
+      distances[0][j] = j;
+    }
+
+    for (var i = 1; i < distances.length; i++) {
+      for (var j = 1; j < distances[i].length; j++) {
+        if (old[i - 1] === current[currentIndex + j - 1])
+          distances[i][j] = distances[i - 1][j - 1];
+        else
+          distances[i][j] = Math.min(distances[i - 1][j] + 1,      // 1 Edit
+                                     distances[i][j - 1] + 1,      // 1 Edit
+                                     distances[i - 1][j - 1] + 2); // 2 Edits
+      }
+    }
+
+    return distances;
+  }
+
   /**
    * Splice Projection functions:
    *
@@ -1404,46 +1444,6 @@
         removed: Array.prototype.slice.apply(removed),
         addedCount: addedCount
       };
-    }
-
-    // Note: This function is *based* on the computation of the Levenshtein
-    // "edit" distance. The one change is that "updates" are treated as two
-    // edits - not one. With Array splices, an update is really a delete
-    // followed by an add. By retaining this, we optimize for "keeping" the
-    // maximum array items in the original array. For example:
-    //
-    //   'xxxx123' -> '123yyyy'
-    //
-    // With 1-edit updates, the shortest path would be just to update all seven
-    // characters. With 2-edit updates, we delete 4, leave 3, and add 4. This
-    // leaves the substring '123' intact.
-    function calcEditDistances(current, currentIndex, currentLength, old) {
-      // "Deletion" columns
-      var distances = new Array(old.length + 1);
-
-      // "Addition" rows. Initialize null column.
-      for (var i = 0; i < distances.length; i++) {
-        distances[i] = new Array(currentLength + 1)
-        distances[i][0] = i;
-      }
-
-      // Initialize null row
-      for (var j = 0; j < distances[0].length; j++) {
-        distances[0][j] = j;
-      }
-
-      for (var i = 1; i < distances.length; i++) {
-        for (var j = 1; j < distances[i].length; j++) {
-          if (old[i - 1] === current[currentIndex + j - 1])
-            distances[i][j] = distances[i - 1][j - 1];
-          else
-            distances[i][j] = Math.min(distances[i - 1][j] + 1,      // 1 Edit
-                                       distances[i][j - 1] + 1,      // 1 Edit
-                                       distances[i - 1][j - 1] + 2); // 2 Edits
-        }
-      }
-
-      return distances;
     }
 
     // This starts at the final weight, and walks "backward" by finding
