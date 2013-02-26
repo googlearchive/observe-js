@@ -914,6 +914,41 @@
     return count;
   }
 
+/*
+  function oldSubArrayFromChangeRecords(changeRecords) {
+    var oldValues = [];
+    var added = [];
+    var updated = [];
+
+    for (var i = 0; i < changeRecords.length; i++) {
+      var record = changeRecords[i];
+
+      if (!knownRecordTypes[record.type]) {
+        console.error('Unknown changeRecord type: ' + record.type);
+        console.error(record);
+        continue;
+      }
+
+      var index = toNumber(record.name);
+      if (isNaN(index) || index < 0)
+        continue;
+
+      if (!updated[index] &&
+           (record.type === 'updated' || (record.type === 'deleted' && !added[index]))) {
+        updated[index] = true;
+        oldValues[index] = record.oldValue;
+        continue;
+      }
+
+      if (record.type === 'deleted' && addded[index])
+        added[index] = false;
+      else if (record.type === 'new' && !updated[index])
+        added[index] = true;
+    }
+
+    return oldValues;
+  } */
+
   ArrayTracker.prototype = {
     check: function(changeRecords) {
       var diff;
@@ -921,14 +956,8 @@
       if (changeRecords)
         throw Error('Not implemented');
 
-      var prefixCount = sharedPrefix(this.array, this.oldArray);
-      var suffixCount = sharedSuffix(this.array, this.oldArray, prefixCount);
-      if (this.array.length == this.oldArray.length &&
-          this.array.length == prefixCount + suffixCount)
-        return false; // Arrays are indentical
-
-      var splices = calcSplices(this.array, prefixCount, this.array.length - suffixCount,
-                                this.oldArray, prefixCount, this.oldArray.length - suffixCount);
+      var splices = calcSplices(this.array, 0, this.array.length,
+                                this.oldArray, 0, this.oldArray.length);
       if (!splices.length)
         return false;
 
@@ -1434,6 +1463,64 @@
     return distances;
   }
 
+  var EDIT_LEAVE = 0;
+  var EDIT_UPDATE = 1;
+  var EDIT_ADD = 2;
+  var EDIT_DELETE = 3;
+
+  // This starts at the final weight, and walks "backward" by finding
+  // the minimum previous weight recursively until the origin of the weight
+  // matrix.
+  function spliceOperationsFromEditDistances(distances) {
+    var i = distances.length - 1;
+    var j = distances[0].length - 1;
+    var current = distances[i][j];
+    var edits = [];
+    while (i > 0 || j > 0) {
+      if (i == 0) {
+        edits.push(EDIT_ADD);
+        j--;
+        continue;
+      }
+      if (j == 0) {
+        edits.push(EDIT_DELETE);
+        i--;
+        continue;
+      }
+      var northWest = distances[i - 1][j - 1];
+      var west = distances[i - 1][j];
+      var north = distances[i][j - 1];
+
+      var min;
+      if (west < north)
+        min = west < northWest ? west : northWest;
+      else
+        min = north < northWest ? north : northWest;
+
+      if (min == northWest) {
+        if (northWest == current) {
+          edits.push(EDIT_LEAVE);
+        } else {
+          edits.push(EDIT_UPDATE);
+          current = northWest;
+        }
+        i--;
+        j--;
+      } else if (min == west) {
+        edits.push(EDIT_DELETE);
+        i--;
+        current = west;
+      } else {
+        edits.push(EDIT_ADD);
+        j--;
+        current = north;
+      }
+    }
+
+    edits.reverse();
+    return edits;
+  }
+
   /**
    * Splice Projection functions:
    *
@@ -1460,12 +1547,21 @@
    */
   function calcSplices(current, currentStart, currentEnd,
                        old, oldStart, oldEnd) {
-    var LEAVE = 0;
-    var UPDATE = 1;
-    var ADD = 2;
-    var DELETE = 3;
+    var prefixCount = 0;
+    var suffixCount = 0;
 
-    if (currentStart == currentEnd && oldStart == oldEnd)
+    if (currentStart == 0 && oldStart == 0)
+      prefixCount = sharedPrefix(current, old);
+
+    if (currentEnd == current.length && oldEnd == old.length)
+      suffixCount = sharedSuffix(current, old, prefixCount);
+
+    currentStart += prefixCount;
+    oldStart += prefixCount;
+    currentEnd -= suffixCount;
+    oldEnd -= suffixCount;
+
+    if (currentEnd - currentStart == 0 && oldEnd - oldStart == 0)
       return [];
 
     function newSplice(index, removed, addedCount) {
@@ -1485,60 +1581,7 @@
     } else if (oldStart == oldEnd)
       return [ newSplice(currentStart, [], currentEnd - currentStart) ];
 
-    // This starts at the final weight, and walks "backward" by finding
-    // the minimum previous weight recursively until the origin of the weight
-    // matrix.
-    function operations(distances) {
-      var i = distances.length - 1;
-      var j = distances[0].length - 1;
-      var current = distances[i][j];
-      var edits = [];
-      while (i > 0 || j > 0) {
-        if (i == 0) {
-          edits.push(ADD);
-          j--;
-          continue;
-        }
-        if (j == 0) {
-          edits.push(DELETE);
-          i--;
-          continue;
-        }
-        var northWest = distances[i - 1][j - 1];
-        var west = distances[i - 1][j];
-        var north = distances[i][j - 1];
-
-        var min;
-        if (west < north)
-          min = west < northWest ? west : northWest;
-        else
-          min = north < northWest ? north : northWest;
-
-        if (min == northWest) {
-          if (northWest == current) {
-            edits.push(LEAVE);
-          } else {
-            edits.push(UPDATE);
-            current = northWest;
-          }
-          i--;
-          j--;
-        } else if (min == west) {
-          edits.push(DELETE);
-          i--;
-          current = west;
-        } else {
-          edits.push(ADD);
-          j--;
-          current = north;
-        }
-      }
-
-      edits.reverse();
-      return edits;
-    }
-
-    var ops = operations(calcEditDistances(current, currentStart, currentEnd,
+    var ops = spliceOperationsFromEditDistances(calcEditDistances(current, currentStart, currentEnd,
                                            old, oldStart, oldEnd));
 
     var splice = undefined;
@@ -1547,7 +1590,7 @@
     var oldIndex = oldStart;
     for (var i = 0; i < ops.length; i++) {
       switch(ops[i]) {
-        case LEAVE:
+        case EDIT_LEAVE:
           if (splice) {
             splices.push(splice);
             splice = undefined;
@@ -1556,7 +1599,7 @@
           index++;
           oldIndex++;
           break;
-        case UPDATE:
+        case EDIT_UPDATE:
           if (!splice)
             splice = newSplice(index, [], 0);
 
@@ -1566,14 +1609,14 @@
           splice.removed.push(old[oldIndex]);
           oldIndex++;
           break;
-        case ADD:
+        case EDIT_ADD:
           if (!splice)
             splice = newSplice(index, [], 0);
 
           splice.addedCount++;
           index++;
           break;
-        case DELETE:
+        case EDIT_DELETE:
           if (!splice)
             splice = newSplice(index, [], 0);
 
