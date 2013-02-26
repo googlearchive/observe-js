@@ -426,7 +426,6 @@
       },
 
       internalCallback: function(records) {
-        // console.log(records.length);
         if (!records || !records.length) {
           console.error('Object.observe callback called with no records');
           return;
@@ -890,33 +889,11 @@
     this.reset(true);
   }
 
-  function sharedPrefix(arr1, arr2) {
-    var searchLength = Math.min(arr1.length, arr2.length);
-    for (var i = 0; i < searchLength; i++)
-      if (arr1[i] !== arr2[i])
-        return i;
-    return searchLength;
-  }
-
-  function sharedSuffix(arr1, arr2, prefixMatched) {
-    if (!arr1.length || !arr2.length)
-      return 0;
-
-    var arr1Index = arr1.length;
-    var arr2Index = arr2.length;
-    var count = 0;
-    while (arr1Index-- > prefixMatched && arr2Index-- > prefixMatched) {
-      if (arr1[arr1Index] !== arr2[arr2Index])
-        return count;
-      count++;
-    }
-
-    return count;
-  }
-
 /*
-  function oldSubArrayFromChangeRecords(changeRecords) {
+  function splicesFromChangeRecords(array, changeRecords) {
+    var lengthFound = false;
     var oldValues = [];
+    var indices = [];
     var added = [];
     var updated = [];
 
@@ -929,14 +906,22 @@
         continue;
       }
 
+      if (!lengthFound && record.name == 'length') {
+        oldValues.length = toNumber(record.oldValue);
+        continue;
+      }
+
       var index = toNumber(record.name);
-      if (isNaN(index) || index < 0)
+      if (isNaN(index) || index < 0 ||
+          index >= array.length ||
+          (lengthFound && index >= oldValues.length));
         continue;
 
       if (!updated[index] &&
            (record.type === 'updated' || (record.type === 'deleted' && !added[index]))) {
         updated[index] = true;
         oldValues[index] = record.oldValue;
+        indices.push(index);
         continue;
       }
 
@@ -945,19 +930,20 @@
       else if (record.type === 'new' && !updated[index])
         added[index] = true;
     }
-
-    return oldValues;
-  } */
+  }*/
 
   ArrayTracker.prototype = {
     check: function(changeRecords) {
-      var diff;
-      var oldValues;
-      if (changeRecords)
-        throw Error('Not implemented');
+      var splices;
+      if (changeRecords) {
+        var oldValues = {};
+        var diff = diffObjectFromChangeRecords(this.array, changeRecords, oldValues);
+        splices = projectArraySplices(this.array, diff, oldValues);
+      } else {
+        splices = calcSplices(this.array, 0, this.array.length,
+                              this.oldArray, 0, this.oldArray.length);
+      }
 
-      var splices = calcSplices(this.array, 0, this.array.length,
-                                this.oldArray, 0, this.oldArray.length);
       if (!splices.length)
         return false;
 
@@ -1521,6 +1507,23 @@
     return edits;
   }
 
+  function sharedPrefix(arr1, arr2, searchLength) {
+    for (var i = 0; i < searchLength; i++)
+      if (arr1[i] !== arr2[i])
+        return i;
+    return searchLength;
+  }
+
+  function sharedSuffix(arr1, arr2, searchLength) {
+    var index1 = arr1.length;
+    var index2 = arr2.length;
+    var count = 0;
+    while (count < searchLength && arr1[--index1] === arr2[--index2])
+      count++;
+
+    return count;
+  }
+
   /**
    * Splice Projection functions:
    *
@@ -1550,11 +1553,12 @@
     var prefixCount = 0;
     var suffixCount = 0;
 
+    var minLength = Math.min(currentEnd - currentStart, oldEnd - oldStart);
     if (currentStart == 0 && oldStart == 0)
-      prefixCount = sharedPrefix(current, old);
+      prefixCount = sharedPrefix(current, old, minLength);
 
     if (currentEnd == current.length && oldEnd == old.length)
-      suffixCount = sharedSuffix(current, old, prefixCount);
+      suffixCount = sharedSuffix(current, old, minLength - prefixCount);
 
     currentStart += prefixCount;
     oldStart += prefixCount;
@@ -1719,7 +1723,8 @@
     var splices = [];
 
     createInitialSplicesFromDiff(array, diff, oldValues).forEach(function(splice) {
-      splices = splices.concat(calcSplices(array, splice.index, splice.addedCount, splice.removed, 0, splice.removed.length));
+      splices = splices.concat(calcSplices(array, splice.index, splice.index + splice.addedCount,
+                                           splice.removed, 0, splice.removed.length));
     });
 
     return splices;

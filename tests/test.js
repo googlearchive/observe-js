@@ -1234,6 +1234,16 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
+  test('ArrayTrackerShiftOne', function() {
+    var model = [16, 15, 15];
+    var copy = model.slice();
+    observer.observeArray(model);
+
+    model.shift('z');
+
+    applySplicesAndAssertDeepEqual(model, copy);
+  });
+
   test('ArrayTrackerUpdateDelete', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
