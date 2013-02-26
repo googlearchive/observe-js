@@ -422,6 +422,22 @@ suite('Basic Tests', function() {
     });
   });
 
+  test('PathValueWithIndices', function() {
+    var model = [];
+    observer.observePath(model, '0');
+
+    model.push(1);
+    assertSummary({
+      object: model,
+      pathChanged: {
+        0: 1
+      },
+      oldValues: {
+        0: undefined
+      }
+    });
+  });
+
   test('PathValueBreadthFirstNotification', function() {
     var model = {};
 

@@ -1037,13 +1037,13 @@
         var length = this.path.length;
         str += 'if (obj'
         for (var i = 0; i < (length - 1); i++) {
-          var part = '.' + this.path[i];
+          var part = '["' + this.path[i] + '"]';
           partStr += part;
           str += ' && ' + partStr;
         }
         str += ') ';
 
-        partStr += '.' + this.path[length - 1];
+        partStr += '["' + this.path[length - 1] + '"]';
 
         str += 'return ' + partStr + '; else return undefined;';
 
