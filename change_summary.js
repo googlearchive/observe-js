@@ -1402,11 +1402,11 @@
   // With 1-edit updates, the shortest path would be just to update all seven
   // characters. With 2-edit updates, we delete 4, leave 3, and add 4. This
   // leaves the substring '123' intact.
-  function calcEditDistances(current, currentStart, currentLength,
-                             old, oldStart, oldLength) {
+  function calcEditDistances(current, currentStart, currentEnd,
+                             old, oldStart, oldEnd) {
     // "Deletion" columns
-    var rowCount = oldLength + 1 - currentStart;
-    var columnCount = currentLength + 1 - oldStart;
+    var rowCount = oldEnd - oldStart + 1;
+    var columnCount = currentEnd - currentStart + 1;
     var distances = new Array(rowCount);
 
     // "Addition" rows. Initialize null column.
@@ -1458,14 +1458,14 @@
    *   l: The length of the current array
    *   p: The length of the old array
    */
-  function calcSplices(current, currentStart, currentLength,
-                      old, oldStart, oldLength) {
+  function calcSplices(current, currentStart, currentEnd,
+                       old, oldStart, oldEnd) {
     var LEAVE = 0;
     var UPDATE = 1;
     var ADD = 2;
     var DELETE = 3;
 
-    if (currentStart == currentLength && oldStart == oldLength)
+    if (currentStart == currentEnd && oldStart == oldEnd)
       return [];
 
     function newSplice(index, removed, addedCount) {
@@ -1476,14 +1476,14 @@
       };
     }
 
-    if (currentStart == currentLength) {
+    if (currentStart == currentEnd) {
       var splice = newSplice(currentStart, [], 0);
-      while (oldStart < oldLength)
+      while (oldStart < oldEnd)
         splice.removed.push(old[oldStart++]);
 
       return [ splice ];
-    } else if (oldStart == oldLength)
-      return [ newSplice(currentStart, [], currentLength - currentStart) ];
+    } else if (oldStart == oldEnd)
+      return [ newSplice(currentStart, [], currentEnd - currentStart) ];
 
     // This starts at the final weight, and walks "backward" by finding
     // the minimum previous weight recursively until the origin of the weight
@@ -1538,8 +1538,8 @@
       return edits;
     }
 
-    var ops = operations(calcEditDistances(current, currentStart, currentLength,
-                                           old, oldStart, oldLength));
+    var ops = operations(calcEditDistances(current, currentStart, currentEnd,
+                                           old, oldStart, oldEnd));
 
     var splice = undefined;
     var splices = [];
