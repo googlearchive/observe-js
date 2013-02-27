@@ -17,8 +17,8 @@
 
 
 (function(global) {
-  var objectCount = 500;
-  var cycles = 1000;
+  var objectCount = 1000;
+  var cycles = 200;
   var objects;
   var observer = new ChangeSummary(function() {});
 
@@ -45,15 +45,14 @@
   }
 
   function mutatePathsAndDeliver(mutationFreq) {
-    var modVal = mutationFreq ? Math.floor(100/mutationFreq) : 0;
-    for (var i = 0; i < cycles; i++) {
-      if (modVal) {
-        for (var j = 0; j < objects.length; j++) {
-          if (j % modVal != 0)
-            continue;
+    var modVal = Math.floor(100/mutationFreq);
 
-          objects[j]['foo']['bar']['baz'] = '' + i;
-        }
+    for (var i = 0; i < cycles; i++) {
+      for (var j = 0; j < objects.length; j++) {
+        if (j % modVal != 0)
+          continue;
+
+        objects[j]['foo']['bar']['baz'] = '' + i;
       }
 
       observer.deliver();

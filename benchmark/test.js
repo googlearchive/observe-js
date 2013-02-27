@@ -136,4 +136,34 @@ suite('Array Benchmarks', function() {
     mutateArraysAndDeliver(20, 'unshift', 'shift');
     unobserveArrays();
   });
+
+  test('Array Benchmark - Update - 0% Changed', function() {
+    createAndObserveArrays();
+    mutateArraysAndDeliver(0, 'update');
+    unobserveArrays();
+  });
+
+  test('Array Benchmark - Update - 1% Changed', function() {
+    createAndObserveArrays();
+    mutateArraysAndDeliver(1, 'update');
+    unobserveArrays();
+  });
+
+  test('Array Benchmark - Update - 5% Changed', function() {
+    createAndObserveArrays();
+    mutateArraysAndDeliver(5, 'update');
+    unobserveArrays();
+  });
+
+  test('Array Benchmark - Update - 10% Changed', function() {
+    createAndObserveArrays();
+    mutateArraysAndDeliver(10, 'update');
+    unobserveArrays();
+  });
+
+  test('Array Benchmark - Update - 20% Changed', function() {
+    createAndObserveArrays();
+    mutateArraysAndDeliver(20, 'update');
+    unobserveArrays();
+  });
 });

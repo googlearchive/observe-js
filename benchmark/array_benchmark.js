@@ -14,8 +14,8 @@
 
 
 (function(global) {
-  var objectCount = 25;
-  var cycles = 1000;
+  var objectCount = 100;
+  var cycles = 200;
   var arrays;
   var observer = new ChangeSummary(function() {});
   var elementCount = 100;
@@ -38,21 +38,26 @@
   }
 
   function mutateArraysAndDeliver(mutationFreq, op, undoOp) {
-    var modVal = mutationFreq ? Math.floor(100/mutationFreq) : 0;
-    var modCount = mutationFreq ? Math.max(1, Math.floor(elementCount * (mutationFreq / 100))) : 0;
+    var modVal = Math.floor(100/mutationFreq);
 
     for (var i = 0; i < cycles; i++) {
-      if (modVal) {
-        for (var j = 0; j < arrays.length; j++) {
-          if (j % modVal != 0)
-            continue;
+      for (var j = 0; j < objectCount; j++) {
+        if (j % modVal != 0)
+          continue;
 
-          var array = arrays[j];
-          if (i % 2)
-            array[op](j);
-          else
-            array[undoOp](j);
+        var array = arrays[j];
+        if (op == 'update') {
+          for (var k = 0; k < elementCount; k++) {
+            if (k % modVal == 0) {
+              array[k] += 1;
+            }
+          }
+          continue;
         }
+        if (i % 2)
+          array[op](j);
+        else
+          array[undoOp](j);
       }
 
       observer.deliver();
