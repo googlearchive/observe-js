@@ -15,7 +15,7 @@
 
 (function(global) {
   var objectCount = 100;
-  var cycles = 200;
+  var cycles = 500;
   var arrays;
   var observer = new ChangeSummary(function() {});
   var elementCount = 100;
@@ -42,7 +42,7 @@
 
     for (var i = 0; i < cycles; i++) {
       for (var j = 0; j < objectCount; j++) {
-        if (j % modVal != 0)
+        if (modVal === Infinity || j % modVal != 0)
           continue;
 
         var array = arrays[j];

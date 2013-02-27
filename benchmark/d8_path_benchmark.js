@@ -14,8 +14,12 @@
 
 // var console = { log: print };
 
-var t1 = new Date();
 createAndObservePaths();
-mutatePathsAndDeliver(10);
+
+var t1 = new Date();
+mutatePathsAndDeliver(20, true);
 var t2 = new Date();
 print('Finished in: ' + (t2.getTime() - t1.getTime()) + 'ms');
+
+unobservePaths();
+

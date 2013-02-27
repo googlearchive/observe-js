@@ -14,8 +14,11 @@
 
 // var console = { log: print };
 
-var t1 = new Date();
 createAndObserveObjects();
+
+var t1 = new Date();
 mutateObjectsAndDeliver(10);
 var t2 = new Date();
 print('Finished in: ' + (t2.getTime() - t1.getTime()) + 'ms');
+
+unobserveObjects();

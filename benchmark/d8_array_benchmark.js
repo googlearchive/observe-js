@@ -14,8 +14,11 @@
 
 // var console = { log: print };
 
-var t1 = new Date();
 createAndObserveArrays();
-mutateArraysAndDeliver(10, 'unshift', 'shift');
+
+var t1 = new Date();
+mutateArraysAndDeliver(0, 'unshift', 'shift');
 var t2 = new Date();
 print('Finished in: ' + (t2.getTime() - t1.getTime()) + 'ms');
+
+unobserveArrays();

@@ -50,7 +50,7 @@
 
     for (var i = 0; i < cycles; i++) {
       for (var j = 0; j < objects.length; j++) {
-        if (j % modVal != 0)
+        if (modVal === Infinity || j % modVal != 0)
           continue;
 
         var object = objects[j];
