@@ -13,157 +13,131 @@
 // limitations under the License.
 
 suite('Path Benchmarks', function() {
-  test('Path Benchmark - 0% Changed', function() {
+  setup(function() {
     createAndObservePaths();
-    mutatePathsAndDeliver(0);
+  });
+
+  teardown(function() {
     unobservePaths();
+  });
+
+  test('Path Benchmark - 0% Changed', function() {
+    mutatePathsAndDeliver(0);
   });
 
   test('Path Benchmark - 1% Changed', function() {
-    createAndObservePaths();
     mutatePathsAndDeliver(1);
-    unobservePaths();
   });
 
   test('Path Benchmark - 5% Changed', function() {
-    createAndObservePaths();
     mutatePathsAndDeliver(5);
-    unobservePaths();
   });
 
   test('Path Benchmark - 10% Changed', function() {
-    createAndObservePaths();
     mutatePathsAndDeliver(10);
-    unobservePaths();
   });
 
   test('Path Benchmark - 20% Changed', function() {
-    createAndObservePaths();
     mutatePathsAndDeliver(20);
-    unobservePaths();
   });
 });
 
 suite('Object Benchmarks', function() {
-  test('Object Benchmark - 0% Changed', function() {
+  setup(function() {
     createAndObserveObjects();
-    mutateObjectsAndDeliver(0);
+  });
+
+  teardown(function() {
     unobserveObjects();
+  });
+
+  test('Object Benchmark - 0% Changed', function() {
+    mutateObjectsAndDeliver(0);
   });
 
   test('Object Benchmark - 1% Changed', function() {
-    createAndObserveObjects();
     mutateObjectsAndDeliver(1);
-    unobserveObjects();
   });
 
   test('Object Benchmark - 5% Changed', function() {
-    createAndObserveObjects();
     mutateObjectsAndDeliver(5);
-    unobserveObjects();
   });
 
   test('Object Benchmark - 10% Changed', function() {
-    createAndObserveObjects();
     mutateObjectsAndDeliver(10);
-    unobserveObjects();
   });
 
   test('Object Benchmark - 20% Changed', function() {
-    createAndObserveObjects();
     mutateObjectsAndDeliver(20);
-    unobserveObjects();
   });
 });
 
 suite('Array Benchmarks', function() {
-  test('Array Benchmark - Push/Pop - 0% Changed', function() {
+  setup(function() {
     createAndObserveArrays();
-    mutateArraysAndDeliver(0, 'push', 'pop');
+  });
+
+  teardown(function() {
     unobserveArrays();
+  });
+
+  test('Array Benchmark - Push/Pop - 0% Changed', function() {
+    mutateArraysAndDeliver(0, 'push', 'pop');
   });
 
   test('Array Benchmark - Push/Pop - 1% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(1, 'push', 'pop');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Push/Pop - 5% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(5, 'push', 'pop');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Push/Pop - 10% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(10, 'push', 'pop');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Push/Pop - 20% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(20, 'push', 'pop');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Unshift/Shift - 0% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(0, 'unshift', 'shift');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Unshift/Shift - 1% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(1, 'unshift', 'shift');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Unshift/Shift - 5% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(5, 'unshift', 'shift');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Unshift/Shift - 10% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(10, 'unshift', 'shift');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Unshift/Shift - 20% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(20, 'unshift', 'shift');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Update - 0% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(0, 'update');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Update - 1% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(1, 'update');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Update - 5% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(5, 'update');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Update - 10% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(10, 'update');
-    unobserveArrays();
   });
 
   test('Array Benchmark - Update - 20% Changed', function() {
-    createAndObserveArrays();
     mutateArraysAndDeliver(20, 'update');
-    unobserveArrays();
   });
 });
