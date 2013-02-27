@@ -21,25 +21,46 @@ suite('Path Benchmarks', function() {
     unobservePaths();
   });
 
-  test('Path Benchmark - 0% Changed', function() {
+  test('Path Benchmark - Leaf - 0% Changed', function() {
     mutatePathsAndDeliver(0);
   });
 
-  test('Path Benchmark - 1% Changed', function() {
+  test('Path Benchmark - Leaf - 1% Changed', function() {
     mutatePathsAndDeliver(1);
   });
 
-  test('Path Benchmark - 5% Changed', function() {
+  test('Path Benchmark - Leaf - 5% Changed', function() {
     mutatePathsAndDeliver(5);
   });
 
-  test('Path Benchmark - 10% Changed', function() {
+  test('Path Benchmark - Leaf - 10% Changed', function() {
     mutatePathsAndDeliver(10);
   });
 
-  test('Path Benchmark - 20% Changed', function() {
+  test('Path Benchmark - Leaf - 20% Changed', function() {
     mutatePathsAndDeliver(20);
   });
+
+  test('Path Benchmark - Root - 0% Changed', function() {
+    mutatePathsAndDeliver(0, true);
+  });
+
+  test('Path Benchmark - Root - 1% Changed', function() {
+    mutatePathsAndDeliver(1, true);
+  });
+
+  test('Path Benchmark - Root - 5% Changed', function() {
+    mutatePathsAndDeliver(5, true);
+  });
+
+  test('Path Benchmark - Root - 10% Changed', function() {
+    mutatePathsAndDeliver(10, true);
+  });
+
+  test('Path Benchmark - Root - 20% Changed', function() {
+    mutatePathsAndDeliver(20, true);
+  });
+
 });
 
 suite('Object Benchmarks', function() {

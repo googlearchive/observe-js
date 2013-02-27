@@ -44,7 +44,7 @@
     }
   }
 
-  function mutatePathsAndDeliver(mutationFreq) {
+  function mutatePathsAndDeliver(mutationFreq, root) {
     var modVal = Math.floor(100/mutationFreq);
 
     for (var i = 0; i < cycles; i++) {
@@ -52,7 +52,10 @@
         if (j % modVal != 0)
           continue;
 
-        objects[j]['foo']['bar']['baz'] = '' + i;
+        if (root)
+          objects[j]['foo'] = { bar: { baz: '' + i }};
+        else
+          objects[j]['foo']['bar']['baz'] = '' + i;
       }
 
       observer.deliver();
