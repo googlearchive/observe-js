@@ -17,11 +17,11 @@
 
 
 (function(global) {
-  var objectCount = 500;
-  var dirtyCheckTimes = 100;
+  var objectCount = 1000;
+  var cycles = 500;
   var objects;
   var observer = new ChangeSummary(function() {});
-  var propertyCount = 20;
+  var propertyCount = 10;
   var properties = [];
 
   for (var i = 0; i < propertyCount; i++) {
@@ -49,14 +49,14 @@
     var modVal = mutationFreq ? Math.floor(100/mutationFreq) : 0;
     var modChar = mutationFreq ? Math.max(1, Math.floor(propertyCount * (mutationFreq / 100))) : 0;
 
-    for (var i = 0; i < dirtyCheckTimes; i++) {
+    for (var i = 0; i < cycles; i++) {
       if (modVal) {
         for (var j = 0; j < objects.length; j++) {
-          if ((j % modVal == 0)) {
-            var object = objects[j];
-            for (var k = 0; k < modChar; k++)
-              object[properties[k]] += k;
-          }
+          if (j % modVal != 0)
+            continue;
+
+          var object = objects[j];
+          object[properties[0]] += j;
         }
       }
 

@@ -435,11 +435,18 @@
           if (!isDelivering)
             this.activeObservers = new Set;
 
-          records.forEach(function(record) {
-            var observer = this.getObjectObserver(record.object);
+          var changedObject;
+          var observer;
+          for (var i = 0; i < records.length; i++) {
+            var record = records[i];
+            if (changedObject !== record.object) {
+              changedObject = record.object;
+              observer = this.getObjectObserver(changedObject)
+              this.activeObservers.add(observer);
+            }
+
             observer.addChangeRecord(record);
-            this.activeObservers.add(observer);
-          }, this);
+          }
 
           if (isDelivering)
             return;

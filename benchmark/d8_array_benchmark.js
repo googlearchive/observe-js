@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// var console = { log: print };
+
 var t1 = new Date();
 createAndObserveArrays();
-mutateArraysAndDeliver(20, 'unshift', 'shift');
+mutateArraysAndDeliver(10, 'unshift', 'shift');
 var t2 = new Date();
 print('Finished in: ' + (t2.getTime() - t1.getTime()) + 'ms');

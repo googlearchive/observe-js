@@ -14,8 +14,8 @@
 
 
 (function(global) {
-  var objectCount = 5000;
-  var dirtyCheckTimes = 100;
+  var objectCount = 25;
+  var cycles = 1000;
   var arrays;
   var observer = new ChangeSummary(function() {});
   var elementCount = 100;
@@ -41,18 +41,17 @@
     var modVal = mutationFreq ? Math.floor(100/mutationFreq) : 0;
     var modCount = mutationFreq ? Math.max(1, Math.floor(elementCount * (mutationFreq / 100))) : 0;
 
-    for (var i = 0; i < dirtyCheckTimes; i++) {
+    for (var i = 0; i < cycles; i++) {
       if (modVal) {
         for (var j = 0; j < arrays.length; j++) {
-          if ((j % modVal == 0)) {
-            var array = arrays[j];
-            for (var k = 0; k < modCount; k++) {
-              if (i % 2)
-                array[op](k);
-              else
-                array[undoOp](k);
-            }
-          }
+          if (j % modVal != 0)
+            continue;
+
+          var array = arrays[j];
+          if (i % 2)
+            array[op](j);
+          else
+            array[undoOp](j);
         }
       }
 
