@@ -842,7 +842,10 @@
     check: function(changeRecords) {
       var diff;
       var oldValues;
-      if (changeRecords) {
+      if (hasObserve) {
+        if (!changeRecords)
+          return false;
+
         oldValues = {};
         diff = diffObjectFromChangeRecords(this.object, changeRecords, oldValues);
       } else {
@@ -929,7 +932,10 @@
   ArrayTracker.prototype = {
     check: function(changeRecords) {
       var splices;
-      if (changeRecords) {
+      if (hasObserve) {
+        if (!changeRecords)
+          return false;
+
         var oldValues = {};
         var diff = diffObjectFromChangeRecords(this.array, changeRecords, oldValues);
         splices = projectArraySplices(this.array, diff, oldValues);

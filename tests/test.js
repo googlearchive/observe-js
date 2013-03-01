@@ -199,27 +199,60 @@ suite('Basic Tests', function() {
   });
 
   test('Summary Shape', function() {
-    var arr = [];
-    observer.observeObject(arr);
+    var arr = [ 0 ];
 
-    arr.length = 5;
-    arr.foo = 'bar';
-    arr[3] = 'baz';
+    observer.observeObject(arr);
+    observer.observeArray(arr);
+    observer.observePath(arr, '1');
+    observer.observePath(arr, 'foo.bar');
+
+    arr[0] = 1;
 
     assertSummary({
       object: arr,
-      added: {
-        foo: 'bar',
-        '3': 'baz'
-      },
+      added: {},
       removed: {},
       changed: {
-        'length': 5
+        '0': 1
       },
+      pathChanged: {},
+      splices: [{
+        index: 0,
+        removed: [0],
+        addedCount: 1
+      }],
       oldValues: {
-        length: 0,
-        foo: undefined,
-        '3': undefined
+        '0': 0
+      }
+    });
+
+    arr.foo = {};
+    assertSummary({
+      object: arr,
+      added: {
+        'foo': arr.foo
+      },
+      removed: {},
+      changed: {},
+      pathChanged: {},
+      splices: [],
+      oldValues: {
+        'foo': undefined
+      }
+    });
+
+    arr.foo.bar = 5;
+    assertSummary({
+      object: arr,
+      added: {},
+      removed: {},
+      changed: {},
+      pathChanged: {
+        'foo.bar': 5
+      },
+      splices: [],
+      oldValues: {
+        'foo.bar': undefined
       }
     });
   });
