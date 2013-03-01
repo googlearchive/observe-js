@@ -94,7 +94,7 @@ suite('Basic Tests', function() {
     assert.deepEqual(orig, copy);
   }
 
-  test('NoDeliveryOnEval', function() {
+  test('No Delivery On Eval', function() {
     if (typeof Object.observe !== 'function')
       return;
 
@@ -111,7 +111,7 @@ suite('Basic Tests', function() {
     assert.equal(0, count);
   });
 
-  test('DeliveryUntilNoChanges', function() {
+  test('Delivery Until No Changes', function() {
     doTeardown();
 
     var arr = [0, 1, 2, 3, 4];
@@ -129,7 +129,7 @@ suite('Basic Tests', function() {
     doSetup();
   });
 
-  test('DegenerateValues', function() {
+  test('Degenerate Values', function() {
     assert.equal(null, observer.observePath(null, ''));
     assert.equal(null, ChangeSummary.getValueAtPath(null, ''));
     observer.unobservePath(null, ''); // shouldn't throw
@@ -153,7 +153,7 @@ suite('Basic Tests', function() {
     observer.unobservePath(undefined, 'a/3!'); // shouldn't throw
   });
 
-  test('SetValues', function() {
+  test('Set Values', function() {
     var obj = {};
     ChangeSummary.setValueAtPath(obj, 'foo', 3);
     assert.equal(3, obj.foo);
@@ -167,7 +167,64 @@ suite('Basic Tests', function() {
     assert.equal(undefined, ChangeSummary.getValueAtPath(obj, 'bar.baz.bat'));
   });
 
-  test('ObserveObject', function() {
+  test('observeArray(non-array) throws', function() {
+    var obj = {};
+    assert.throws(function () { observer.observeArray(obj); });
+  });
+
+  test('observeObject(array)', function() {
+    var arr = [];
+    observer.observeObject(arr);
+
+    arr.length = 5;
+    arr.foo = 'bar';
+    arr[3] = 'baz';
+
+    assertSummary({
+      object: arr,
+      added: {
+        foo: 'bar',
+        '3': 'baz'
+      },
+      removed: {},
+      changed: {
+        'length': 5
+      },
+      oldValues: {
+        length: 0,
+        foo: undefined,
+        '3': undefined
+      }
+    });
+  });
+
+  test('Summary Shape', function() {
+    var arr = [];
+    observer.observeObject(arr);
+
+    arr.length = 5;
+    arr.foo = 'bar';
+    arr[3] = 'baz';
+
+    assertSummary({
+      object: arr,
+      added: {
+        foo: 'bar',
+        '3': 'baz'
+      },
+      removed: {},
+      changed: {
+        'length': 5
+      },
+      oldValues: {
+        length: 0,
+        foo: undefined,
+        '3': undefined
+      }
+    });
+  });
+
+  test('Observe Object', function() {
     var model = {};
 
     observer.observeObject(model);
@@ -257,7 +314,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('ObjectDeleteAddDelete', function() {
+  test('Object Delete Add Delete', function() {
     var model = { id: 1 };
 
     observer.observeObject(model);
@@ -294,7 +351,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('ObserveAll', function() {
+  test('Observe All', function() {
     var model = { foo: 1, bar: 2, bat: 3 };
     observer.observeObject(model);
     observer.observePath(model, 'foo');
@@ -357,7 +414,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('PathValueTripleEquals', function() {
+  test('Path Value Triple Equals', function() {
     var model = { };
     observer.observePath(model, 'foo');
 
@@ -384,7 +441,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('PathValueSimple', function() {
+  test('Path Value Simple', function() {
     var model = { };
     observer.observePath(model, 'foo');
 
@@ -422,7 +479,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('PathValueWithIndices', function() {
+  test('Path Value With Indices', function() {
     var model = [];
     observer.observePath(model, '0');
 
@@ -438,7 +495,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('PathValueBreadthFirstNotification', function() {
+  test('Path Value Lots of Paths', function() {
     var model = {};
 
     var notificationSequence = '';
@@ -496,7 +553,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('BindingSimple', function() {
+  test('Binding Simple', function() {
     var model = { a: 1, b: 2, c: 3 };
 
     observer.observePath(model, 'a');
@@ -609,7 +666,7 @@ suite('Basic Tests', function() {
 
   });
 
-  test('PathObservation', function() {
+  test('Path Observation', function() {
     var model = {
       a: {
         b: {
@@ -705,7 +762,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('MultipleObservationsAreCollapsed', function() {
+  test('Multiple Observations Are Collapsed', function() {
     var model = {id: 1};
 
     observer.observePath(model, 'id');
@@ -724,7 +781,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('ExceptionDoesntStopNotification', function() {
+  test('Exception Doesnt Stop Notification', function() {
     var model = { id: 1 };
     var count = 0;
 
@@ -759,7 +816,7 @@ suite('Basic Tests', function() {
     assert.equal(4, callbackCount);
   });
 
-  test('SetSame', function() {
+  test('Set Same', function() {
     var model = [1];
 
     observer.observeArray(model);
@@ -768,7 +825,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('SetToSameAsPrototype', function() {
+  test('Set To Same As Prototype', function() {
     var model = {
       __proto__: {
         id: 1
@@ -781,7 +838,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('SetReadOnly', function() {
+  test('Set Read Only', function() {
     var model = {};
     Object.defineProperty(model, 'x', {
       configurable: true,
@@ -795,7 +852,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('SetUndefined', function() {
+  test('Set Undefined', function() {
     var model = {};
 
     observer.observeObject(model);
@@ -814,7 +871,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('SetShadows', function() {
+  test('Set Shadows', function() {
     var model = {
       __proto__: {
         x: 1
@@ -834,7 +891,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('DeleteWithSameValueOnPrototype', function() {
+  test('Delete With Same Value On Prototype', function() {
     var model = {
       __proto__: {
         x: 1,
@@ -847,7 +904,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('DeleteWithDifferentValueOnPrototype', function() {
+  test('Delete With Different Value On Prototype', function() {
     var model = {
       __proto__: {
         x: 1,
@@ -868,7 +925,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('DeleteOfNonConfigurable', function() {
+  test('Delete Of Non Configurable', function() {
     var model = {};
     Object.defineProperty(model, 'x', {
       configurable: false,
@@ -907,7 +964,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('ArraySplice', function() {
+  test('Array Splice', function() {
 
     var model = [0, 1]
 
@@ -973,7 +1030,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('ArraySpliceTruncateAndExpandWithLength', function() {
+  test('Array Splice Truncate And Expand With Length', function() {
     var model = ['a', 'b', 'c', 'd', 'e'];
 
     observer.observeArray(model);
@@ -1001,7 +1058,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('ArraySpliceDeleteTooMany', function() {
+  test('Array Splice Delete Too Many', function() {
     var model = ['a', 'b', 'c'];
 
     observer.observeArray(model);
@@ -1017,7 +1074,7 @@ suite('Basic Tests', function() {
     });
   });
 
-  test('ArrayLength', function() {
+  test('Array Length', function() {
     var model = [0, 1];
 
     observer.observeArray(model);
@@ -1046,7 +1103,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('ArrayPush', function() {
+  test('Array Push', function() {
     var model = [0, 1];
 
     observer.observeArray(model);
@@ -1065,7 +1122,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('ArrayPop', function() {
+  test('Array Pop', function() {
     var model = [0, 1];
 
     observer.observeArray(model);
@@ -1094,7 +1151,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('ArrayShift', function() {
+  test('Array Shift', function() {
     var model = [0, 1];
 
     observer.observeArray(model);
@@ -1122,7 +1179,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('ArrayUnshift', function() {
+  test('Array Unshift', function() {
     var model = [0, 1];
 
     observer.observeArray(model);
@@ -1150,7 +1207,7 @@ suite('Basic Tests', function() {
     assertNoSummary();
   });
 
-  test('ArrayTrackerContained', function() {
+  test('Array Tracker Contained', function() {
     var model = ['a', 'b'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1162,7 +1219,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerDeleteEmpty', function() {
+  test('Array Tracker Delete Empty', function() {
     var model = [];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1173,7 +1230,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerRightNonOverlap', function() {
+  test('Array Tracker Right Non Overlap', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1184,7 +1241,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerLeftNonOverlap', function() {
+  test('Array Tracker Left Non Overlap', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1195,7 +1252,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerRightAdjacent', function() {
+  test('Array Tracker Right Adjacent', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1206,7 +1263,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerLeftAdjacent', function() {
+  test('Array Tracker Left Adjacent', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1217,7 +1274,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerRightOverlap', function() {
+  test('Array Tracker Right Overlap', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1228,7 +1285,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerLeftOverlap', function() {
+  test('Array Tracker Left Overlap', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1239,7 +1296,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerPrefixAndSuffixOneIn', function() {
+  test('Array Tracker Prefix And Suffix One In', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1250,7 +1307,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerShiftOne', function() {
+  test('Array Tracker Shift One', function() {
     var model = [16, 15, 15];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1260,7 +1317,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerUpdateDelete', function() {
+  test('Array Tracker Update Delete', function() {
     var model = ['a', 'b', 'c', 'd'];
     var copy = model.slice();
     observer.observeArray(model);
@@ -1272,7 +1329,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerUpdateAfterDelete', function() {
+  test('Array Tracker Update After Delete', function() {
     var model = ['a', 'b', 'c', 'd'];
     delete model[2];
 
@@ -1284,7 +1341,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerDeleteMidArray', function() {
+  test('Array Tracker Delete Mid Array', function() {
     var model = ['a', 'b', 'c', 'd'];
 
     var copy = model.slice();
@@ -1295,7 +1352,7 @@ suite('Basic Tests', function() {
     applySplicesAndAssertDeepEqual(model, copy);
   });
 
-  test('ArrayTrackerFuzzer', function() {
+  test('Array Tracker Fuzzer', function() {
     doTeardown();
 
     var testCount = 256;
@@ -1335,7 +1392,7 @@ suite('Basic Tests', function() {
     assert.deepEqual(expectDistance, actualDistance);
   }
 
-  test('ArrayTrackerNoProxiesEdits', function() {
+  test('Array Tracker No Proxies Edits', function() {
     model = [];
     observer.observeArray(model);
     model.length = 0;
@@ -1358,7 +1415,7 @@ suite('Basic Tests', function() {
     observer.unobserveArray(model);
   });
 
-  test('MultipleChangesAtOnce', function() {
+  test('Multiple Changes At Once', function() {
     var model = {
       a: {b: 'ab'},
       c: {d: 'cd'}

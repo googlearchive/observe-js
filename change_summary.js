@@ -275,17 +275,6 @@
   else
     polyfillMapSet(global);
 
-  /*
-   * TODO(rafaelw): Need rigorous definitions for path and "value at path".
-   * Cases to consider:
-   *   Path:
-   *     -empty string (currently a path with 0 property componets)
-   *     -index operators, e.g. "foo[2].baz" (currently not supported)
-   *   Value at Path:
-   *     -empty string path (the value is the model itself)
-   *     -non-object model (valid, if path is non-empty, value is undefined)
-   */
-
   var pathIndentPart = '[\$a-z0-9_]+[\$a-z0-9_\\d]*';
   var pathRegExp = new RegExp('^' +
                               '(?:#?' + pathIndentPart + ')?' +
@@ -544,9 +533,6 @@
       Object.observe(register, internal.callback);
       Object.unobserve(register, internal.callback);
     }
-
-    // TODO(rafaelw): Disallow changing observation/bindings while connected.
-    // TODO(rafaelw): Garbage collection???
 
     this.observeObject = function(obj) {
       if (!isObject(obj))
@@ -834,11 +820,12 @@
   }
 
   function copyObject(object, opt_copy) {
-    var copy = opt_copy || {};
+    var copy = opt_copy || (Array.isArray(object) ? [] : {});
     for (var prop in object) {
       copy[prop] = object[prop];
     };
-
+    if (Array.isArray(object))
+      copy.length = object.length;
     return copy;
   }
 
@@ -1217,7 +1204,6 @@
     connect: function() {
       if (hasObserve)
         Object.observe(this.object, this.internal.callback);
-      // TODO(rafaelw): Implement and test disconnecting, then connecting for dirty check.
     },
 
     disconnect: function() {
@@ -1248,7 +1234,7 @@
     },
 
     checkPathValues: function(changeRecords) {
-      if (!this.internal)  // observation stopped mid-process. TODO(rafaelw): Is this really possible?
+      if (!this.internal)
         return;
 
       if (!this.pathTrackers)
@@ -1274,7 +1260,7 @@
     },
 
     checkObjectsAndArrays: function() {
-      if (!this.internal)  // observation stopped mid-process. TODO(rafaelw): Is this really possible?
+      if (!this.internal)
         return;
 
       if (this.objectTracker)
@@ -1289,8 +1275,6 @@
       this.dirtyPathTrackers.add(pathTracker);
     },
 
-    // TODO(rafaelw): Summary should have a fixed shape based only on what is observed:
-    // https://github.com/rafaelw/ChangeSummary/issues/5
     produceSummary: function() {
       if ((!this.objectTracker || !this.objectTracker.changed) &&
           (!this.arrayTracker || !this.arrayTracker.changed) &&
