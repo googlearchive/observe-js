@@ -430,7 +430,12 @@
             var record = records[i];
             if (changedObject !== record.object) {
               changedObject = record.object;
-              observer = this.getObjectObserver(changedObject)
+              observer = this.getObjectObserver(changedObject);
+              if (!observer) {
+                changedObject = undefined;
+                continue;
+              }
+
               this.activeObservers.add(observer);
             }
 
@@ -1119,7 +1124,7 @@
 
   ObjectObserver.prototype = {
     observeObject: function() {
-      this.objectTracker = new ObjectTracker(this.object);
+      this.objectTracker = this.objectTracker || new ObjectTracker(this.object);
     },
 
     unobserveObject: function() {
@@ -1128,7 +1133,7 @@
     },
 
     observeArray: function() {
-      this.arrayTracker = new ArrayTracker(this.object);
+      this.arrayTracker = this.arrayTracker || new ArrayTracker(this.object);
     },
 
     unobserveArray: function() {

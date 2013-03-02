@@ -258,7 +258,6 @@ suite('Basic Tests', function() {
     });
   });
 
-
   test('Disconnect and Reconnect', function() {
     var arr = [ 0 ];
 
@@ -352,13 +351,106 @@ suite('Basic Tests', function() {
         'length': 1
       }
     }, true);
+  });
 
+  test('Observe and Unobserve - Paths', function() {
+    var arr = {};
+
+    arr.foo = 'bar';
+    observer.observePath(arr, 'foo');
+    arr.foo = 'baz';
+    arr.bat = 'bag';
+    observer.observePath(arr, 'bat');
+
+    assertSummary({
+      object: arr,
+      pathChanged: {
+        'foo': 'baz'
+      },
+      oldValues: {
+        'foo': 'bar'
+      }
+    });
+
+    arr.foo = 'bar';
+    observer.unobservePath(arr, 'foo');
+    arr.bat = 'boo';
+    observer.observePath(arr, 'bat');
+    arr.bat = 'boot';
+
+    assertSummary({
+      object: arr,
+      pathChanged: {
+        'bat': 'boot'
+      },
+      oldValues: {
+        'bat': 'bag'
+      }
+    });
+  });
+
+  test('Observe and Unobserve - Object', function() {
+    var obj = {};
+
+    obj.foo = 'bar';
+    observer.observeObject(obj);
+    obj.foo = 'baz';
+    obj.bat = 'bag';
+    obj.blaz = 'foo';
+    observer.observeObject(obj);
+    delete obj.foo;
+    delete obj.blaz;
+
+    assertSummary({
+      object: obj,
+      added: {
+        'bat': 'bag'
+      },
+      removed: {
+        'foo': undefined
+      },
+      changed: {},
+      oldValues: {
+        'foo': 'bar',
+        'bat': undefined
+      }
+    });
+
+    obj.foo = 'blarg';
+    observer.unobserveObject(obj);
+    obj.bar = 'blaz';
+    assertNoSummary();
+  });
+
+  test('Observe and Unobserve - Array', function() {
+    var arr = [];
+
+    arr.push(0);
+    observer.observeArray(arr);
+    arr.push(1);
+    observer.observeArray(arr);
+    arr.push(2);
+
+    assertSummary({
+      object: arr,
+      splices: [{
+        index: 1,
+        removed: [],
+        addedCount: 2
+      }]
+    });
+
+    arr.pop();
+    observer.unobserveArray(arr);
+
+    arr.unshift(0);
+    assertNoSummary();
   });
 
   test('Observe Object', function() {
     var model = {};
 
-    observer.observeObject(model);
+    observer.observeArray(model);
     model.id = 0;
     assertSummary({
       object: model,
