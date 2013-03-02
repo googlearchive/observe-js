@@ -41,8 +41,9 @@ suite('Basic Tests', function() {
     }
   }
 
-  function assertSummary(expect) {
-    observer.deliver();
+  function assertSummary(expect, skipDeliver) {
+    if (!skipDeliver)
+      observer.deliver();
 
     var summary = summaries[0];
     assert.strictEqual(expect.object, summary.object);
@@ -255,6 +256,103 @@ suite('Basic Tests', function() {
         'foo.bar': undefined
       }
     });
+  });
+
+
+  test('Disconnect and Reconnect', function() {
+    var arr = [ 0 ];
+
+    observer.observeObject(arr);
+    observer.observeArray(arr);
+    observer.observePath(arr, '1');
+    observer.observePath(arr, 'foo.bar');
+
+    arr[0] = 1;
+
+    assertSummary({
+      object: arr,
+      added: {},
+      removed: {},
+      changed: {
+        '0': 1
+      },
+      pathChanged: {},
+      splices: [{
+        index: 0,
+        removed: [0],
+        addedCount: 1
+      }],
+      oldValues: {
+        '0': 0
+      }
+    });
+
+    summaries = observer.disconnect();
+    assert.isUndefined(summaries);
+    assert.throws(function() {
+      observer.deliver();
+    });
+
+    arr.foo = { bar: 'baz' };
+    arr.push(2);
+    observer.connect();
+    assertNoSummary();
+
+    arr.foo.bar = 'bat';
+    arr.bag = 'boo';
+    arr.pop();
+
+    assertSummary({
+      object: arr,
+      added: {
+        'bag': 'boo'
+      },
+      removed: {
+        '1': undefined
+      },
+      changed: {
+        'length': 1
+      },
+      pathChanged: {
+        'foo.bar': 'bat',
+        '1': undefined
+      },
+      splices: [{
+        index: 1,
+        removed: [2],
+        addedCount: 0
+      }],
+      oldValues: {
+        '1': 2,
+        'bag': undefined,
+        'foo.bar': 'baz',
+        'length': 2
+      }
+    });
+
+    arr.pop();
+    summaries = observer.disconnect();
+     assertSummary({
+      object: arr,
+      added: {},
+      removed: {
+        '0': undefined
+      },
+      changed: {
+        'length': 0
+      },
+      pathChanged: {},
+      splices: [{
+        index: 0,
+        removed: [1],
+        addedCount: 0
+      }],
+      oldValues: {
+        '0': 1,
+        'length': 1
+      }
+    }, true);
+
   });
 
   test('Observe Object', function() {

@@ -675,6 +675,9 @@
     };
 
     this.deliver = function() {
+      if (!observing)
+        throw Error('Disconnected');
+
       if (hasObserve)
         Object.deliverChangeRecords(internal.callback);
       else
@@ -699,7 +702,7 @@
       return retval;
     };
 
-    this.reconnect = function() {
+    this.connect = function() {
       if (observing)
         return;
 
@@ -1210,6 +1213,7 @@
     connect: function() {
       if (hasObserve)
         Object.observe(this.object, this.internal.callback);
+      this.reset(true);
     },
 
     disconnect: function() {
@@ -1325,13 +1329,15 @@
       return summary;
     },
 
-    reset: function() {
+    reset: function(force) {
       if (this.objectTracker)
-        this.objectTracker.reset();
+        this.objectTracker.reset(force);
       if (this.arrayTracker)
-        this.arrayTracker.reset();
-      if (this.dirtyPathTrackers)
-        this.dirtyPathTrackers.forEach(function(pathTracker) { pathTracker.reset(); });
+        this.arrayTracker.reset(force);
+
+      var pathTrackersToReset = force ? this.pathTrackers : this.dirtyPathTrackers;
+      if (pathTrackersToReset)
+        pathTrackersToReset.forEach(function(pathTracker) { pathTracker.reset(force); });
 
       this.changeRecords = undefined;
       this.dirtyPathTrackers = undefined;
