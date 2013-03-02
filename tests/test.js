@@ -450,7 +450,7 @@ suite('Basic Tests', function() {
   test('Observe Object', function() {
     var model = {};
 
-    observer.observeArray(model);
+    observer.observeObject(model);
     model.id = 0;
     assertSummary({
       object: model,
