@@ -280,7 +280,7 @@
           lowest = free.pop();
         } while (free.size && !lowest.methods.size);
 
-        if (!lowest.methods.size)
+        if (!lowest.methods.size)
           break;
 
         var method = lowest.freeMethod();
