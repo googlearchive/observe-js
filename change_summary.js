@@ -1811,7 +1811,7 @@
       callbacks.object.delete(callback)
 
       if (!callbacks.object.size) {
-        observe.unobserveArray(object);
+        observer.unobserveObject(object);
         callbacks.object = undefined;
       }
 
@@ -1847,7 +1847,7 @@
       callbacks.array.delete(callback)
 
       if (!callbacks.array.size) {
-        observe.unobserveArray(array);
+        observer.unobserveArray(array);
         callbacks.array = undefined;
       }
 
@@ -1881,7 +1881,7 @@
         callbacks.path[path] = pathCallbacks;
         retval = observer.observePath(object, path);
       } else {
-        retval = Model.getValueAtPath(object, path);
+        retval = ChangeSummary.getValueAtPath(object, path);
       }
 
       pathCallbacks.add(callback);
