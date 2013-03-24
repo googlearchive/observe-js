@@ -1755,6 +1755,7 @@
             callback(summary.added, summary.removed, summary.changed, summary.getOldValue, summary.object);
           } catch (ex) {
             console.log('Exception thrown during callback: ' + ex);
+            ChangeSummary._errorThrownDuringCallback = true;
           }
         });
       }
@@ -1765,6 +1766,7 @@
             callback(summary.splices, summary.object);
           } catch (ex) {
             console.log('Exception thrown during callback: ' + ex);
+            ChangeSummary._errorThrownDuringCallback = true;
           }
         });
       }
@@ -1779,6 +1781,7 @@
               callback(summary.pathChanged[path], summary.getOldValue(path), summary.object, path);
             } catch (ex) {
               console.log('Exception thrown during callback: ' + ex);
+              ChangeSummary._errorThrownDuringCallback = true;
             }
           });
         });
