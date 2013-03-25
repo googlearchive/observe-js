@@ -30,7 +30,7 @@
   }
 
   function numberIsNaN(value) {
-    return value !== undefined && typeof value !== 'string' && isNaN(value);
+    return typeof value == 'number' && isNaN(value);
   }
 
   function areSameValue(v1, v2) {
