@@ -154,6 +154,18 @@ suite('Basic Tests', function() {
     observer.unobservePath(undefined, 'a/3!'); // shouldn't throw
   });
 
+  test('Observe NaN', function() {
+    var foo = { val: 1 };
+    observer.observePath(foo, 'val');
+    foo.val = 0/0;
+
+    // Can't use assertSummary because deepEqual() will fail with NaN
+    observer.deliver();
+    var summary = summaries[0];
+    assert.strictEqual(1, summary.getOldValue('val'));
+    assert.isTrue(isNaN(summary.pathChanged.val));
+  });
+
   test('Set Values', function() {
     var obj = {};
     ChangeSummary.setValueAtPath(obj, 'foo', 3);

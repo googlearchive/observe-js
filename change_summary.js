@@ -29,6 +29,18 @@
     return obj === Object(obj);
   }
 
+  function numberIsNaN(value) {
+    return value !== undefined && typeof value !== 'string' && isNaN(value);
+  }
+
+  function areSameValue(v1, v2) {
+    if (v1 === v2)
+      return true;
+    if (numberIsNaN(v1) && numberIsNaN(v2))
+      return true;
+    return false;
+  }
+
   var createObject = ('__proto__' in {}) ?
     function(obj) { return obj; } :
     function(obj) {
@@ -1080,7 +1092,8 @@
       if (!this.changed)
         this.oldValue = this.value;
       this.value = newValue;
-      return this.changed = this.oldValue !== this.value;
+      this.changed = !areSameValue(this.oldValue, this.value);
+      return this.changed;
     },
 
     setValue: function(newValue) {
