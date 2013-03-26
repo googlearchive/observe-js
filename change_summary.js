@@ -29,16 +29,17 @@
     return obj === Object(obj);
   }
 
-  function numberIsNaN(value) {
-    return typeof value == 'number' && isNaN(value);
+  var numberIsNaN = global.Number.isNaN || function isNaN(value) {
+    return typeof value === 'number' && global.isNaN(value);
   }
 
-  function areSameValue(v1, v2) {
-    if (v1 === v2)
+  function areSameValue(left, right) {
+    if (left === right)
+      return left !== 0 || 1 / left === 1 / right;
+    if (numberIsNaN(left) && numberIsNaN(right))
       return true;
-    if (numberIsNaN(v1) && numberIsNaN(v2))
-      return true;
-    return false;
+
+    return left !== left && right !== right;
   }
 
   var createObject = ('__proto__' in {}) ?
