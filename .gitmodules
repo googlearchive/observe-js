@@ -1,6 +1,0 @@
-[submodule "third_party/chai"]
-	path = third_party/chai
-	url = https://github.com/chaijs/chai.git
-[submodule "third_party/mocha"]
-	path = third_party/mocha
-	url = https://github.com/visionmedia/mocha.git
