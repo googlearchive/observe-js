@@ -383,8 +383,6 @@
 
       objectObservers: new Map,
 
-      bindingPriorityCounter: 1,
-
       getObjectObserver: function(obj) {
         return this.objectObservers.get(obj);
       },
@@ -401,10 +399,6 @@
 
       removeObjectObserver: function(obj) {
         this.objectObservers.delete(obj);
-      },
-
-      nextBindingPriority: function() {
-        return this.bindingPriorityCounter++;
       },
 
       addPathTracker: function(obj, pathTracker) {
@@ -481,40 +475,12 @@
         } while (changesDelivered && cycles < MAX_DIRTY_CHECK_CYCLES)
       },
 
-      resolveBindings: function() {
-        var methods = this.planner.getPlan();
-
-        if (!methods)
-          console.error('Error: bindings are over-constrained');
-
-        var changed = false;
-        for (var i = 0; i < methods.length; i++) {
-          var method = methods[i];
-          var pathTracker = method.to;
-          if (!pathTracker.setValue(method.from.value))
-            break;
-
-          changed = true;
-          var observer = this.getOrCreateObjectObserver(pathTracker.object);
-          observer.addDirtyPath(pathTracker);
-          this.activeObservers.add(observer);
-        }
-
-        return changed;
-      },
-
       deliverSummaries: function() {
         summaries = [];
 
-        var shouldResolveBindings = false;
         this.activeObservers.forEach(function(observer) {
-          shouldResolveBindings = observer.checkPathValues() || shouldResolveBindings;
+          observer.checkPathValues();
         });
-
-        if (shouldResolveBindings) {
-          if (this.resolveBindings() && hasObserve)
-            Object.deliverChangeRecords(internal.callback);
-        }
 
         this.activeObservers.forEach(function(observer) {
           observer.checkObjectsAndArrays();
@@ -619,77 +585,6 @@
         return;
 
       observer.unobservePath(path);
-    };
-
-    this.bind = function(obj1, pathString1, obj2, pathString2) {
-      if (typeof global.Planner !== 'function')
-        throw Error('Binding requires Planner library');
-
-      // TODO(rafaelw): Implement all the non-observing and error cases.
-      if (!isPathValid(pathString1) || !isPathValid(pathString2))
-        throw Error('Not implemented');
-
-      var path1 = new Path(pathString1);
-      var path2 = new Path(pathString2);
-      if (!path1.length || !path2.length || !isObject(obj1) || !isObject(obj2))
-        throw Error('Not implemented');
-
-      if (!internal.planner)
-        internal.planner = new Planner();
-
-      var pathTracker1 = internal.getOrCreateObjectObserver(obj1).observePath(path1, true);
-      var pathTracker2 = internal.getOrCreateObjectObserver(obj2).observePath(path2, true);
-
-      if (pathTracker2.bindings && tracker2.bindings.has(pathTracker1))
-        return; // TODO(rafaelw): reverse binding attempted. ok to just return?
-
-      if (pathTracker1.bindings && pathTracker1.bindings.has(pathTracker2))
-        return;
-
-      if (!pathTracker1.bindings)
-        pathTracker1.bindings = new Map;
-
-      // TODO(rafaelw): Having variables hold references to data may make
-      // garbage collection harder
-      if (!pathTracker1.variable) {
-        var priority1 = internal.nextBindingPriority();
-        pathTracker1.variable = internal.planner.addVariable(function() {
-          return pathTracker1.changed ? priority1 : Infinity;
-        });
-      }
-
-      if (!pathTracker2.variable) {
-        var priority2 = internal.nextBindingPriority();
-        pathTracker2.variable = internal.planner.addVariable(function() {
-          return pathTracker2.changed ? priority2 : Infinity;
-        });
-      }
-
-      var constraint = internal.planner.addConstraint();
-      pathTracker1.bindings.set(pathTracker2, constraint);
-
-      var toMethod = constraint.addMethod(pathTracker2.variable);
-      var fromMethod = constraint.addMethod(pathTracker1.variable);
-
-      toMethod.from = pathTracker1;
-      toMethod.to = pathTracker2;
-      toMethod.name = pathTracker2.path.toString() + '->' + pathTracker1.path.toString();
-
-      fromMethod.from = pathTracker2;
-      fromMethod.to = pathTracker1;
-      toMethod.name = pathTracker1.path.toString() + '->' + pathTracker2.path.toString();
-
-      if (pathTracker1.value === pathTracker2.value)
-        return;
-
-      if (pathTracker1.value === undefined)
-        pathTracker1.setValue(pathTracker2.value);
-      else
-        pathTracker2.setValue(pathTracker1.value);
-    };
-
-    this.unbind = function(obj1, pathString1, obj2, pathString2) {
-      throw Error('Not implemented');
     };
 
     this.deliver = function() {
@@ -1027,10 +922,6 @@
     this.observed = path.length > 1 ? new Array(path.length - 2) : undefined;
     this.changed = false;
     this.oldValue = undefined;
-    this.bound = false;
-    this.reporting = false;
-    this.bindings = undefined;
-    this.variable = undefined;
 
     this.internal = internal;
 
@@ -1124,14 +1015,6 @@
       return this.changed;
     },
 
-    setValue: function(newValue) {
-      var changed = internalSetValueAtPath(this.object, this.path, newValue);
-      if (!changed)
-        return false;
-      this.valueMaybeChanged(newValue);
-      return changed;
-    },
-
     summarize: function(summary, oldValues) {
       summary.pathChanged[this.pathString] = this.value;
       oldValues[this.pathString] = this.oldValue;
@@ -1205,7 +1088,7 @@
       this.destroyIfEmpty();
     },
 
-    observePath: function(path, forBinding) {
+    observePath: function(path) {
       var pathTracker;
       var pathString = path.toString();
       if (this.pathTrackers && this.pathTrackerMap)
@@ -1218,29 +1101,16 @@
         this.addPathTracker(pathTracker, pathString);
       }
 
-      if (forBinding)
-        pathTracker.bound = true;
-      else
-        pathTracker.reporting = true;
-
       return pathTracker;
     },
 
-    unobservePath: function(path, forBinding) {
+    unobservePath: function(path) {
       if (!this.pathTrackerMap)
         return;
 
       var pathString = path.toString();
       var pathTracker = this.pathTrackerMap[pathString];
       if (!pathTracker)
-        return;
-
-      if (forBinding)
-        pathTracker.bound = forBinding;
-      else
-        pathTracker.reporting = false
-
-      if (pathTracker.bound || pathTracker.reporting)
         return;
 
       pathTracker.destroy();
@@ -1296,8 +1166,6 @@
       if (!this.pathTrackers)
         return;
 
-      var bindingsAreDirty = false;
-
       for (var i = 0; i < this.pathTrackers.length; i++) {
         var pathTracker = this.pathTrackers[i];
         if (pathTracker.check()) {
@@ -1306,13 +1174,8 @@
           observer.addDirtyPath(pathTracker);
           if (!isThis)
             this.internal.activeObservers.add(observer);
-
-          if (pathTracker.variable)
-            bindingsAreDirty = true;
         }
       }
-
-      return bindingsAreDirty;
     },
 
     checkObjectsAndArrays: function() {
@@ -1363,7 +1226,7 @@
 
       if (this.dirtyPathTrackers) {
         this.dirtyPathTrackers.forEach(function(pathTracker) {
-          if (!pathTracker.changed || !pathTracker.reporting)
+          if (!pathTracker.changed)
             return;
 
           pathTracker.summarize(summary, oldValues);
@@ -1956,14 +1819,6 @@
 
       if (!callbacks.object && !callbacks.array && !callbacks.path)
         callbacksMap.delete(object);
-    };
-
-    this.bind = function(obj1, path1, obj2, path2) {
-      observer.bind(obj1, path1, obj2, path2);
-    };
-
-    this.unbind = function(obj1, path1, obj2, path2) {
-      observer.unbind(obj1, path1, obj2, path2);
     };
 
     this.deliver = observer.deliver.bind(observer);
