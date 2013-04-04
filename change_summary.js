@@ -730,6 +730,44 @@
     };
   }
 
+  function newCompiledGetValueAtPath(path) {
+    var str = '';
+    var partStr = 'obj';
+    var length = path.length;
+    str += 'if (obj'
+    for (var i = 0; i < (length - 1); i++) {
+      var part = '["' + path[i] + '"]';
+      partStr += part;
+      str += ' && ' + partStr;
+    }
+    str += ') ';
+
+    partStr += '["' + path[length - 1] + '"]';
+
+    str += 'return ' + partStr + '; else return undefined;';
+    return new Function('obj', str);
+  }
+
+  var compiledGettersCache = {};
+
+  function compiledGetValueAtPath(object, path) {
+    var pathString = path.toString();
+    if (!compiledGettersCache[pathString])
+      compiledGettersCache[pathString] = newCompiledGetValueAtPath(path);
+
+    return compiledGettersCache[pathString](object);
+  }
+
+  function internalGetValueAtPath(object, path) {
+    var newValue;
+    path.walkPropertiesFrom(object, function(prop, value, i) {
+      if (i === path.length)
+        newValue = value;
+    });
+
+    return newValue;
+  }
+
   ChangeSummary.getValueAtPath = function(obj, pathString) {
     if (!isPathValid(pathString))
       return undefined;
@@ -741,13 +779,10 @@
     if (!isObject(obj))
       return;
 
-    var retval;
-    path.walkPropertiesFrom(obj, function(prop, value, i) {
-      if (i == this.length)
-        retval = value;
-    }, path);
-
-    return retval;
+    if (hasEval)
+      return compiledGetValueAtPath(obj, path);
+    else
+      return internalGetValueAtPath(obj, path);
   }
 
   function internalSetValueAtPath(obj, path, value) {
@@ -1012,7 +1047,7 @@
   var pathTrackerCheck;
 
   if (hasObserve) {
-    pathTrackerCheck = function() {
+    pathTrackerCheck = function(initial) {
       var newValue;
       this.path.walkPropertiesFrom(this.object, function(prop, value, i) {
         if (i === this.path.length) {
@@ -1048,52 +1083,42 @@
         this.internal.addPathTracker(observed, this);
       }, this);
 
-      return this.isChanged(newValue);
+      return this.valueMaybeChanged(newValue, initial);
     };
   } else if (hasEval) {
-    pathTrackerCheck = function() {
+    pathTrackerCheck = function(initial) {
       if (!this.checkFunc) {
-        var str = '';
-        var partStr = 'obj';
-        var length = this.path.length;
-        str += 'if (obj'
-        for (var i = 0; i < (length - 1); i++) {
-          var part = '["' + this.path[i] + '"]';
-          partStr += part;
-          str += ' && ' + partStr;
-        }
-        str += ') ';
-
-        partStr += '["' + this.path[length - 1] + '"]';
-
-        str += 'return ' + partStr + '; else return undefined;';
-
-        this.checkFunc = new Function('obj', str);
+        this.checkFunc = newCompiledGetValueAtPath(this.path);
       }
 
-      return this.isChanged(this.checkFunc(this.object));
+      return this.valueMaybeChanged(this.checkFunc(this.object), initial);
     };
 
   } else {
-    pathTrackerCheck = function() {
-      var newValue;
-      this.path.walkPropertiesFrom(this.object, function(prop, value, i) {
-        if (i === this.path.length)
-          newValue = value;
-      }, this);
-
-      return this.isChanged(newValue);
+    pathTrackerCheck = function(initial) {
+      var newValue = internalGetValueAtPath(this.object, this.path);
+      return this.valueMaybeChanged(newValue, initial);
     };
   }
 
   PathTracker.prototype = {
     check: pathTrackerCheck,
 
-    isChanged: function(newValue) {
+    valueMaybeChanged: function(newValue, initial) {
+      if (initial) {
+        this.value = newValue;
+        return this.changed;
+      }
+
+      // TODO(rafaelw): If newValue === this.oldValue, set this.changed = false?
+      if (areSameValue(this.value, newValue))
+        return this.changed;
+
       if (!this.changed)
         this.oldValue = this.value;
+      this.changed = true;
+
       this.value = newValue;
-      this.changed = !areSameValue(this.oldValue, this.value);
       return this.changed;
     },
 
@@ -1101,7 +1126,7 @@
       var changed = internalSetValueAtPath(this.object, this.path, newValue);
       if (!changed)
         return false;
-      this.isChanged(newValue);
+      this.valueMaybeChanged(newValue);
       return changed;
     },
 
@@ -1112,7 +1137,7 @@
 
     reset: function(force) {
       if (force)
-        this.check();
+        this.check(true);
       this.oldValue = undefined;
       this.changed = false;
     },

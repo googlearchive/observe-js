@@ -166,7 +166,35 @@ suite('Basic Tests', function() {
     assert.isTrue(isNaN(summary.pathChanged.val));
   });
 
-  test('Set Values', function() {
+  test('GetValueAtPath', function() {
+    var obj = {
+      a: {
+        b: {
+          c: 1
+        }
+      }
+    };
+
+    assert.strictEqual(obj.a, ChangeSummary.getValueAtPath(obj, 'a'));
+    assert.strictEqual(obj.a.b, ChangeSummary.getValueAtPath(obj, 'a.b'));
+    assert.strictEqual(1, ChangeSummary.getValueAtPath(obj, 'a.b.c'));
+
+    obj.a.b.c = 2;
+    assert.strictEqual(2, ChangeSummary.getValueAtPath(obj, 'a.b.c'));
+
+    obj.a.b = {
+      c: 3
+    };
+    assert.strictEqual(3, ChangeSummary.getValueAtPath(obj, 'a.b.c'));
+
+    obj.a = {
+      b: 4
+    };
+    assert.strictEqual(undefined, ChangeSummary.getValueAtPath(obj, 'a.b.c'));
+    assert.strictEqual(4, ChangeSummary.getValueAtPath(obj, 'a.b'));
+  });
+
+  test('SetValueAtPath', function() {
     var obj = {};
     ChangeSummary.setValueAtPath(obj, 'foo', 3);
     assert.equal(3, obj.foo);
