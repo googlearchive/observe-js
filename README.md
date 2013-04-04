@@ -1,22 +1,16 @@
 ChangeSummary
 =============
 
-A utility library which depends upon the ECMAScript Object.observe strawman and exposes JS Data Path/Object/Array observation.
+A library for observing JavaScript values which is built on top of Object.observe (http://wiki.ecmascript.org/doku.php?id=strawman:observe) and is capable of dirty-checking for changes if Object.observe isn't available. It supports observing Arrays, Objects and "Paths" (e.g. obj.foo.bar), .
 
-* Object.observe strawman: http://wiki.ecmascript.org/doku.php?id=strawman:observe
+Note
+-----
+This README is currently incomplete. It's lacks documentation about available API and important information about usage. More information coming soon...
 
-Dependencies
-============
-
-This library is only useful when run against a JavaScript implemention which includes support for the Object.observe strawman. A branch of Google's v8 JavaScript engine which includes Object.observe() is here (binaries of Chromium Mac/Win available):
-
-* https://github.com/rafaelw/v8
-
-Also, this library uses ECMAScript Maps and Sets. (With the above Chromium binaries, go to about://flags and select "Enable Experimental JavaScript").
 
 Usage
 -----
-ChangeSummary uses Object.observe() under the covers and exposes a high-level API, which is conceptually similar to the MutationSummary library (http://code.google.com/p/mutation-summary/).
+ChangeSummary exposes a high-level API, which is conceptually similar to the MutationSummary library (http://code.google.com/p/mutation-summary/).
 
     var observer = new ChangeSummary(function(summaries) {
       summaries.forEach(function(summary) {
@@ -24,7 +18,7 @@ ChangeSummary uses Object.observe() under the covers and exposes a high-level AP
         summary.added; // Object map: added property => new value.
         summary.removed // Object map: removed property => undefined.
         summary.changed // Object map: property whose value changed => new value.
-        summary.arraySplices; // An Array of objects, each of which describes a "splice", if Array.isArray(summary.object).
+        summary.splices; // An Array of objects, each of which describes a "splice", if Array.isArray(summary.object).
         summary.pathChanged; // Object map: path whose value changed => new value.
         summary.getOldValue(propertyOr{ath); // A function which returns previous value of the changed property or path.
       });
@@ -87,46 +81,4 @@ To make this concrete, the following code transforms a copy of the old state of 
     });
 
     observer.observePropertySet(arr);
-
-Observing accessor properties (getter/setters)
-----------------------------------------------
-The Object.observe() mechanism only reports changes in value to data properties of objects. If a property is configured to be an accessor, nothing is reported about assignments to that accessor.
-
-It is up to the implementation of the accessor to notify when its value has changed. The ChangeSummary library assumes that any accessor which wishes to be observable does this and does it correctly. E.g.
-
-    var obj = {
-      id: 1
-    };
-
-    var name_ = '';
-    Object.defineOwnProperty(obj, 'name', {
-      get: function() { return name_; },
-      set: function(name) {
-        if (name_ == name)
-          return;
-
-        Object.getNotifier(this).notify({
-          type: 'updated',
-          name: 'name',
-          oldValue: _name
-        });
-        name_ = name;
-      }
-    })
-
-Background: Object.observe()
-----------------------------
-The proposed Object.observe() mechanism allows observation of mutations to JavaScript objects. It offers the following abilities:
-
-* Find out when the value of a *data* property changes (changes accessor properties, e.g. getters/setters are not detected).
-* Find out when an object has new properties added and existing properties deleted.
-* Find out when existing properties are reconfigured.
-
-The basic pattern of interaction is:
-
-* Register an observer, which is just a function with Object.observe(myObj, callback). Sometime later, your callback will be invoked with an Array of change records, representing the in-order sequence of changes which occurred to myObj.
-
-Details: "Sometime later?"
------------------
-Object.observe() in conceptually similar to DOM Mutation Observers (https://developer.mozilla.org/en-US/docs/DOM/DOM_Mutation_Observers), and delivery of change records happens with similar timing. The easiest way to think about this is that your change records will be delivered immediately after the current script invocation exits. In the browser context, this will most often be after each event handler fires. Delivery continues until there are no more observers with pending change records.
 
