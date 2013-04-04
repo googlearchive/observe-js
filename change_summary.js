@@ -1107,18 +1107,20 @@
     valueMaybeChanged: function(newValue, initial) {
       if (initial) {
         this.value = newValue;
-        return this.changed;
+      } else if (!this.changed) {
+        if (!areSameValue(this.value, newValue)) {
+          this.oldValue = this.value;
+          this.value = newValue;
+          this.changed = true;
+        }
+      } else {
+        this.value = newValue;
+        if (areSameValue(this.value, this.oldValue)) {
+          this.changed = false;
+          this.oldValue = undefined;
+        }
       }
 
-      // TODO(rafaelw): If newValue === this.oldValue, set this.changed = false?
-      if (areSameValue(this.value, newValue))
-        return this.changed;
-
-      if (!this.changed)
-        this.oldValue = this.value;
-      this.changed = true;
-
-      this.value = newValue;
       return this.changed;
     },
 

@@ -208,6 +208,21 @@ suite('Basic Tests', function() {
     assert.equal(undefined, ChangeSummary.getValueAtPath(obj, 'bar.baz.bat'));
   });
 
+  test('SetValueBackToSame', function() {
+    var obj = {};
+    ChangeSummary.setValueAtPath(obj, 'foo', 3);
+    assert.equal(3, obj.foo);
+    assert.equal(3, observer.observePath(obj, 'foo'));
+
+    ChangeSummary.setValueAtPath(obj, 'foo', 2);
+    assert.equal(2, observer.observePath(obj, 'foo'));
+
+    ChangeSummary.setValueAtPath(obj, 'foo', 3);
+    assert.equal(3, observer.observePath(obj, 'foo'));
+
+    assertNoSummary();
+  });
+
   test('observeArray(non-array) throws', function() {
     var obj = {};
     assert.throws(function () { observer.observeArray(obj); });
