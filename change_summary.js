@@ -1612,7 +1612,7 @@
       var record = changeRecords[i];
       switch(record.type) {
         case 'splice':
-          mergeSplice(splices, record.index, record.deleted.slice(), record.addCount);
+          mergeSplice(splices, record.index, record.removed.slice(), record.addedCount);
           break;
         case 'new':
         case 'updated':
