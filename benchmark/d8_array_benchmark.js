@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// var console = { log: print };
+var console = { log: print };
+var recordCount = 0;
 
 createAndObserveArrays();
 
 var t1 = new Date();
-mutateArraysAndDeliver(0, 'unshift', 'shift');
+mutateArraysAndDeliver(50, 'unshift', 'shift');
 var t2 = new Date();
 print('Finished in: ' + (t2.getTime() - t1.getTime()) + 'ms');
-
+print('Record count: ' + recordCount);
 unobserveArrays();
