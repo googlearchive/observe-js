@@ -1637,6 +1637,13 @@
     var splices = [];
 
     createInitialSplices(array, changeRecords).forEach(function(splice) {
+      if (splice.addedCount == 1 && splice.removed.length == 1) {
+        if (splice.removed[0] !== array[splice.index])
+          splices.push(splice);
+
+        return
+      };
+
       splices = splices.concat(calcSplices(array, splice.index, splice.index + splice.addedCount,
                                            splice.removed, 0, splice.removed.length));
     });
