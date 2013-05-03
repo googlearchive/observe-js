@@ -17,24 +17,26 @@
   var objectCount = 100;
   var cycles = 500;
   var arrays;
-  var observer = new ChangeSummary(function() {});
+  var observers;
   var elementCount = 100;
+  function callback() {}
 
   function createAndObserveArrays() {
     arrays = [];
+    observers = [];
     for (var i = 0; i < objectCount; i++) {
       var array = [];
       for (var j = 0; j < elementCount; j++)
         array.push(j);
 
-      observer.observeArray(array);
+      observers.push(new ArrayObserver(array, callback));
       arrays.push(array);
     }
   }
 
   function unobserveArrays() {
     for (var i = 0; i < objectCount; i++)
-      observer.unobserveArray(arrays[i]);
+      observers[i].disconnect();
   }
 
   function mutateArraysAndDeliver(mutationFreq, op, undoOp) {
@@ -60,7 +62,9 @@
           array[undoOp](j);
       }
 
-      observer.deliver();
+      for (var j = 0; j < objectCount; j++) {
+        observers[j].deliver();
+      }
     }
   }
 

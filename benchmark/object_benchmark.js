@@ -20,9 +20,10 @@
   var objectCount = 1000;
   var cycles = 200;
   var objects;
-  var observer = new ChangeSummary(function() {});
+  var observers;
   var propertyCount = 10;
   var properties = [];
+  function callback() {}
 
   for (var i = 0; i < propertyCount; i++) {
     properties.push(String.fromCharCode(97 + i));
@@ -30,19 +31,20 @@
 
   function createAndObserveObjects() {
     objects = [];
+    observers = [];
     for (var i = 0; i < objectCount; i++) {
       var object = {};
       for (var j = 0; j < propertyCount; j++)
         object[properties[j]] = '';
 
-      observer.observeObject(object);
+      observers.push(new ObjectObserver(object, callback));
       objects.push(object);
     }
   }
 
   function unobserveObjects() {
     for (var i = 0; i < objectCount; i++)
-      observer.unobserveObject(objects[i]);
+      observers[i].disconnect();
   }
 
   function mutateObjectsAndDeliver(mutationFreq) {
@@ -57,7 +59,9 @@
         object[properties[0]] += j;
       }
 
-      observer.deliver();
+      for (var j = 0; j < objects.length; j++) {
+        observers[j].deliver();
+      }
     }
   }
 

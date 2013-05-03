@@ -20,10 +20,12 @@
   var objectCount = 1000;
   var cycles = 200;
   var objects;
-  var observer = new ChangeSummary(function() {});
+  var observers;
+  function callback() {}
 
   function createAndObservePaths() {
     objects = [];
+    observers = [];
     for (var i = 0; i < objectCount; i++) {
       var object = {
         foo: {
@@ -33,14 +35,14 @@
         }
       };
 
-      observer.observePath(object, 'foo.bar.baz');
+      observers.push(new PathObserver(object, 'foo.bar.baz', callback));
       objects.push(object);
     }
   }
 
   function unobservePaths() {
     for (var i = 0; i < objectCount; i++) {
-      observer.unobservePath(objects[i], 'foo.bar.baz');
+      observers[i].disconnect();
     }
   }
 
@@ -58,7 +60,9 @@
           objects[j]['foo']['bar']['baz'] = '' + i;
       }
 
-      observer.deliver();
+      for (var j = 0; j < objects.length; j++) {
+        observers[j].deliver();
+      }
     }
   }
 

@@ -17,6 +17,13 @@
 
   var hasObserve = typeof Object.observe == 'function';
 
+  var hasEval = false;
+  try {
+    var f = new Function('', 'return true;');
+    hasEval = f();
+  } catch (ex) {
+  }
+
   function isIndex(s) {
     return +s === s >>> 0;
   }
@@ -55,238 +62,6 @@
       });
       return newObject;
     };
-
-  function ensureMapSetForEach() {
-    // Included inline from from https://github.com/arv/map-set-for-each.
-    if (Map.prototype.forEach && Set.prototype.forEach)
-      return;
-
-    // We use an object to keep the ordering
-    var keyMap = new WeakMap;
-
-    function getKeyMap(obj) {
-      var map = keyMap.get(obj);
-      if (!map) {
-        map = Object.create(null);
-        keyMap.set(obj, map);
-      }
-      return map;
-    }
-
-    // These maps are used to map a value to a unique ID.
-    var objectKeys = new WeakMap;
-    var numberKeys = Object.create(null);
-    var stringKeys = Object.create(null);
-
-    var uidCounter = 4;  // 0 - 3 are used for null, undefined, false and true
-
-    /**
-     * @param {*} key
-     * @return {string} A unique ID for a given key (of any type). This unique ID
-     *    is a non numeric string since strings that can be used as array indexes
-     *    causes different enumeration order.
-     */
-    function getUid(key) {
-      if (key === null)
-        return '$0';
-
-      var keys, uid;
-
-      switch (typeof key) {
-        case 'undefined':
-          return '$1';
-        case 'boolean':
-          // 2 & 3
-          return '$' + (key + 2);
-        case 'object':
-        case 'function':
-          uid = objectKeys.get(key);
-          if (!uid) {
-            uid = '$' + uidCounter++;
-            objectKeys.set(key, uid);
-          }
-          return uid;
-        case 'number':
-          keys = numberKeys;
-          break;
-        case 'string':
-          keys = stringKeys;
-          break;
-      }
-      uid = keys[key];
-      if (!uid) {
-        uid = '$' + uidCounter++;
-        keys[key] = uid;
-      }
-      return uid;
-    }
-
-    var MapSet = Map.prototype.set;
-    var MapDelete = Map.prototype.delete;
-    var SetAdd = Set.prototype.add;
-    var SetDelete = Set.prototype.delete;
-
-    Map.prototype.set = function(key, value) {
-      var uid = getUid(key);
-      var keyMap = getKeyMap(this);
-      keyMap[uid] = key;
-      return MapSet.call(this, key, value);
-    };
-
-    Map.prototype.delete = function(key) {
-      var uid = getUid(key);
-      var keyMap = getKeyMap(this);
-      delete keyMap[uid];
-      return MapDelete.call(this, key);
-    };
-
-    /**
-     * For each key and value in the map call a function that takes the key and
-     * the value (as well as the map).
-     * @param {function(*, *, Map} f
-     * @param {Object} opt_this The object to use as this in the callback.
-     *     Defaults to the map itself.
-     */
-    Map.prototype.forEach = function(f, opt_this) {
-      var keyMap = getKeyMap(this);
-      for (var uid in keyMap) {
-        var key = keyMap[uid]
-        var value = this.get(key);
-        f.call(opt_this || this, value, key, this);
-      }
-    };
-
-    Set.prototype.add = function(key) {
-      var uid = getUid(key);
-      var keyMap = getKeyMap(this);
-      keyMap[uid] = key;
-      return SetAdd.call(this, key);
-    };
-
-    Set.prototype.delete = function(key) {
-      var uid = getUid(key);
-      var keyMap = getKeyMap(this);
-      delete keyMap[uid];
-      return SetDelete.call(this, key);
-    };
-
-    /**
-     * For each value in the set call a function that takes the value and
-     * the value (again) (as well as the set).
-     * @param {function(*, *, Set} f
-     * @param {Object} opt_this The object to use as this in the callback.
-     *     Defaults to the set itself.
-     */
-    Set.prototype.forEach = function(f, opt_this) {
-      var keyMap = getKeyMap(this);
-      for (var uid in keyMap) {
-        var key = keyMap[uid]
-        f.call(opt_this || this, key, key, this);
-      }
-    };
-
-    Map.getValueSet = function(map) {
-      var set = new Set;
-      map.forEach(function(value, key) {
-        set.add(value);
-      })
-      return set;
-    }
-  }
-
-  function polyfillMapSet(global) {
-    function Map() {
-      this.values_ = [];
-      this.keys_ = [];
-    }
-
-    Map.prototype = {
-      get: function(key) {
-        return this.values_[this.keys_.indexOf(key)];
-      },
-
-      set: function(key, value) {
-        var index = this.keys_.indexOf(key);
-        if (index < 0)
-          index = this.keys_.length;
-
-        this.keys_[index] = key;
-        this.values_[index] = value;
-      },
-
-      has: function(key) {
-        return this.keys_.indexOf(key) >= 0;
-      },
-
-      delete: function(key) {
-        var index = this.keys_.indexOf(key);
-        if (index < 0)
-          return false;
-
-        this.keys_.splice(index, 1);
-        this.values_.splice(index, 1);
-        return true;
-      },
-
-      forEach: function(f, opt_this) {
-        for (var i = 0; i < this.keys_.length; i++)
-          f.call(opt_this || this, this.values_[i], this.keys_[i], this);
-      },
-
-      get size() {
-        return this.keys_.length;
-      }
-    }
-
-    function Set() {
-      this.keys_ = [];
-    }
-
-    Set.prototype = {
-      add: function(key) {
-        if (this.keys_.indexOf(key) < 0)
-          this.keys_.push(key);
-      },
-
-      has: function(key) {
-        return this.keys_.indexOf(key) >= 0;
-      },
-
-      delete: function(key) {
-        var index = this.keys_.indexOf(key);
-        if (index < 0)
-          return false;
-
-        this.keys_.splice(index, 1);
-        return true;
-      },
-
-      forEach: function(f, opt_this) {
-        for (var i = 0; i < this.keys_.length; i++)
-          f.call(opt_this || this, this.keys_[i], this.keys_[i], this);
-      },
-
-      get size() {
-        return this.keys_.length;
-      }
-    }
-
-    Map.getValueSet = function(map) {
-      var set = new Set;
-      set.keys_ = map.values_.slice();
-      return set;
-    }
-
-    global.Map = Map;
-    global.Set = Set;
-  }
-
-  if (typeof Map === 'function' &&
-      typeof Set === 'function' &&
-      typeof WeakMap === 'function')
-    ensureMapSetForEach();
-  else
-    polyfillMapSet(global);
 
   var pathIndentPart = '[\$a-z0-9_]+[\$a-z0-9_\\d]*';
   var pathRegExp = new RegExp('^' +
@@ -348,377 +123,16 @@
     }
   });
 
-  /**
-   * Callback looks like this
-   *
-  function callback(summaries) {
-    summaries.forEach(function(summary) {
-      summary.added;   // { prop => newValue }
-      summary.removed; // { prop => newValue }
-      summary.changed; // { prop => newValue }
-      summary.splices; // [ Array of
-                       //   {
-                       //     index: [ Number ]
-                       //     removed: [ Array of values ]
-                       //     addedCount: [ Count ]
-                       //   }
-                       // ]
-
-      summary.pathChanged; // { path => newValue }
-      summary.getOldValue(propOrPath) = function() {};
-    });
-  }
-  */
-
   var MAX_DIRTY_CHECK_CYCLES = 1000;
 
-  function ChangeSummary(externalCallback) {
-    var observing = true;
-    var isDisconnecting = false;
-    var isDelivering = false;
-    var changesDelivered = false;
-    var summaries;
-
-    var internal = {
-
-      objectObservers: new Map,
-
-      getObjectObserver: function(obj) {
-        return this.objectObservers.get(obj);
-      },
-
-      getOrCreateObjectObserver: function(obj) {
-        var observer = this.objectObservers.get(obj);
-        if (!observer) {
-          observer = new ObjectObserver(this, obj);
-          this.objectObservers.set(obj, observer);
-        }
-
-        return observer;
-      },
-
-      removeObjectObserver: function(obj) {
-        this.objectObservers.delete(obj);
-      },
-
-      addPathTracker: function(obj, pathTracker) {
-        this.getOrCreateObjectObserver(obj).addPathTracker(pathTracker);
-      },
-
-      removePathTracker: function(obj, pathTracker) {
-        this.getObjectObserver(obj).removePathTracker(pathTracker);
-      },
-
-      connect: function() {
-        this.objectObservers.forEach(function(observer) {
-          observer.connect();
-        });
-      },
-
-      disconnect: function() {
-        this.objectObservers.forEach(function(observer, object) {
-          observer.disconnect();
-        });
-      },
-
-      internalCallback: function(records) {
-        if (!records || !records.length) {
-          console.error('Object.observe callback called with no records');
-          return;
-        }
-
-        try {
-          if (!isDelivering)
-            this.activeObservers = new Set;
-
-          var changedObject;
-          var observer;
-          for (var i = 0; i < records.length; i++) {
-            var record = records[i];
-            if (changedObject !== record.object) {
-              changedObject = record.object;
-              observer = this.getObjectObserver(changedObject);
-              if (!observer) {
-                changedObject = undefined;
-                continue;
-              }
-
-              this.activeObservers.add(observer);
-            }
-
-            observer.addChangeRecord(record);
-          }
-
-          if (isDelivering)
-            return;
-
-          isDelivering = true;
-          this.deliverSummaries();
-          isDelivering = false;
-
-        } catch (ex) {
-          console.error(ex);
-        }
-      },
-
-      dirtyCheck: function() {
-        var cycles = 0;
-
-        do {
-          try {
-            cycles++;
-            this.activeObservers = Map.getValueSet(this.objectObservers);
-            this.deliverSummaries();
-          } catch (ex) {
-            console.error(ex);
-          }
-        } while (changesDelivered && cycles < MAX_DIRTY_CHECK_CYCLES)
-      },
-
-      deliverSummaries: function() {
-        summaries = [];
-
-        this.activeObservers.forEach(function(observer) {
-          observer.checkPathValues();
-        });
-
-        this.activeObservers.forEach(function(observer) {
-          observer.checkObjectsAndArrays();
-        });
-
-        this.activeObservers.forEach(function(observer) {
-          var summary = observer.produceSummary();
-          observer.reset();
-          if (summary)
-            summaries.push(summary);
-        });
-
-        this.activeObservers = undefined;
-
-        if (!summaries.length)
-          summaries = undefined;
-
-        if (isDisconnecting || !summaries) {
-          changesDelivered = false;
-          return;
-        }
-
-        externalCallback(summaries);
-        summaries = undefined;
-        changesDelivered = true;
-      }
-    };
-
-    internal.callback = internal.internalCallback.bind(internal);
-
-    // Register callback to assign delivery order.
-    if (hasObserve) {
-      var register = {};
-      Object.observe(register, internal.callback);
-      Object.unobserve(register, internal.callback);
+  function dirtyCheck(observer) {
+    var cycles = 0;
+    while (cycles < MAX_DIRTY_CHECK_CYCLES && observer.check()) {
+      if (observer.report)
+        observer.report();
+      cycles++;
     }
-
-    this.observeObject = function(obj) {
-      if (!isObject(obj))
-        throw Error('Invalid attempt to observe non-object: ' + obj);
-
-      internal.getOrCreateObjectObserver(obj).observeObject();
-    };
-
-    this.unobserveObject = function(obj) {
-      if (!isObject(obj))
-        throw Error('Invalid attempt to unobserve non-object: ' + obj);
-
-      var observer = internal.getObjectObserver(obj);
-      if (!observer)
-        return;
-
-      observer.unobserveObject();
-    };
-
-    this.observeArray = function(arr) {
-      if (!Array.isArray(arr))
-        throw Error('Invalid attempt to observe non-array: ' + arr);
-
-      internal.getOrCreateObjectObserver(arr).observeArray();
-    };
-
-    this.unobserveArray = function(arr) {
-      if (!Array.isArray(arr))
-        return;
-
-      var observer = internal.getObjectObserver(arr);
-      if (!observer)
-        return;
-
-      observer.unobserveArray();
-    };
-
-    this.observePath = function(obj, pathString) {
-      if (!isPathValid(pathString))
-        return undefined;
-
-      var path = new Path(pathString);
-      if (!path.length)
-        return obj;
-
-      if (!isObject(obj))
-        return undefined;
-
-      var pathTracker = internal.getOrCreateObjectObserver(obj).observePath(path);
-      return pathTracker.value;
-    };
-
-    this.unobservePath = function(obj, pathString) {
-      if (!isPathValid(pathString))
-        return;
-
-      var path = new Path(pathString);
-      if (!path.length)
-        return;
-
-      if (!isObject(obj))
-        return;
-
-      var observer = internal.getObjectObserver(obj)
-      if (!observer)
-        return;
-
-      observer.unobservePath(path);
-    };
-
-    this.deliver = function() {
-      if (!observing)
-        throw Error('Disconnected');
-
-      if (hasObserve)
-        Object.deliverChangeRecords(internal.callback);
-      else
-        internal.dirtyCheck();
-    };
-
-    this.disconnect = function() {
-      if (!observing)
-        return;
-      isDisconnecting = true;
-      this.deliver();
-      isDisconnecting = false;
-
-      internal.disconnect();
-
-      observing = false;
-
-      if (!summaries)
-        return;
-      var retval = summaries;
-      summaries = undefined;
-      return retval;
-    };
-
-    this.connect = function() {
-      if (observing)
-        return;
-
-      internal.connect();
-
-      observing = true;
-    };
   }
-
-  function newCompiledGetValueAtPath(path) {
-    var str = '';
-    var partStr = 'obj';
-    var length = path.length;
-    str += 'if (obj'
-    for (var i = 0; i < (length - 1); i++) {
-      var part = '["' + path[i] + '"]';
-      partStr += part;
-      str += ' && ' + partStr;
-    }
-    str += ') ';
-
-    partStr += '["' + path[length - 1] + '"]';
-
-    str += 'return ' + partStr + '; else return undefined;';
-    return new Function('obj', str);
-  }
-
-  var compiledGettersCache = {};
-
-  function compiledGetValueAtPath(object, path) {
-    var pathString = path.toString();
-    if (!compiledGettersCache[pathString])
-      compiledGettersCache[pathString] = newCompiledGetValueAtPath(path);
-
-    return compiledGettersCache[pathString](object);
-  }
-
-  function internalGetValueAtPath(object, path) {
-    var newValue;
-    path.walkPropertiesFrom(object, function(prop, value, i) {
-      if (i === path.length)
-        newValue = value;
-    });
-
-    return newValue;
-  }
-
-  ChangeSummary.getValueAtPath = function(obj, pathString) {
-    if (!isPathValid(pathString))
-      return undefined;
-
-    var path = new Path(pathString);
-    if (!path.length)
-      return obj;
-
-    if (!isObject(obj))
-      return;
-
-    if (hasEval)
-      return compiledGetValueAtPath(obj, path);
-    else
-      return internalGetValueAtPath(obj, path);
-  }
-
-  function internalSetValueAtPath(obj, path, value) {
-    var changed = false;
-
-    path.walkPropertiesFrom(obj, function(prop, m, i) {
-      if (isObject(m) && i == path.length - 1) {
-        changed = true;
-        m[prop] = value;
-      }
-    });
-
-    return changed;
-  }
-
-  ChangeSummary.setValueAtPath = function(obj, pathString, value) {
-    if (!isPathValid(pathString))
-      return;
-
-    var path = new Path(pathString);
-    if (!path.length)
-      return;
-
-    if (!isObject(obj))
-      return;
-
-    internalSetValueAtPath(obj, path, value);
-  };
-
-  ChangeSummary.applySplices = function(previous, current, splices) {
-    splices.forEach(function(splice) {
-      var spliceArgs = [splice.index, splice.removed.length];
-      var addIndex = splice.index;
-      while (addIndex < splice.index + splice.addedCount) {
-        spliceArgs.push(current[addIndex]);
-        addIndex++;
-      }
-
-      Array.prototype.splice.apply(previous, spliceArgs);
-    });
-  };
 
   function objectIsEmpty(object) {
     for (var prop in object)
@@ -780,16 +194,91 @@
     return copy;
   }
 
-  function ObjectTracker(object) {
-    this.object = object;
-    this.changed = false;
-    this.diff = undefined;
-    this.oldValues = undefined;
+  function Observer(callback) {
+    this.callback = callback;
+    this.reporting = true;
+    if (hasObserve)
+      this.boundInternalCallback = this.internalCallback.bind(this);
 
-    this.reset(true);
+    this.valid = true;
+    this.connect();
+    this.sync(true);
   }
 
-  ObjectTracker.prototype = {
+  Observer.prototype = {
+    valid: false,
+
+    internalCallback: function(records) {
+      if (!this.valid)
+        return;
+      if (this.reporting && this.check(records))
+        this.report();
+    },
+
+    close: function() {
+      if (!this.valid)
+        return;
+      this.disconnect();
+      this.valid = false;
+    },
+
+    deliver: function() {
+      if (!this.valid)
+        return;
+      if (hasObserve) {
+        Object.deliverChangeRecords(this.boundInternalCallback);
+      } else {
+        dirtyCheck(this);
+      }
+    },
+
+    report: function() {
+      if (!this.reporting)
+        return;
+
+      this.sync(false);
+
+      try {
+        this.callback.apply(undefined, this.reportArgs);
+      } catch (ex) {
+        console.error('Exception caught during observer callback: ' + ex);
+      }
+
+      this.reportArgs = undefined;
+    },
+
+    reset: function() {
+      if (!this.valid)
+        return;
+
+      if (hasObserve) {
+        this.reporting = false;
+        Object.deliverChangeRecords(this.boundInternalCallback);
+        this.reporting = true;
+      }
+
+      this.sync(true);
+    }
+  }
+
+  function ObjectObserver(object, callback) {
+    this.object = object;
+    Observer.call(this, callback);
+  }
+
+  ObjectObserver.prototype = createObject({
+    __proto__: Observer.prototype,
+
+    connect: function() {
+      if (hasObserve)
+        Object.observe(this.object, this.boundInternalCallback);
+    },
+
+    sync: function(hard) {
+      if (!hasObserve)
+        this.oldObject = copyObject(this.object);
+    },
+
     check: function(changeRecords) {
       var diff;
       var oldValues;
@@ -798,7 +287,8 @@
           return false;
 
         oldValues = {};
-        diff = diffObjectFromChangeRecords(this.object, changeRecords, oldValues);
+        diff = diffObjectFromChangeRecords(this.object, changeRecords,
+                                           oldValues);
       } else {
         oldValues = this.oldObject;
         diff = diffObjectFromOldObject(this.object, this.oldObject);
@@ -807,80 +297,42 @@
       if (diffIsEmpty(diff))
         return false;
 
-      this.diff = diff;
-      this.oldValues = oldValues;
-      this.changed = true;
+      this.reportArgs =
+          [diff.added || {}, diff.removed || {}, diff.changed || {}];
+      this.reportArgs.push(function(property) {
+        return oldValues[property];
+      });
+
       return true;
     },
 
-    summarize: function(summary, oldValues) {
-      summary.added = this.changed ? this.diff.added : {};
-      summary.removed = this.changed ? this.diff.removed : {};
-      summary.changed = this.changed ? this.diff.changed : {};
+    disconnect: function() {
+      if (!hasObserve)
+        this.oldObject = undefined;
+      else if (this.object)
+        Object.unobserve(this.object, this.boundInternalCallback);
 
-      copyObject(this.oldValues, oldValues);
+      this.object = undefined;
+    }
+  });
+
+  function ArrayObserver(array, callback) {
+    if (!Array.isArray(array))
+      throw Error('Provided object is not an Array');
+
+    this.object = array;
+
+    Observer.call(this, callback);
+  }
+
+  ArrayObserver.prototype = createObject({
+    __proto__: ObjectObserver.prototype,
+
+    sync: function() {
+      if (!hasObserve)
+        this.oldObject = this.object.slice();
     },
 
-    reset: function(force) {
-      if (!hasObserve && (force || this.diff))
-        this.oldObject = copyObject(this.object);
-      this.changed = false;
-      this.diff = undefined;
-      this.oldValues = undefined;
-    }
-  }
-
-  function ArrayTracker(array) {
-    this.array = array;
-    this.changed = false;
-    this.splices = undefined;
-    this.reset(true);
-  }
-
-/*
-  function splicesFromChangeRecords(array, changeRecords) {
-    var lengthFound = false;
-    var oldValues = [];
-    var indices = [];
-    var added = [];
-    var updated = [];
-
-    for (var i = 0; i < changeRecords.length; i++) {
-      var record = changeRecords[i];
-
-      if (!knownRecordTypes[record.type]) {
-        console.error('Unknown changeRecord type: ' + record.type);
-        console.error(record);
-        continue;
-      }
-
-      if (!lengthFound && record.name == 'length') {
-        oldValues.length = toNumber(record.oldValue);
-        continue;
-      }
-
-      var index = toNumber(record.name);
-      if (isNaN(index) || index < 0 ||
-          index >= array.length ||
-          (lengthFound && index >= oldValues.length));
-        continue;
-
-      if (!updated[index] &&
-           (record.type === 'updated' || (record.type === 'deleted' && !added[index]))) {
-        updated[index] = true;
-        oldValues[index] = record.oldValue;
-        indices.push(index);
-        continue;
-      }
-
-      if (record.type === 'deleted' && addded[index])
-        added[index] = false;
-      else if (record.type === 'new' && !updated[index])
-        added[index] = true;
-    }
-  }*/
-
-  ArrayTracker.prototype = {
     check: function(changeRecords) {
       var splices;
       if (hasObserve) {
@@ -888,369 +340,211 @@
           return false;
 
         var oldValues = {};
-        var diff = diffObjectFromChangeRecords(this.array, changeRecords, oldValues);
-        splices = projectArraySplices(this.array, diff, oldValues);
+        var diff = diffObjectFromChangeRecords(this.object, changeRecords, oldValues);
+        splices = projectArraySplices(this.object, diff, oldValues);
       } else {
-        splices = calcSplices(this.array, 0, this.array.length,
-                              this.oldArray, 0, this.oldArray.length);
+        splices = calcSplices(this.object, 0, this.object.length,
+                              this.oldObject, 0, this.oldObject.length);
       }
 
-      if (!splices.length)
+      if (!splices || !splices.length)
         return false;
 
-      this.splices = splices;
-      this.changed = true;
+      this.reportArgs = [splices];
       return true;
-    },
-
-    summarize: function(summary) {
-      summary.splices = this.splices ? this.splices : [];
-    },
-
-    reset: function(force) {
-      if (!hasObserve && (force || this.splices))
-        this.oldArray = this.array.slice();
-      this.changed = false;
-      this.splices = undefined;
     }
+  });
+
+  ArrayObserver.applySplices = function(previous, current, splices) {
+    splices.forEach(function(splice) {
+      var spliceArgs = [splice.index, splice.removed.length];
+      var addIndex = splice.index;
+      while (addIndex < splice.index + splice.addedCount) {
+        spliceArgs.push(current[addIndex]);
+        addIndex++;
+      }
+
+      Array.prototype.splice.apply(previous, spliceArgs);
+    });
+  };
+
+  function getPathValue(object, path) {
+    var newValue;
+    path.walkPropertiesFrom(object, function(prop, value, i) {
+      if (i === path.length)
+        newValue = value;
+    });
+
+    return newValue;
   }
 
-  function PathTracker(object, path, pathString, internal) {
+  function setPathValue(obj, path, value) {
+    var changed = false;
+
+    path.walkPropertiesFrom(obj, function(prop, m, i) {
+      if (isObject(m) && i == path.length - 1) {
+        changed = true;
+        m[prop] = value;
+      }
+    });
+
+    return changed;
+  }
+
+  function newCompiledGetValueAtPath(path) {
+    var str = '';
+    var partStr = 'obj';
+    var length = path.length;
+    str += 'if (obj'
+    for (var i = 0; i < (length - 1); i++) {
+      var part = '["' + path[i] + '"]';
+      partStr += part;
+      str += ' && ' + partStr;
+    }
+    str += ') ';
+
+    partStr += '["' + path[length - 1] + '"]';
+
+    str += 'return ' + partStr + '; else return undefined;';
+    return new Function('obj', str);
+  }
+
+  var compiledGettersCache = {};
+
+  function compiledGetValueAtPath(object, path) {
+    var pathString = path.toString();
+    if (!compiledGettersCache[pathString])
+      compiledGettersCache[pathString] = newCompiledGetValueAtPath(path);
+
+    return compiledGettersCache[pathString](object);
+  }
+
+  function getPathValueObserved(object, path, currentlyObserved, callback) {
+    var newValue = undefined;
+
+    path.walkPropertiesFrom(object, function(prop, value, i) {
+      if (i === path.length) {
+        newValue = value;
+        return;
+      }
+
+      var observed = currentlyObserved[i];
+      if (value === observed)
+        return;
+
+      if (observed !== undefined) {
+        currentlyObserved[i] = observed = undefined;
+        var stillObserving = false;
+        for (var j = 0; j < currentlyObserved.length; j++) {
+          if (currentlyObserved[j] === observed) {
+            stillObserving = true;
+            break;
+          }
+        }
+
+        if (!stillObserving)
+          Object.unobserve(observed, callback);
+      }
+
+      if (!isObject(value))
+        return;
+
+      currentlyObserved[i] = observed = value;
+      Object.observe(observed, callback);
+    }, this);
+
+    return newValue;
+  };
+
+  function PathObserver(object, pathString, callback) {
+    this.value = undefined;
+
+    if (!isPathValid(pathString))
+      return;
+
+    var path = new Path(pathString);
+    if (!path.length) {
+      this.value = object;
+      return;
+    }
+
+    if (!isObject(object))
+      return;
+
     this.object = object;
     this.path = path;
-    this.pathString = pathString;
-    this.observed = path.length > 1 ? new Array(path.length - 2) : undefined;
-    this.changed = false;
-    this.oldValue = undefined;
 
-    this.internal = internal;
-
-    this.reset(true);
-  }
-
-  var hasEval = false;
-  try {
-    var f = new Function('', 'return true;');
-    hasEval = f();
-  } catch (ex) {
-  }
-
-  var pathTrackerCheck;
-
-  if (hasObserve) {
-    pathTrackerCheck = function(initial) {
-      var newValue;
-      this.path.walkPropertiesFrom(this.object, function(prop, value, i) {
-        if (i === this.path.length) {
-          newValue = value;
-          return;
-        }
-
-        if (i === 0)
-          return;
-
-        var observed = this.observed[i - 1];
-        if (value === observed)
-          return;
-
-        if (observed !== undefined) {
-          this.observed[i - 1] = observed = undefined;
-          var stillObserving = false;
-          for (var j = 0; j < this.observed.length; j++) {
-            if (this.observed[j] === observed) {
-              stillObserving = true;
-              break;
-            }
-          }
-
-          if (!stillObserving)
-            this.internal.removePathTracker(observed, this);
-        }
-
-        if (!isObject(value))
-          return;
-
-        this.observed[i - 1] = observed = value;
-        this.internal.addPathTracker(observed, this);
-      }, this);
-
-      return this.valueMaybeChanged(newValue, initial);
-    };
-  } else if (hasEval) {
-    pathTrackerCheck = function(initial) {
-      if (!this.checkFunc) {
-        this.checkFunc = newCompiledGetValueAtPath(this.path);
-      }
-
-      return this.valueMaybeChanged(this.checkFunc(this.object), initial);
-    };
-
-  } else {
-    pathTrackerCheck = function(initial) {
-      var newValue = internalGetValueAtPath(this.object, this.path);
-      return this.valueMaybeChanged(newValue, initial);
-    };
-  }
-
-  PathTracker.prototype = {
-    check: pathTrackerCheck,
-
-    valueMaybeChanged: function(newValue, initial) {
-      if (initial) {
-        this.value = newValue;
-      } else if (!this.changed) {
-        if (!areSameValue(this.value, newValue)) {
-          this.oldValue = this.value;
-          this.value = newValue;
-          this.changed = true;
-        }
-      } else {
-        this.value = newValue;
-        if (areSameValue(this.value, this.oldValue)) {
-          this.changed = false;
-          this.oldValue = undefined;
-        }
-      }
-
-      return this.changed;
-    },
-
-    summarize: function(summary, oldValues) {
-      summary.pathChanged[this.pathString] = this.value;
-      oldValues[this.pathString] = this.oldValue;
-    },
-
-    reset: function(force) {
-      if (force)
-        this.check(true);
-      this.oldValue = undefined;
-      this.changed = false;
-    },
-
-    destroy: function() {
-      this.object = undefined;
-      this.reset(true);
+    if (hasObserve) {
+      this.observed = new Array(path.length);
+      this.getPathValue = getPathValueObserved;
+    } else if (hasEval) {
+      this.getPathValue = newCompiledGetValueAtPath(this.path);
+    } else {
+      this.getPathValue = getPathValue;
     }
+
+    Observer.call(this, callback);
   }
 
-  function ObjectObserver(internal, object) {
-    this.internal = internal;
-    this.object = object;
-    this.objectTracker = undefined;
-    this.arrayTracker = undefined;
-    this.pathTrackers = undefined;
-    this.pathTrackerMap = undefined;
-    this.changeRecords = undefined;
-    this.dirtyPathTrackers = undefined;
-
-    this.connect();
-  }
-
-  ObjectObserver.prototype = {
-    observeObject: function() {
-      this.objectTracker = this.objectTracker || new ObjectTracker(this.object);
-    },
-
-    unobserveObject: function() {
-      this.objectTracker = undefined;
-      this.destroyIfEmpty();
-    },
-
-    observeArray: function() {
-      this.arrayTracker = this.arrayTracker || new ArrayTracker(this.object);
-    },
-
-    unobserveArray: function() {
-      this.arrayTracker = undefined;
-      this.destroyIfEmpty();
-    },
-
-    addPathTracker: function(pathTracker, opt_pathString) {
-      if (!this.pathTrackers) {
-        this.pathTrackers = [];
-        this.pathTrackerMap = {};
-      }
-
-      if (opt_pathString)
-        this.pathTrackerMap[opt_pathString] = pathTracker;
-
-      this.pathTrackers.push(pathTracker);
-    },
-
-    removePathTracker: function(pathTracker) {
-      if (!this.pathTrackers)
-        return;
-
-      this.pathTrackers.splice(this.pathTrackers.indexOf(pathTracker), 1);
-      if (!this.pathTrackers.length)
-        this.pathTrackers = undefined;
-
-      this.destroyIfEmpty();
-    },
-
-    observePath: function(path) {
-      var pathTracker;
-      var pathString = path.toString();
-      if (this.pathTrackers && this.pathTrackerMap)
-        pathTracker = this.pathTrackerMap[pathString];
-
-      if (pathTracker) {
-        pathTracker.check();
-      } else {
-        pathTracker = new PathTracker(this.object, path, pathString, this.internal);
-        this.addPathTracker(pathTracker, pathString);
-      }
-
-      return pathTracker;
-    },
-
-    unobservePath: function(path) {
-      if (!this.pathTrackerMap)
-        return;
-
-      var pathString = path.toString();
-      var pathTracker = this.pathTrackerMap[pathString];
-      if (!pathTracker)
-        return;
-
-      pathTracker.destroy();
-
-      delete this.pathTrackerMap[pathString];
-      if (!Object.keys(this.pathTrackerMap).length)
-        this.pathTrackerMap = undefined;
-
-      this.pathTrackers.splice(this.pathTrackers.indexOf(pathTracker), 1);
-      if (!this.pathTrackers.length)
-        this.pathTrackers = undefined;
-
-      this.destroyIfEmpty();
-    },
+  PathObserver.prototype = createObject({
+    __proto__: Observer.prototype,
 
     connect: function() {
-      if (hasObserve)
-        Object.observe(this.object, this.internal.callback);
-      this.reset(true);
     },
 
     disconnect: function() {
-      if (hasObserve)
-        Object.unobserve(this.object, this.internal.callback);
+      this.object = undefined;
+      this.value = undefined;
+      this.sync(true);
     },
 
-    destroyIfEmpty: function() {
-      if (this.objectTracker ||
-          this.arrayTracker ||
-          this.pathTrackers)
-        return;
+    check: function() {
+      this.value = this.getPathValue(this.object, this.path, this.observed,
+                                     this.boundInternalCallback);
+      if (areSameValue(this.value, this.oldValue))
+        return false;
 
-      this.internal.removeObjectObserver(this.object);
-      this.destroy();
+      this.reportArgs = [this.value, this.oldValue];
+      return true;
     },
 
-    destroy: function() {
-      this.disconnect();
-      this.internal = undefined;
-    },
-
-    addChangeRecord: function(changeRecord) {
-      if (!this.changeRecords)
-        this.changeRecords = [];
-
-      this.changeRecords.push(changeRecord);
-    },
-
-    checkPathValues: function(changeRecords) {
-      if (!this.internal)
-        return;
-
-      if (!this.pathTrackers)
-        return;
-
-      for (var i = 0; i < this.pathTrackers.length; i++) {
-        var pathTracker = this.pathTrackers[i];
-        if (pathTracker.check()) {
-          var isThis = this.object === pathTracker.object;
-          var observer = isThis ? this : this.internal.getOrCreateObjectObserver(pathTracker.object);
-          observer.addDirtyPath(pathTracker);
-          if (!isThis)
-            this.internal.activeObservers.add(observer);
-        }
-      }
-    },
-
-    checkObjectsAndArrays: function() {
-      if (!this.internal)
-        return;
-
-      if (this.objectTracker)
-        this.objectTracker.check(this.changeRecords);
-      if (this.arrayTracker)
-        this.arrayTracker.check(this.changeRecords);
-    },
-
-    addDirtyPath: function(pathTracker) {
-      if (!this.dirtyPathTrackers)
-        this.dirtyPathTrackers = new Set;
-      this.dirtyPathTrackers.add(pathTracker);
-    },
-
-    produceSummary: function() {
-      if ((!this.objectTracker || !this.objectTracker.changed) &&
-          (!this.arrayTracker || !this.arrayTracker.changed) &&
-          (!this.dirtyPathTrackers))
-        return;
-
-      var oldValues;
-      var summary = {
-        object: this.object
-      };
-      if (this.objectTracker || this.pathTrackerMap) {
-        oldValues = {};
-        summary.getOldValue = function(propOrPath) {
-          return oldValues[propOrPath];
-        };
-      }
-      if (this.pathTrackerMap)
-        summary.pathChanged = {};
-
-      var changed = false;
-      if (this.objectTracker) {
-        this.objectTracker.summarize(summary, oldValues);
-        changed = changed || this.objectTracker.changed;
-      }
-
-      if (this.arrayTracker) {
-        this.arrayTracker.summarize(summary);
-        changed = changed || this.arrayTracker.changed;
-      }
-
-      if (this.dirtyPathTrackers) {
-        this.dirtyPathTrackers.forEach(function(pathTracker) {
-          if (!pathTracker.changed)
-            return;
-
-          pathTracker.summarize(summary, oldValues);
-          changed = true;
-        });
-      }
-
-      if (changed)
-      return summary;
-    },
-
-    reset: function(force) {
-      if (this.objectTracker)
-        this.objectTracker.reset(force);
-      if (this.arrayTracker)
-        this.arrayTracker.reset(force);
-
-      var pathTrackersToReset = force ? this.pathTrackers : this.dirtyPathTrackers;
-      if (pathTrackersToReset)
-        pathTrackersToReset.forEach(function(pathTracker) { pathTracker.reset(force); });
-
-      this.changeRecords = undefined;
-      this.dirtyPathTrackers = undefined;
+    sync: function(hard) {
+      if (hard)
+        this.value = this.getPathValue(this.object, this.path, this.observed,
+                                       this.boundInternalCallback);
+      this.oldValue = this.value;
     }
+  });
+
+  PathObserver.getValueAtPath = function(obj, pathString) {
+    if (!isPathValid(pathString))
+      return undefined;
+
+    var path = new Path(pathString);
+    if (!path.length)
+      return obj;
+
+    if (!isObject(obj))
+      return;
+
+    if (hasEval)
+      return compiledGetValueAtPath(obj, path);
+    else
+      return getPathValue(obj, path);
+  }
+
+  PathObserver.setValueAtPath = function(obj, pathString, value) {
+    if (!isPathValid(pathString))
+      return;
+
+    var path = new Path(pathString);
+    if (!path.length)
+      return;
+
+    if (!isObject(obj))
+      return;
+
+    setPathValue(obj, path, value);
   };
 
   var knownRecordTypes = {
@@ -1642,187 +936,7 @@
     return splices;
   }
 
-  global.ChangeSummary = ChangeSummary;
-
-  function CallbackRouter() {
-
-    var callbacksMap = typeof WeakMap == 'function' ? new WeakMap : new Map;
-
-    function invokeCallbacks(summary) {
-      var callbacks = callbacksMap.get(summary.object);
-      if (!callbacks)
-        return;
-
-      if (callbacks.object && (summary.added || summary.removed || summary.changed)) {
-        callbacks.object.forEach(function(callback) {
-          try {
-            callback(summary.added, summary.removed, summary.changed, summary.getOldValue, summary.object);
-          } catch (ex) {
-            console.log('Exception thrown during callback: ' + ex);
-            ChangeSummary._errorThrownDuringCallback = true;
-          }
-        });
-      }
-
-      if (callbacks.array && summary.splices) {
-        callbacks.array.forEach(function(callback) {
-          try {
-            callback(summary.splices, summary.object);
-          } catch (ex) {
-            console.log('Exception thrown during callback: ' + ex);
-            ChangeSummary._errorThrownDuringCallback = true;
-          }
-        });
-      }
-
-      if (callbacks.path && summary.pathChanged) {
-        Object.keys(callbacks.path).forEach(function(path) {
-          if (!summary.pathChanged.hasOwnProperty(path))
-            return;
-
-          callbacks.path[path].forEach(function(callback) {
-            try {
-              callback(summary.pathChanged[path], summary.getOldValue(path), summary.object, path);
-            } catch (ex) {
-              console.log('Exception thrown during callback: ' + ex);
-              ChangeSummary._errorThrownDuringCallback = true;
-            }
-          });
-        });
-      }
-    }
-
-    var observer = new ChangeSummary(function(summaries) {
-      summaries.forEach(invokeCallbacks);
-    });
-
-    this.observeObject = function(object, callback) {
-      var callbacks = callbacksMap.get(object)
-      if (!callbacks) {
-        callbacks = {};
-        callbacksMap.set(object, callbacks);
-      }
-      if (!callbacks.object) {
-        callbacks.object = new Set;
-        observer.observeObject(object);
-      }
-
-      callbacks.object.add(callback);
-    };
-
-    this.unobserveObject = function(object, callback) {
-      var callbacks = callbacksMap.get(object)
-      if (!callbacks || !callbacks.object)
-        return;
-
-      callbacks.object.delete(callback)
-
-      if (!callbacks.object.size) {
-        observer.unobserveObject(object);
-        callbacks.object = undefined;
-      }
-
-      if (!callbacks.object && !callbacks.array && !callbacks.path)
-        callbacksMap.delete(object);
-    };
-
-    this.observeArray = function(array, callback) {
-      if (!Array.isArray(array))
-        throw Error('Invalid attempt to observe non-array: ' + arr);
-
-      var callbacks = callbacksMap.get(array)
-      if (!callbacks) {
-        callbacks = {};
-        callbacksMap.set(array, callbacks);
-      }
-      if (!callbacks.array) {
-        callbacks.array = new Set;
-        observer.observeArray(array);
-      }
-
-      callbacks.array.add(callback);
-    };
-
-    this.unobserveArray = function(array, callback) {
-      if (!Array.isArray(array))
-        return;
-
-      var callbacks = callbacksMap.get(array)
-      if (!callbacks || !callbacks.array)
-        return;
-
-      callbacks.array.delete(callback)
-
-      if (!callbacks.array.size) {
-        observer.unobserveArray(array);
-        callbacks.array = undefined;
-      }
-
-      if (!callbacks.object && !callbacks.array && !callbacks.path)
-        callbacksMap.delete(array);
-    };
-
-    this.observePath = function(object, path, callback) {
-      if (!isPathValid(path))
-        return undefined;
-
-      if (path.trim() == '')
-        return object;
-
-      if (!isObject(object))
-        return undefined;
-
-      var callbacks = callbacksMap.get(object)
-      if (!callbacks) {
-        callbacks = {};
-        callbacksMap.set(object, callbacks);
-      }
-
-      if (!callbacks.path)
-        callbacks.path = {};
-
-      var pathCallbacks = callbacks.path[path];
-      var retval;
-      if (!pathCallbacks) {
-        pathCallbacks = new Set;
-        callbacks.path[path] = pathCallbacks;
-        retval = observer.observePath(object, path);
-      } else {
-        retval = ChangeSummary.getValueAtPath(object, path);
-      }
-
-      pathCallbacks.add(callback);
-      return retval;
-    };
-
-    this.unobservePath = function(object, path, callback) {
-      if (!isPathValid(path) || !isObject(object))
-        return;
-
-      var callbacks = callbacksMap.get(object)
-      if (!callbacks || !callbacks.path)
-        return;
-
-      var pathCallbacks = callbacks.path[path];
-      if (!pathCallbacks)
-        return;
-
-      pathCallbacks.delete(callback);
-
-      if (!pathCallbacks.size) {
-        observer.unobservePath(object, path);
-        delete callbacks.path[path];
-      }
-
-      if (!Object.keys(callbacks.path).length)
-        callbacks.path = undefined;
-
-      if (!callbacks.object && !callbacks.array && !callbacks.path)
-        callbacksMap.delete(object);
-    };
-
-    this.deliver = observer.deliver.bind(observer);
-  }
-
-  global.ChangeSummary.CallbackRouter = CallbackRouter;
+  global.ArrayObserver = ArrayObserver;
+  global.ObjectObserver = ObjectObserver;
+  global.PathObserver = PathObserver;
 })(this);

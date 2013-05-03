@@ -85,13 +85,13 @@ ArrayFuzzer.prototype.go = function() {
   randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
   var copy = this.copy = this.arr.slice();
 
-  var observer = new ChangeSummary(function(summaries) {
-    ChangeSummary.applySplices(copy, orig, summaries[0].splices);
+  var observer = new ArrayObserver(this.arr, function(splices) {
+    ArrayObserver.applySplices(copy, orig, splices);
   });
 
-  observer.observeArray(this.arr);
   randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
   observer.deliver();
+  observer.disconnect();
 }
 
 global.ArrayFuzzer = ArrayFuzzer;
