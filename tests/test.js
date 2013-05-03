@@ -639,7 +639,7 @@ suite('Basic Tests', function() {
     model.id = 2;
     model.id2 = 2;
 
-    Observer.performMircotaskCheckpoint();
+    Platform.performMicrotaskCheckpoint();
     assert.equal(3, count);
 
     observer1.close();

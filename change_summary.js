@@ -262,20 +262,20 @@
     }
   }
 
-
+  var collectObservers = !hasObserve || Observer.__forceCollectObservers;
   var allObservers;
-  if (!hasObserve)
+  if (collectObservers)
     allObservers = [];
 
   function addToAll(observer) {
-    if (hasObserve)
+    if (!collectObservers)
       return;
 
     allObservers.push(observer);
   }
 
   function removeFromAll(observer) {
-    if (hasObserve)
+    if (!collectObservers)
       return;
 
     for (var i = 0; i < allObservers.length; i++) {
@@ -288,8 +288,9 @@
 
   var runningMicrotaskCheckpoint = false;
 
-  Observer.performMircotaskCheckpoint = function() {
-    if (hasObserve || runningMicrotaskCheckpoint)
+  global.Platform = global.Platform || {};
+  global.Platform.performMicrotaskCheckpoint = function() {
+    if (!collectObservers || runningMicrotaskCheckpoint)
       return;
 
     runningMicrotaskCheckpoint = true;
