@@ -128,8 +128,7 @@
   function dirtyCheck(observer) {
     var cycles = 0;
     while (cycles < MAX_DIRTY_CHECK_CYCLES && observer.check()) {
-      if (observer.report)
-        observer.report();
+      observer.report();
       cycles++;
     }
   }
@@ -201,6 +200,7 @@
       this.boundInternalCallback = this.internalCallback.bind(this);
 
     this.valid = true;
+    addToAll(this);
     this.connect();
     this.sync(true);
   }
@@ -220,6 +220,7 @@
         return;
       this.disconnect();
       this.valid = false;
+      removeFromAll(this);
     },
 
     deliver: function() {
@@ -260,6 +261,63 @@
       this.sync(true);
     }
   }
+
+
+  var allObservers;
+  if (!hasObserve)
+    allObservers = [];
+
+  function addToAll(observer) {
+    if (hasObserve)
+      return;
+
+    allObservers.push(observer);
+  }
+
+  function removeFromAll(observer) {
+    if (hasObserve)
+      return;
+
+    for (var i = 0; i < allObservers.length; i++) {
+      if (allObservers[i] === observer) {
+        allObservers[i] = undefined;
+        break;
+      }
+    }
+  }
+
+  var runningMicrotaskCheckpoint = false;
+
+  Observer.performMircotaskCheckpoint = function() {
+    if (hasObserve || runningMicrotaskCheckpoint)
+      return;
+
+    runningMicrotaskCheckpoint = true;
+
+    var cycles = 0;
+    var anyChanged = false;
+
+    do {
+      cycles++;
+      var toCheck = allObservers;
+      allObservers = [];
+
+      for (var i = 0; i < toCheck.length; i++) {
+        var observer = toCheck[i];
+        if (!observer || !observer.valid)
+          continue;
+
+        if (observer.check()) {
+          anyChanged = true;
+          observer.report();
+        }
+
+        allObservers.push(observer);
+      }
+    } while (cycles < MAX_DIRTY_CHECK_CYCLES && anyChanged);
+
+    runningMicrotaskCheckpoint = false;
+  };
 
   function ObjectObserver(object, callback) {
     this.object = object;
@@ -936,6 +994,7 @@
     return splices;
   }
 
+  global.Observer = Observer;
   global.ArrayObserver = ArrayObserver;
   global.ObjectObserver = ObjectObserver;
   global.PathObserver = PathObserver;

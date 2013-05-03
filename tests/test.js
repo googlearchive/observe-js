@@ -611,6 +611,40 @@ suite('Basic Tests', function() {
     observer3.deliver();
 
     assert.equal(3, count);
+
+    observer1.close();
+    observer2.close();
+    observer3.close();
+  });
+
+  test('No Object.observe performMicrotaskCheckpoint', function() {
+    if (typeof Object.observe == 'function')
+      return;
+
+    var model = { id: 1 };
+    var count = 0;
+
+    var observer1 = new ObjectObserver(model, function() {
+      count++;
+    });
+
+    var observer2 = new ObjectObserver(model, function() {
+      count++;
+    });
+
+    var observer3 = new ObjectObserver(model, function() {
+      count++;
+    });
+
+    model.id = 2;
+    model.id2 = 2;
+
+    Observer.performMircotaskCheckpoint();
+    assert.equal(3, count);
+
+    observer1.close();
+    observer2.close();
+    observer3.close();
   });
 
   test('Path Set To Same As Prototype', function() {
