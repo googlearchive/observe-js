@@ -211,8 +211,11 @@
     internalCallback: function(records) {
       if (!this.valid)
         return;
-      if (this.reporting && this.check(records))
+      if (this.reporting && this.check(records)) {
         this.report();
+        if (this.testingResults)
+          this.testingResults.anyChanged = true;
+      }
     },
 
     close: function() {
@@ -223,11 +226,13 @@
       removeFromAll(this);
     },
 
-    deliver: function() {
+    deliver: function(testingResults) {
       if (!this.valid)
         return;
       if (hasObserve) {
+        this.testingResults = testingResults;
         Object.deliverChangeRecords(this.boundInternalCallback);
+        this.testingResults = undefined;
       } else {
         dirtyCheck(this);
       }
@@ -296,27 +301,29 @@
     runningMicrotaskCheckpoint = true;
 
     var cycles = 0;
-    var anyChanged;
+    var results = {};
 
     do {
       cycles++;
       var toCheck = allObservers;
       allObservers = [];
-      anyChanged = false;
+      results.anyChanged = false;
 
       for (var i = 0; i < toCheck.length; i++) {
         var observer = toCheck[i];
         if (!observer || !observer.valid)
           continue;
 
-        if (observer.check()) {
-          anyChanged = true;
+        if (hasObserve) {
+          observer.deliver(results);
+        } else if (observer.check()) {
+          results.anyChanged = true;
           observer.report();
         }
 
         allObservers.push(observer);
       }
-    } while (cycles < MAX_DIRTY_CHECK_CYCLES && anyChanged);
+    } while (cycles < MAX_DIRTY_CHECK_CYCLES && results.anyChanged);
 
     runningMicrotaskCheckpoint = false;
   };
