@@ -247,6 +247,7 @@
       try {
         this.callback.apply(undefined, this.reportArgs);
       } catch (ex) {
+        Observer._errorThrownDuringCallback = true;
         console.error('Exception caught during observer callback: ' + ex);
       }
 
