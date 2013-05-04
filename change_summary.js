@@ -296,12 +296,13 @@
     runningMicrotaskCheckpoint = true;
 
     var cycles = 0;
-    var anyChanged = false;
+    var anyChanged;
 
     do {
       cycles++;
       var toCheck = allObservers;
       allObservers = [];
+      anyChanged = false;
 
       for (var i = 0; i < toCheck.length; i++) {
         var observer = toCheck[i];
