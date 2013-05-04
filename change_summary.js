@@ -262,7 +262,7 @@
     }
   }
 
-  var collectObservers = !hasObserve || Observer.__forceCollectObservers;
+  var collectObservers = !hasObserve || global.forceCollectObservers;
   var allObservers;
   if (collectObservers)
     allObservers = [];
@@ -320,6 +320,12 @@
 
     runningMicrotaskCheckpoint = false;
   };
+
+  if (collectObservers) {
+    global.Platform.clearObservers = function() {
+      allObservers = [];
+    };
+  }
 
   function ObjectObserver(object, callback) {
     this.object = object;
