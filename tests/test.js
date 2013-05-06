@@ -12,73 +12,166 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+var observer;
+var callbackArgs = undefined;
+var callbackInvoked = false;
+
+function callback() {
+  callbackArgs = Array.prototype.slice.apply(arguments);
+  callbackInvoked = true;
+}
+
+function doSetup() {}
+function doTeardown() {
+  callbackInvoked = false;
+  callbackArgs = undefined;
+}
+
+function assertNoChanges() {
+  if (observer)
+    observer.deliver();
+  assert.isFalse(callbackInvoked);
+  assert.isUndefined(callbackArgs);
+}
+
 suite('Basic Tests', function() {
 
-  var observer;
-  var callbackArgs = undefined;
-  var callbackInvoked = false;
+/*
+  test('Array disconnect', function() {
+    var arr = [ 0 ];
 
-  function callback() {
-    callbackArgs = Array.prototype.slice.apply(arguments);
-    callbackInvoked = true;
-  }
+    observer = new ArrayObserver(arr, callback);
 
-  // TODO(rafaelw): This is a little weak.
-  function ensureNonSparse(arr) {
-    for (var i = 0; i < arr.length; i++) {
-      if (i in arr)
-        continue;
-      arr[i] = undefined;
-    }
-  }
+    arr[0] = 1;
 
-  function assertArrayChanges(expectSplices) {
-    observer.deliver();
-    var splices = callbackArgs[0];
+    assertArrayChanges([{
+      index: 0,
+      removed: [0],
+      addedCount: 1
+    }]);
 
-    assert.isTrue(callbackInvoked);
+    observer.close();
+    arr[1] = 2;
+    assertNoChanges();
+  });
 
-    splices.forEach(function(splice) {
-      ensureNonSparse(splice.removed);
+  test('Path disconnect', function() {
+    var arr = {};
+
+    arr.foo = 'bar';
+    observer = new PathObserver(arr, 'foo', callback);
+    arr.foo = 'baz';
+
+    assertPathChanges('baz', 'bar');
+    arr.foo = 'bar';
+
+    observer.close();
+    arr.foo = 'boo';
+    assertNoChanges();
+  });
+
+  test('Object disconnect', function() {
+    var obj = {};
+
+    obj.foo = 'bar';
+    observer = new ObjectObserver(obj, callback);
+
+    obj.foo = 'baz';
+    obj.bat = 'bag';
+    obj.blaz = 'foo';
+
+    delete obj.foo;
+    delete obj.blaz;
+
+    assertObjectChanges({
+      added: {
+        'bat': 'bag'
+      },
+      removed: {
+        'foo': undefined
+      },
+      changed: {},
+      oldValues: {
+        'foo': 'bar',
+        'bat': undefined
+      }
     });
 
-    expectSplices.forEach(function(splice) {
-      ensureNonSparse(splice.removed);
+    obj.foo = 'blarg';
+
+    observer.close();
+
+    obj.bar = 'blaz';
+    assertNoChanges();
+  });
+*/
+
+  test('Exception Doesnt Stop Notification', function() {
+    var model = [1];
+    var count = 0;
+
+    var observer1 = new ObjectObserver(model, function() {
+      count++;
     });
 
-    assert.deepEqual(expectSplices, splices);
-    callbackArgs = undefined;
-    callbackInvoked = false;
-  }
+    var observer2 = new PathObserver(model, '0', function() {
+      count++;
+    });
 
-  function assertObjectChanges(expect) {
-    observer.deliver();
+    var observer3 = new ArrayObserver(model, function() {
+      count++;
+    });
 
-    assert.isTrue(callbackInvoked);
+    model[0] = 2;
+    model[1] = 2;
 
-    var added = callbackArgs[0];
-    var removed = callbackArgs[1];
-    var changed = callbackArgs[2];
-    var getOldValue = callbackArgs[3];
-    var oldValues = {};
+    observer1.deliver();
+    observer2.deliver();
+    observer3.deliver();
 
-    function collectOldValues(type) {
-      Object.keys(type).forEach(function(prop) {
-        oldValues[prop] = getOldValue(prop);
-      });
-    };
-    collectOldValues(added);
-    collectOldValues(removed);
-    collectOldValues(changed);
+    assert.equal(3, count);
 
-    assert.deepEqual(expect.added, added);
-    assert.deepEqual(expect.removed, removed);
-    assert.deepEqual(expect.changed, changed);
-    assert.deepEqual(expect.oldValues, oldValues);
+    observer1.close();
+    observer2.close();
+    observer3.close();
+  });
 
-    callbackArgs = undefined;
-    callbackInvoked = false;
-  }
+  test('No Object.observe performMicrotaskCheckpoint', function() {
+    if (typeof Object.observe == 'function')
+      return;
+
+    var model = [1];
+    var count = 0;
+
+    var observer1 = new ObjectObserver(model, function() {
+      count++;
+    });
+
+    var observer2 = new PathObserver(model, '0', function() {
+      count++;
+    });
+
+    var observer3 = new ArrayObserver(model, function() {
+      count++;
+    });
+
+    model[0] = 2;
+    model[1] = 2;
+
+    Platform.performMicrotaskCheckpoint();
+    assert.equal(3, count);
+
+    observer1.close();
+    observer2.close();
+    observer3.close();
+  });
+});
+
+suite('PathObserver Tests', function() {
+
+  setup(doSetup);
+
+  teardown(doTeardown);
 
   function assertPathChanges(expectNewValue, expectOldValue) {
     observer.deliver();
@@ -94,78 +187,18 @@ suite('Basic Tests', function() {
     callbackInvoked = false;
   }
 
-  function applySplicesAndAssertDeepEqual(orig, copy) {
-    observer.deliver();
-    if (callbackInvoked) {
-      var splices = callbackArgs[0];
-      ArrayObserver.applySplices(copy, orig, splices);
-    }
-
-    ensureNonSparse(orig);
-    ensureNonSparse(copy);
-    assert.deepEqual(orig, copy);
-    callbackArgs = undefined;
-    callbackInvoked = false;
-  }
-
-  function assertEditDistance(orig, expectDistance) {
-    observer.deliver();
-    var splices = callbackArgs[0];
-    var actualDistance = 0;
-
-    if (callbackInvoked) {
-      splices.forEach(function(splice) {
-        actualDistance += splice.addedCount + splice.removed.length;
-      });
-    }
-
-    assert.deepEqual(expectDistance, actualDistance);
-    callbackArgs = undefined;
-    callbackInvoked = false;
-  }
-
-  function assertNoChanges() {
-    if (observer)
-      observer.deliver();
-    assert.isFalse(callbackInvoked);
-    assert.isUndefined(callbackArgs);
-  }
-
-  function doSetup() {}
-  setup(doSetup);
-
-  function doTeardown() {
-    callbackInvoked = false;
-    callbackArgs = undefined;
-  }
-  teardown(doTeardown);
-
-  test('No Delivery On Eval', function() {
-    if (typeof Object.observe !== 'function')
-      return;
-
-    var obj = {};
-    var count = 0;
-    function callback() {
-      count++;
-    }
-
-    Object.observe(obj, callback);
-    obj.id = 1;
-    Function('var i = 1;');
-    eval('var i = 1;');
-    assert.equal(0, count);
-  });
-
   test('Delivery Until No Changes', function() {
-    var arr = [0, 1, 2, 3, 4];
+    var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
-    var observer = new ArrayObserver(arr, function() {
+    var observer = new PathObserver(obj, 'foo.bar', function() {
       callbackCount++;
-      arr.shift();
+      if (!obj.foo.bar)
+        return;
+
+      obj.foo.bar--;
     });
 
-    arr.shift();
+    obj.foo.bar--;
     observer.deliver();
 
     assert.equal(5, callbackCount);
@@ -278,225 +311,6 @@ suite('Basic Tests', function() {
     observer.close();
   });
 
-  test('Object observe array', function() {
-    var arr = [];
-
-    observer = new ObjectObserver(arr, callback);
-
-    arr.length = 5;
-    arr.foo = 'bar';
-    arr[3] = 'baz';
-
-    assertObjectChanges({
-      added: {
-        foo: 'bar',
-        '3': 'baz'
-      },
-      removed: {},
-      changed: {
-        'length': 5
-      },
-      oldValues: {
-        length: 0,
-        foo: undefined,
-        '3': undefined
-      }
-    });
-
-    observer.close();
-  });
-
-/*
-  test('Array disconnect', function() {
-    var arr = [ 0 ];
-
-    observer = new ArrayObserver(arr, callback);
-
-    arr[0] = 1;
-
-    assertArrayChanges([{
-      index: 0,
-      removed: [0],
-      addedCount: 1
-    }]);
-
-    observer.close();
-    arr[1] = 2;
-    assertNoChanges();
-  });
-
-  test('Path disconnect', function() {
-    var arr = {};
-
-    arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo', callback);
-    arr.foo = 'baz';
-
-    assertPathChanges('baz', 'bar');
-    arr.foo = 'bar';
-
-    observer.close();
-    arr.foo = 'boo';
-    assertNoChanges();
-  });
-
-  test('Object disconnect', function() {
-    var obj = {};
-
-    obj.foo = 'bar';
-    observer = new ObjectObserver(obj, callback);
-
-    obj.foo = 'baz';
-    obj.bat = 'bag';
-    obj.blaz = 'foo';
-
-    delete obj.foo;
-    delete obj.blaz;
-
-    assertObjectChanges({
-      added: {
-        'bat': 'bag'
-      },
-      removed: {
-        'foo': undefined
-      },
-      changed: {},
-      oldValues: {
-        'foo': 'bar',
-        'bat': undefined
-      }
-    });
-
-    obj.foo = 'blarg';
-
-    observer.close();
-
-    obj.bar = 'blaz';
-    assertNoChanges();
-  });
-*/
-
-  test('Object', function() {
-    var model = {};
-
-    observer = new ObjectObserver(model, callback);
-    model.id = 0;
-    assertObjectChanges({
-      added: {
-        id: 0
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        id: undefined
-      }
-    });
-
-    delete model.id;
-    assertObjectChanges({
-      added: {},
-      removed: {
-        id: undefined
-      },
-      changed: {},
-      oldValues: {
-        id: 0
-      }
-    });
-
-    // Stop observing -- shouldn't see an event
-    observer.close();
-    model.id = 101;
-    assertNoChanges();
-
-    // Re-observe -- should see an new event again.
-    observer = new ObjectObserver(model, callback);
-    model.id2 = 202;;
-    assertObjectChanges({
-      added: {
-        id2: 202
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        id2: undefined
-      }
-    });
-
-    observer.close();
-  });
-
-  test('Notify', function() {
-    if (typeof Object.getNotifier !== 'function')
-      return;
-
-    var model = {
-      a: {}
-    }
-
-    var _b = 2;
-
-    Object.defineProperty(model.a, 'b', {
-      get: function() { return _b; },
-      set: function(b) {
-        Object.getNotifier(this).notify({
-          type: 'updated',
-          name: 'b',
-          oldValue: _b
-        });
-
-        _b = b;
-      }
-    });
-
-    observer = new PathObserver(model, 'a.b', callback);
-    _b = 3; // won't be observed.
-    assertNoChanges();
-
-    model.a.b = 4; // will be observed.
-    assertPathChanges(4, 2);
-
-    observer.close();
-  });
-
-  test('Object Delete Add Delete', function() {
-    var model = { id: 1 };
-
-    observer = new ObjectObserver(model, callback);
-
-    // If mutation occurs in seperate "runs", two events fire.
-    delete model.id;
-    assertObjectChanges({
-      added: {},
-      removed: {
-        id: undefined
-      },
-      changed: {},
-      oldValues: {
-        id: 1
-      }
-    });
-
-    model.id = 1;
-    assertObjectChanges({
-      added: {
-        id: 1
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        id: undefined
-      }
-    });
-
-    // If mutation occurs in the same "run", no events fire (nothing changed).
-    delete model.id;
-    model.id = 1;
-    assertNoChanges();
-
-    observer.close();
-  });
-
   test('Path Triple Equals', function() {
     var model = { };
 
@@ -584,69 +398,6 @@ suite('Basic Tests', function() {
     observer.close();
   });
 
-  test('Exception Doesnt Stop Notification', function() {
-    var model = { id: 1 };
-    var count = 0;
-
-    var observer1 = new ObjectObserver(model, function() {
-      count++;
-      throw 'Bad';
-    });
-
-    var observer2 = new ObjectObserver(model, function() {
-      count++;
-      throw 'Bad';
-    });
-
-    var observer3 = new ObjectObserver(model, function() {
-      count++;
-      throw 'Bad';
-    });
-
-    model.id = 2;
-    model.id2 = 2;
-
-    observer1.deliver();
-    observer2.deliver();
-    observer3.deliver();
-
-    assert.equal(3, count);
-
-    observer1.close();
-    observer2.close();
-    observer3.close();
-  });
-
-  test('No Object.observe performMicrotaskCheckpoint', function() {
-    if (typeof Object.observe == 'function')
-      return;
-
-    var model = { id: 1 };
-    var count = 0;
-
-    var observer1 = new ObjectObserver(model, function() {
-      count++;
-    });
-
-    var observer2 = new ObjectObserver(model, function() {
-      count++;
-    });
-
-    var observer3 = new ObjectObserver(model, function() {
-      count++;
-    });
-
-    model.id = 2;
-    model.id2 = 2;
-
-    Platform.performMicrotaskCheckpoint();
-    assert.equal(3, count);
-
-    observer1.close();
-    observer2.close();
-    observer3.close();
-  });
-
   test('Path Set To Same As Prototype', function() {
     var model = {
       __proto__: {
@@ -673,26 +424,6 @@ suite('Basic Tests', function() {
     model.x = 2;
 
     assertNoChanges();
-    observer.close();
-  });
-
-  test('Object Set Undefined', function() {
-    var model = {};
-
-    observer = new ObjectObserver(model, callback);
-
-    model.x = undefined;
-    assertObjectChanges({
-      added: {
-        x: undefined
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        x: undefined
-      }
-    });
-
     observer.close();
   });
 
@@ -750,6 +481,119 @@ suite('Basic Tests', function() {
 
     delete model.x;
     assertNoChanges();
+    observer.close();
+  });
+
+  test('Notify', function() {
+    if (typeof Object.getNotifier !== 'function')
+      return;
+
+    var model = {
+      a: {}
+    }
+
+    var _b = 2;
+
+    Object.defineProperty(model.a, 'b', {
+      get: function() { return _b; },
+      set: function(b) {
+        Object.getNotifier(this).notify({
+          type: 'updated',
+          name: 'b',
+          oldValue: _b
+        });
+
+        _b = b;
+      }
+    });
+
+    observer = new PathObserver(model, 'a.b', callback);
+    _b = 3; // won't be observed.
+    assertNoChanges();
+
+    model.a.b = 4; // will be observed.
+    assertPathChanges(4, 2);
+
+    observer.close();
+  });
+});
+
+suite('ArrayObserver Tests', function() {
+
+  setup(doSetup);
+
+  teardown(doTeardown);
+
+  function ensureNonSparse(arr) {
+    for (var i = 0; i < arr.length; i++) {
+      if (i in arr)
+        continue;
+      arr[i] = undefined;
+    }
+  }
+
+  function assertArrayChanges(expectSplices) {
+    observer.deliver();
+    var splices = callbackArgs[0];
+
+    assert.isTrue(callbackInvoked);
+
+    splices.forEach(function(splice) {
+      ensureNonSparse(splice.removed);
+    });
+
+    expectSplices.forEach(function(splice) {
+      ensureNonSparse(splice.removed);
+    });
+
+    assert.deepEqual(expectSplices, splices);
+    callbackArgs = undefined;
+    callbackInvoked = false;
+  }
+
+  function applySplicesAndAssertDeepEqual(orig, copy) {
+    observer.deliver();
+    if (callbackInvoked) {
+      var splices = callbackArgs[0];
+      ArrayObserver.applySplices(copy, orig, splices);
+    }
+
+    ensureNonSparse(orig);
+    ensureNonSparse(copy);
+    assert.deepEqual(orig, copy);
+    callbackArgs = undefined;
+    callbackInvoked = false;
+  }
+
+  function assertEditDistance(orig, expectDistance) {
+    observer.deliver();
+    var splices = callbackArgs[0];
+    var actualDistance = 0;
+
+    if (callbackInvoked) {
+      splices.forEach(function(splice) {
+        actualDistance += splice.addedCount + splice.removed.length;
+      });
+    }
+
+    assert.deepEqual(expectDistance, actualDistance);
+    callbackArgs = undefined;
+    callbackInvoked = false;
+  }
+
+  test('Delivery Until No Changes', function() {
+    var arr = [0, 1, 2, 3, 4];
+    var callbackCount = 0;
+    var observer = new ArrayObserver(arr, function() {
+      callbackCount++;
+      arr.shift();
+    });
+
+    arr.shift();
+    observer.deliver();
+
+    assert.equal(5, callbackCount);
+
     observer.close();
   });
 
@@ -1223,6 +1067,197 @@ suite('Basic Tests', function() {
     model.length = 0;
     model.push('a', '2', 'y', 'y', '4', '5', 'z', 'z');
     assertEditDistance(model, 7);
+    observer.close();
+  });
+});
+
+suite('ObjectObserver Tests', function() {
+
+  setup(doSetup);
+
+  teardown(doTeardown);
+
+  function assertObjectChanges(expect) {
+    observer.deliver();
+
+    assert.isTrue(callbackInvoked);
+
+    var added = callbackArgs[0];
+    var removed = callbackArgs[1];
+    var changed = callbackArgs[2];
+    var getOldValue = callbackArgs[3];
+    var oldValues = {};
+
+    function collectOldValues(type) {
+      Object.keys(type).forEach(function(prop) {
+        oldValues[prop] = getOldValue(prop);
+      });
+    };
+    collectOldValues(added);
+    collectOldValues(removed);
+    collectOldValues(changed);
+
+    assert.deepEqual(expect.added, added);
+    assert.deepEqual(expect.removed, removed);
+    assert.deepEqual(expect.changed, changed);
+    assert.deepEqual(expect.oldValues, oldValues);
+
+    callbackArgs = undefined;
+    callbackInvoked = false;
+  }
+
+  test('Delivery Until No Changes', function() {
+    var obj = { foo: 5 };
+    var callbackCount = 0;
+    var observer = new ObjectObserver(obj, function() {
+      callbackCount++;
+      if (!obj.foo)
+        return;
+
+      obj.foo--;
+    });
+
+    obj.foo--;
+    observer.deliver();
+
+    assert.equal(5, callbackCount);
+
+    observer.close();
+  });
+
+  test('Object observe array', function() {
+    var arr = [];
+
+    observer = new ObjectObserver(arr, callback);
+
+    arr.length = 5;
+    arr.foo = 'bar';
+    arr[3] = 'baz';
+
+    assertObjectChanges({
+      added: {
+        foo: 'bar',
+        '3': 'baz'
+      },
+      removed: {},
+      changed: {
+        'length': 5
+      },
+      oldValues: {
+        length: 0,
+        foo: undefined,
+        '3': undefined
+      }
+    });
+
+    observer.close();
+  });
+
+  test('Object', function() {
+    var model = {};
+
+    observer = new ObjectObserver(model, callback);
+    model.id = 0;
+    assertObjectChanges({
+      added: {
+        id: 0
+      },
+      removed: {},
+      changed: {},
+      oldValues: {
+        id: undefined
+      }
+    });
+
+    delete model.id;
+    assertObjectChanges({
+      added: {},
+      removed: {
+        id: undefined
+      },
+      changed: {},
+      oldValues: {
+        id: 0
+      }
+    });
+
+    // Stop observing -- shouldn't see an event
+    observer.close();
+    model.id = 101;
+    assertNoChanges();
+
+    // Re-observe -- should see an new event again.
+    observer = new ObjectObserver(model, callback);
+    model.id2 = 202;;
+    assertObjectChanges({
+      added: {
+        id2: 202
+      },
+      removed: {},
+      changed: {},
+      oldValues: {
+        id2: undefined
+      }
+    });
+
+    observer.close();
+  });
+
+  test('Object Delete Add Delete', function() {
+    var model = { id: 1 };
+
+    observer = new ObjectObserver(model, callback);
+
+    // If mutation occurs in seperate "runs", two events fire.
+    delete model.id;
+    assertObjectChanges({
+      added: {},
+      removed: {
+        id: undefined
+      },
+      changed: {},
+      oldValues: {
+        id: 1
+      }
+    });
+
+    model.id = 1;
+    assertObjectChanges({
+      added: {
+        id: 1
+      },
+      removed: {},
+      changed: {},
+      oldValues: {
+        id: undefined
+      }
+    });
+
+    // If mutation occurs in the same "run", no events fire (nothing changed).
+    delete model.id;
+    model.id = 1;
+    assertNoChanges();
+
+    observer.close();
+  });
+
+  test('Object Set Undefined', function() {
+    var model = {};
+
+    observer = new ObjectObserver(model, callback);
+
+    model.x = undefined;
+    assertObjectChanges({
+      added: {
+        x: undefined
+      },
+      removed: {},
+      changed: {},
+      oldValues: {
+        x: undefined
+      }
+    });
+
     observer.close();
   });
 });
