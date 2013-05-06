@@ -151,6 +151,24 @@ suite('PathObserver Tests', function() {
     assertNoChanges();
   });
 
+  test('Path reset', function() {
+    var arr = {};
+
+    arr.foo = 'bar';
+    observer = new PathObserver(arr, 'foo', callback);
+    arr.foo = 'baz';
+
+    assertPathChanges('baz', 'bar');
+
+    arr.foo = 'bat';
+    observer.reset();
+    assertNoChanges();
+
+    arr.foo = 'bag';
+    assertPathChanges('bag', 'bat');
+    observer.close();
+  });
+
   test('Degenerate Values', function() {
     observer = new PathObserver(null, '', callback);
     assert.equal(null, observer.value);
@@ -558,6 +576,32 @@ suite('ArrayObserver Tests', function() {
     observer.close();
     arr[1] = 2;
     assertNoChanges();
+  });
+
+  test('Array reset', function() {
+    var arr = [];
+
+    arr.push(1);
+    observer = new ArrayObserver(arr, callback);
+    arr.push(2);
+
+    assertArrayChanges([{
+      index: 1,
+      removed: [],
+      addedCount: 1
+    }]);
+
+    arr.push(3);
+    observer.reset();
+    assertNoChanges();
+
+    arr.pop();
+    assertArrayChanges([{
+      index: 2,
+      removed: [3],
+      addedCount: 0
+    }]);
+    observer.close();
   });
 
   test('Array', function() {
@@ -1121,6 +1165,42 @@ suite('ObjectObserver Tests', function() {
 
     obj.bar = 'blaz';
     assertNoChanges();
+  });
+
+  test('Object reset', function() {
+    var obj = {};
+
+    obj.foo = 'bar';
+    observer = new ObjectObserver(obj, callback);
+    obj.foo = 'baz';
+
+    assertObjectChanges({
+      added: {},
+      removed: {},
+      changed: {
+        foo: 'baz'
+      },
+      oldValues: {
+        foo: 'bar'
+      }
+    });
+
+    obj.blaz = 'bat';
+    observer.reset();
+    assertNoChanges();
+
+    obj.bat = 'bag';
+    assertObjectChanges({
+      added: {
+        bat: 'bag'
+      },
+      removed: {},
+      changed: {},
+      oldValues: {
+        bat: undefined
+      }
+    });
+    observer.close();
   });
 
   test('Object observe array', function() {
