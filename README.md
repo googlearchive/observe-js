@@ -37,7 +37,7 @@ var observer = new ObjectObserver(obj, function(added, removed, changed, getOldV
     added[property]; // its value
   });
   Object.keys(removed).forEach(function(property) {
-    property; // a property which has been been removed from from obj
+    property; // a property which has been been removed from obj
     getOldValueFn(property); // its old value
   });
   Object.keys(changed).forEach(function(property) {
