@@ -36,76 +36,6 @@ function assertNoChanges() {
 
 suite('Basic Tests', function() {
 
-/*
-  test('Array disconnect', function() {
-    var arr = [ 0 ];
-
-    observer = new ArrayObserver(arr, callback);
-
-    arr[0] = 1;
-
-    assertArrayChanges([{
-      index: 0,
-      removed: [0],
-      addedCount: 1
-    }]);
-
-    observer.close();
-    arr[1] = 2;
-    assertNoChanges();
-  });
-
-  test('Path disconnect', function() {
-    var arr = {};
-
-    arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo', callback);
-    arr.foo = 'baz';
-
-    assertPathChanges('baz', 'bar');
-    arr.foo = 'bar';
-
-    observer.close();
-    arr.foo = 'boo';
-    assertNoChanges();
-  });
-
-  test('Object disconnect', function() {
-    var obj = {};
-
-    obj.foo = 'bar';
-    observer = new ObjectObserver(obj, callback);
-
-    obj.foo = 'baz';
-    obj.bat = 'bag';
-    obj.blaz = 'foo';
-
-    delete obj.foo;
-    delete obj.blaz;
-
-    assertObjectChanges({
-      added: {
-        'bat': 'bag'
-      },
-      removed: {
-        'foo': undefined
-      },
-      changed: {},
-      oldValues: {
-        'foo': 'bar',
-        'bat': undefined
-      }
-    });
-
-    obj.foo = 'blarg';
-
-    observer.close();
-
-    obj.bar = 'blaz';
-    assertNoChanges();
-  });
-*/
-
   test('Exception Doesnt Stop Notification', function() {
     var model = [1];
     var count = 0;
@@ -204,6 +134,21 @@ suite('PathObserver Tests', function() {
     assert.equal(5, callbackCount);
 
     observer.close();
+  });
+
+  test('Path disconnect', function() {
+    var arr = {};
+
+    arr.foo = 'bar';
+    observer = new PathObserver(arr, 'foo', callback);
+    arr.foo = 'baz';
+
+    assertPathChanges('baz', 'bar');
+    arr.foo = 'bar';
+
+    observer.close();
+    arr.foo = 'boo';
+    assertNoChanges();
   });
 
   test('Degenerate Values', function() {
@@ -595,6 +540,24 @@ suite('ArrayObserver Tests', function() {
     assert.equal(5, callbackCount);
 
     observer.close();
+  });
+
+  test('Array disconnect', function() {
+    var arr = [ 0 ];
+
+    observer = new ArrayObserver(arr, callback);
+
+    arr[0] = 1;
+
+    assertArrayChanges([{
+      index: 0,
+      removed: [0],
+      addedCount: 1
+    }]);
+
+    observer.close();
+    arr[1] = 2;
+    assertNoChanges();
   });
 
   test('Array', function() {
@@ -1123,6 +1086,41 @@ suite('ObjectObserver Tests', function() {
     assert.equal(5, callbackCount);
 
     observer.close();
+  });
+
+  test('Object disconnect', function() {
+    var obj = {};
+
+    obj.foo = 'bar';
+    observer = new ObjectObserver(obj, callback);
+
+    obj.foo = 'baz';
+    obj.bat = 'bag';
+    obj.blaz = 'foo';
+
+    delete obj.foo;
+    delete obj.blaz;
+
+    assertObjectChanges({
+      added: {
+        'bat': 'bag'
+      },
+      removed: {
+        'foo': undefined
+      },
+      changed: {},
+      oldValues: {
+        'foo': 'bar',
+        'bat': undefined
+      }
+    });
+
+    obj.foo = 'blarg';
+
+    observer.close();
+
+    obj.bar = 'blaz';
+    assertNoChanges();
   });
 
   test('Object observe array', function() {
