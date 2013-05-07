@@ -507,7 +507,7 @@
         return;
 
       if (observed !== undefined) {
-        currentlyObserved[i] = observed = undefined;
+        currentlyObserved[i] = undefined;
         var stillObserving = false;
         for (var j = 0; j < currentlyObserved.length; j++) {
           if (currentlyObserved[j] === observed) {
@@ -520,10 +520,11 @@
           Object.unobserve(observed, callback);
       }
 
-      if (!isObject(value))
+      observed = value;
+      if (!isObject(observed))
         return;
 
-      currentlyObserved[i] = observed = value;
+      currentlyObserved[i] = observed;
       Object.observe(observed, callback);
     }, this);
 
