@@ -493,7 +493,8 @@
     return compiledGettersCache[pathString](object);
   }
 
-  function getPathValueObserved(object, path, currentlyObserved, callback) {
+  function getPathValueObserved(object, path, currentlyObserved, observedMap,
+      callback) {
     var newValue = undefined;
 
     path.walkPropertiesFrom(object, function(prop, value, i) {
@@ -503,29 +504,43 @@
       }
 
       var observed = currentlyObserved[i];
-      if (value === observed)
+      if (observed && value === observed[0])
         return;
 
-      if (observed !== undefined) {
-        currentlyObserved[i] = undefined;
-        var stillObserving = false;
-        for (var j = 0; j < currentlyObserved.length; j++) {
-          if (currentlyObserved[j] === observed) {
-            stillObserving = true;
-            break;
+      if (observed) {
+        for (var j = 0; j < observed.length; j++) {
+          var obj = observed[j];
+          var count = observedMap.get(obj);
+          if (count == 1) {
+            observedMap.delete(obj);
+            global.unobserveCount++;
+            Object.unobserve(obj, callback);
+          } else {
+            observedMap.set(obj, count - 1);
           }
         }
-
-        if (!stillObserving)
-          Object.unobserve(observed, callback);
       }
 
       observed = value;
       if (!isObject(observed))
         return;
 
+      var observed = []
+      while (isObject(value)) {
+        observed.push(value);
+        var count = observedMap.get(value);
+        if (!count) {
+          observedMap.set(value, 1);
+          global.observeCount++;
+          Object.observe(value, callback);
+        } else {
+          observedMap.set(value, count + 1);
+        }
+
+        value = Object.getPrototypeOf(value);
+      }
+
       currentlyObserved[i] = observed;
-      Object.observe(observed, callback);
     }, this);
 
     return newValue;
@@ -551,6 +566,7 @@
 
     if (hasObserve) {
       this.observed = new Array(path.length);
+      this.observedMap = new Map;
       this.getPathValue = getPathValueObserved;
     } else if (hasEval) {
       this.getPathValue = newCompiledGetValueAtPath(this.path);
@@ -574,7 +590,10 @@
     },
 
     check: function() {
-      this.value = this.getPathValue(this.object, this.path, this.observed,
+      this.value = this.getPathValue(this.object,
+                                     this.path,
+                                     this.observed,
+                                     this.observedMap,
                                      this.boundInternalCallback);
       if (areSameValue(this.value, this.oldValue))
         return false;
@@ -585,7 +604,10 @@
 
     sync: function(hard) {
       if (hard)
-        this.value = this.getPathValue(this.object, this.path, this.observed,
+        this.value = this.getPathValue(this.object,
+                                       this.path,
+                                       this.observed,
+                                       this.observedMap,
                                        this.boundInternalCallback);
       this.oldValue = this.value;
     }

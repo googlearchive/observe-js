@@ -431,6 +431,26 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
+  test('Value Change On Prototype', function() {
+    var proto = {
+      x: 1
+    }
+    var model = {
+      __proto__: proto
+    };
+
+    observer = new PathObserver(model, 'x', callback);
+    model.x = 2;
+    assertPathChanges(2, 1);
+
+    delete model.x;
+    assertPathChanges(1, 2);
+
+    proto.x = 3;
+    assertPathChanges(3, 1);
+    observer.close();
+  });
+
   // FIXME: Need test of observing change on proto.
 
   test('Delete Of Non Configurable', function() {
