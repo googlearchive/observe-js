@@ -55,7 +55,7 @@ function ArrayReduction(array, path, reduceFn, initial) {
     Array.prototype.splice.apply(observers, observerArgs);
   }
 
-  this.arrayObserver = new ArrayObserver(array, function(splices) {
+  var arrayObserver = new ArrayObserver(array, function(splices) {
     splices.forEach(handleSplice);
     reduce();
   });
@@ -67,4 +67,11 @@ function ArrayReduction(array, path, reduceFn, initial) {
   });
 
   reduce();
+
+  this.close = function() {
+    observers.forEach(function(observer) {
+      observer.close();
+    });
+    arrayObserver.close();
+  };
 }
