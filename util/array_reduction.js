@@ -66,12 +66,55 @@ function ArrayReduction(array, path, reduceFn, initial) {
     addedCount: array.length
   });
 
-  reduce();
-
   this.close = function() {
     observers.forEach(function(observer) {
       observer.close();
     });
     arrayObserver.close();
   };
+
+  this.deliver = function() {
+    arrayObserver.deliver();
+    observers.forEach(function(observer) {
+      observer.deliver();
+    });
+  }
+
+  reduce();
+}
+
+ArrayReduction.defineProperty = function(object, name, descriptor) {
+  var observer;
+  if (descriptor.hasOwnProperty('initial'))
+    observer = new ArrayReduction(descriptor.array, descriptor.path, descriptor.reduce, descriptor.initial);
+  else
+    observer = new ArrayReduction(descriptor.array, descriptor.path, descriptor.reduce);
+
+  Object.defineProperty(object, name, {
+    get: function() {
+      observer.deliver();
+      return observer.value;
+    }
+  });
+
+  if (typeof Object.observe !== 'function')
+    return;
+
+  var value = observer.value;
+  Object.defineProperty(observer, 'value', {
+    get: function() {
+      return value;
+    },
+    set: function(newValue) {
+      Object.getNotifier(object).notify({
+        object: object,
+        type: 'updated',
+        name: name,
+        oldValue: value
+      });
+      value = newValue;
+    }
+  })
+
+  return observer;
 }
