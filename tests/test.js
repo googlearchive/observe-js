@@ -499,6 +499,116 @@ suite('PathObserver Tests', function() {
 
     observer.close();
   });
+
+  test('DefineProperty', function() {
+    var source = { foo: { bar: 1 }};
+    var target = {};
+    var changeRecords;
+    var callback;
+    if (typeof Object.observe === 'function') {
+      changeRecords = [];
+      callback = function(records) {
+        Array.prototype.push.apply(changeRecords, records);
+      };
+
+      Object.observe(target, callback);
+    }
+
+    var observer = PathObserver.defineProperty(target, 'computed', {
+      object: source,
+      path: 'foo.bar'
+    });
+    assert.isTrue(target.hasOwnProperty('computed'));
+    assert.strictEqual(1, target.computed);
+
+    target.computed = 2;
+    assert.strictEqual(2, source.foo.bar);
+
+    source.foo.bar = 3;
+    assert.strictEqual(3, target.computed);
+
+    source.foo.bar = 4;
+    target.computed = 5;
+    assert.strictEqual(5, target.computed);
+
+    target.computed = 6;
+    source.foo.bar = 7;
+    assert.strictEqual(7, target.computed);
+
+    delete source.foo;
+    target.computed = 8;
+    assert.isUndefined(target.computed);
+
+    source.foo = { bar: 9 };
+    assert.strictEqual(9, target.computed);
+
+    observer.close();
+    assert.isFalse(target.hasOwnProperty('computed'));
+
+    if (!changeRecords)
+      return;
+
+    Object.deliverChangeRecords(callback);
+    assert.deepEqual(changeRecords, [
+      {
+        object: target,
+        name: 'computed',
+        type: 'new'
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'updated',
+        oldValue: 1
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'updated',
+        oldValue: 2
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'updated',
+        oldValue: 3
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'updated',
+        oldValue: 5
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'updated',
+        oldValue: 6
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'updated',
+        oldValue: 7
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'updated',
+        oldValue: undefined
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: 'deleted'
+        // TODO(rafaelw): When notifer.performChange() is implemented, this can
+        // a synthetic record can be sent with the correct value.
+        // oldValue: 9
+      }
+    ]);
+
+    Object.unobserve(target, callback);
+  });
 });
 
 suite('ArrayObserver Tests', function() {

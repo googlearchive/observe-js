@@ -650,6 +650,61 @@
     'deleted': true
   };
 
+  function notifyFunction(object, name) {
+    if (typeof Object.observe !== 'function')
+      return;
+
+    var notifier = Object.getNotifier(object);
+    return function(type, oldValue) {
+      var changeRecord = {
+        object: object,
+        type: type,
+        name: name
+      };
+      if (arguments.length === 2)
+        changeRecord.oldValue = oldValue;
+      notifier.notify(changeRecord);
+    }
+  }
+
+  PathObserver.defineProperty = function(object, name, descriptor) {
+    var notify = notifyFunction(object, name);
+
+    var observer = new PathObserver(descriptor.object, descriptor.path,
+        function(newValue, oldValue) {
+          if (notify)
+            notify('updated', oldValue);
+        }
+    );
+
+    Object.defineProperty(object, name, {
+      get: function() {
+        observer.deliver();
+        return observer.value;
+      },
+      set: function(newValue) {
+        PathObserver.setValueAtPath(descriptor.object, descriptor.path,
+                                    newValue);
+        observer.deliver();
+      },
+      configurable: true
+    });
+
+    return {
+      close: function() {
+        var oldValue;
+        if (notify)
+          observer.deliver();
+        observer.close();
+        delete object[name];
+        // FIXME: When notifier.performChange is available, suppress the
+        // underlying delete
+        // if (notify)
+        //  notify('deleted', oldValue);
+      }
+    };
+  }
+
   function diffObjectFromChangeRecords(object, changeRecords, oldValues) {
     var added = {};
     var removed = {};
