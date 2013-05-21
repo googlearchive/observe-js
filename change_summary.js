@@ -402,6 +402,11 @@
   ArrayObserver.prototype = createObject({
     __proto__: ObjectObserver.prototype,
 
+    connect: function() {
+      if (hasObserve)
+        Array.observe(this.object, this.boundInternalCallback);
+    },
+
     sync: function() {
       if (!hasObserve)
         this.oldObject = this.object.slice();
@@ -412,10 +417,7 @@
       if (hasObserve) {
         if (!changeRecords)
           return false;
-
-        var oldValues = {};
-        var diff = diffObjectFromChangeRecords(this.object, changeRecords, oldValues);
-        splices = projectArraySplices(this.object, diff, oldValues);
+        splices = projectArraySplices(this.object, changeRecords);
       } else {
         splices = calcSplices(this.object, 0, this.object.length,
                               this.oldObject, 0, this.oldObject.length);
@@ -882,6 +884,14 @@
     return count;
   }
 
+  function newSplice(index, removed, addedCount) {
+    return {
+      index: index,
+      removed: removed,
+      addedCount: addedCount
+    };
+  }
+
   /**
    * Splice Projection functions:
    *
@@ -925,14 +935,6 @@
 
     if (currentEnd - currentStart == 0 && oldEnd - oldStart == 0)
       return [];
-
-    function newSplice(index, removed, addedCount) {
-      return {
-        index: index,
-        removed: removed,
-        addedCount: addedCount
-      };
-    }
 
     if (currentStart == currentEnd) {
       var splice = newSplice(currentStart, [], 0);
@@ -994,93 +996,142 @@
     return splices;
   }
 
-  function createInitialSplicesFromDiff(array, diff, oldValues) {
-    var oldLength = 'length' in oldValues ? toNumber(oldValues.length) : array.length;
+  function intersect(start1, end1, start2, end2) {
+    // Disjoint
+    if (end1 < start2 || end2 < start1)
+      return -1;
 
-    var lengthChangeSplice;
-    if (array.length > oldLength) {
-      lengthChangeSplice = {
-        index: oldLength,
-        removed: [],
-        addedCount: array.length - oldLength
-      };
-    } else if (array.length < oldLength) {
-      lengthChangeSplice = {
-        index: array.length,
-        removed: new Array(oldLength - array.length),
-        addedCount: 0
-      };
+    // Adjacent
+    if (end1 == start2 || end2 == start1)
+      return 0;
+
+    // Non-zero intersect, span1 first
+    if (start1 < start2) {
+      if (end1 < end2)
+        return end1 - start2; // Overlap
+      else
+        return end2 - start2; // Contained
+    } else {
+      // Non-zero intersect, span2 first
+      if (end2 < end1)
+        return end2 - start1; // Overlap
+      else
+        return end1 - start1; // Contained
     }
+  }
 
-    var indicesChanged = [];
-    function addProperties(properties, oldValues) {
-      Object.keys(properties).forEach(function(prop) {
-        var index = toNumber(prop);
-        if (isNaN(index) || index < 0 || index >= oldLength)
-          return;
+  function mergeSplice(splices, index, removed, addedCount) {
 
-        var oldValue = oldValues[index];
-        if (index < array.length)
-          indicesChanged[index] = oldValue;
-        else
-          lengthChangeSplice.removed[index - array.length] = oldValues[index];
-      });
-    }
+    var splice = newSplice(index, removed, addedCount);
 
-    addProperties(diff.added, oldValues);
-    addProperties(diff.removed, oldValues);
-    addProperties(diff.changed, oldValues);
+    var inserted = false;
+    var insertionOffset = 0;
 
-    var splices = [];
-    var current;
+    for (var i = 0; i < splices.length; i++) {
+      var current = splices[i];
+      current.index += insertionOffset;
 
-    for (var index in indicesChanged) {
-      index = toNumber(index);
+      if (inserted)
+        continue;
 
-      if (current) {
-        if (current.index + current.removed.length == index) {
-          current.removed.push(indicesChanged[index]);
-          continue;
-        }
+      var intersectCount = intersect(splice.index,
+                                     splice.index + splice.removed.length,
+                                     current.index,
+                                     current.index + current.addedCount);
 
-        current.addedCount = Math.min(array.length, current.index + current.removed.length) - current.index;
-        splices.push(current);
-        current = undefined;
-      }
+      if (intersectCount >= 0) {
+        // Merge the two splices
 
-      current = {
-        index: index,
-        removed: [indicesChanged[index]]
-      }
-    }
+        splices.splice(i, 1);
+        i--;
 
-    if (current) {
-      current.addedCount = Math.min(array.length, current.index + current.removed.length) - current.index;
+        insertionOffset -= current.addedCount - current.removed.length;
 
-      if (lengthChangeSplice) {
-        if (current.index + current.removed.length == lengthChangeSplice.index) {
-          // Join splices
-          current.addedCount = current.addedCount + lengthChangeSplice.addedCount;
-          current.removed = current.removed.concat(lengthChangeSplice.removed);
-          splices.push(current);
+        splice.addedCount += current.addedCount - intersectCount;
+        var deleteCount = splice.removed.length +
+                          current.removed.length - intersectCount;
+
+        if (!splice.addedCount && !deleteCount) {
+          // merged splice is a noop. discard.
+          inserted = true;
         } else {
-          splices.push(current);
-          splices.push(lengthChangeSplice);
+          var removed = current.removed;
+
+          if (splice.index < current.index) {
+            // some prefix of splice.removed is prepended to current.removed.
+            var prepend = splice.removed.slice(0, current.index - splice.index);
+            Array.prototype.push.apply(prepend, removed);
+            removed = prepend;
+          }
+
+          if (splice.index + splice.removed.length > current.index + current.addedCount) {
+            // some suffix of splice.removed is appended to current.removed.
+            var append = splice.removed.slice(current.index + current.addedCount - splice.index);
+            Array.prototype.push.apply(removed, append);
+          }
+
+          splice.removed = removed;
+          if (current.index < splice.index) {
+            splice.index = current.index;
+          }
         }
-      } else {
-        splices.push(current)
+      } else if (splice.index < current.index) {
+        // Insert splice here.
+
+        inserted = true;
+
+        splices.splice(i, 0, splice);
+        i++;
+
+        var offset = splice.addedCount - splice.removed.length
+        current.index += offset;
+        insertionOffset += offset;
       }
-    } else if (lengthChangeSplice) {
-      splices.push(lengthChangeSplice);
+    }
+
+    if (!inserted)
+      splices.push(splice);
+  }
+
+  function createInitialSplices(array, changeRecords) {
+    var splices = [];
+
+    for (var i = 0; i < changeRecords.length; i++) {
+      var record = changeRecords[i];
+      switch(record.type) {
+        case 'splice':
+          mergeSplice(splices, record.index, record.removed.slice(), record.addedCount);
+          break;
+        case 'new':
+        case 'updated':
+        case 'deleted':
+          if (!isIndex(record.name))
+            continue;
+          var index = toNumber(record.name);
+          if (index < 0)
+            continue;
+          mergeSplice(splices, index, [record.oldValue], 1);
+          break;
+        default:
+          console.error('Unexpected record type: ' + JSON.stringify(record));
+          break;
+      }
     }
 
     return splices;
   }
 
-  function projectArraySplices(array, diff, oldValues) {
+  function projectArraySplices(array, changeRecords) {
     var splices = [];
 
-    createInitialSplicesFromDiff(array, diff, oldValues).forEach(function(splice) {
+    createInitialSplices(array, changeRecords).forEach(function(splice) {
+      if (splice.addedCount == 1 && splice.removed.length == 1) {
+        if (splice.removed[0] !== array[splice.index])
+          splices.push(splice);
+
+        return
+      };
+
       splices = splices.concat(calcSplices(array, splice.index, splice.index + splice.addedCount,
                                            splice.removed, 0, splice.removed.length));
     });

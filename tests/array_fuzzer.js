@@ -18,7 +18,7 @@ function ArrayFuzzer() {}
 
 ArrayFuzzer.valMax = 16;
 ArrayFuzzer.arrayLengthMax = 64;
-ArrayFuzzer.operationCount = 16;
+ArrayFuzzer.operationCount = 32;
 
 function randInt(start, end) {
   return Math.round(Math.random()*(end-start) + start);

@@ -1166,6 +1166,45 @@ suite('ArrayObserver Tests', function() {
     observer.close();
   });
 
+  test('Array Random Case 1', function() {
+    var model = ['a','b'];
+    var copy = model.slice();
+
+    observer = new ArrayObserver(model, callback);
+
+    model.splice(0, 1, 'c', 'd', 'e');
+    model.splice(4,0,'f');
+    model.splice(3,2);
+
+    applySplicesAndAssertDeepEqual(model, copy);
+  });
+
+  test('Array Random Case 2', function() {
+    var model = [3,4];
+    var copy = model.slice();
+
+    observer = new ArrayObserver(model, callback);
+
+    model.splice(2,0,8);
+    model.splice(0,1,0,5);
+    model.splice(2,2);
+
+    applySplicesAndAssertDeepEqual(model, copy);
+  });
+
+  test('Array Random Case 3', function() {
+    var model = [1,3,6];
+    var copy = model.slice();
+
+    observer = new ArrayObserver(model, callback);
+
+    model.splice(1,1);
+    model.splice(0,2,1,7);
+    model.splice(1,0,3,7);
+
+    applySplicesAndAssertDeepEqual(model, copy);
+  });
+
   test('Array Tracker Fuzzer', function() {
     var testCount = 64;
 
