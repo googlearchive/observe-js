@@ -17,20 +17,43 @@
 function ArrayFuzzer() {}
 
 ArrayFuzzer.valMax = 16;
-ArrayFuzzer.arrayLengthMax = 64;
-ArrayFuzzer.operationCount = 16;
+ArrayFuzzer.arrayLengthMax = 128;
+ArrayFuzzer.operationCount = 64;
+
+function randDouble(start, end) {
+  return Math.random()*(end-start) + start;
+}
 
 function randInt(start, end) {
-  return Math.round(Math.random()*(end-start) + start);
+  return Math.round(randDouble(start, end));
+}
+
+function randASCIIChar() {
+  return String.fromCharCode(randInt(32, 126));
+}
+
+function randValue() {
+  switch(randInt(0, 5)) {
+    case 0:
+      return {};
+    case 1:
+      return undefined;
+    case 2:
+      return null;
+    case 3:
+      return randInt(0, ArrayFuzzer.valMax);
+    case 4:
+      return randDouble(0, ArrayFuzzer.valMax);
+    case 5:
+      return randASCIIChar();
+  }
 }
 
 function randArray() {
   var args = [];
   var count = randInt(0, ArrayFuzzer.arrayLengthMax);
-
-  while(count-- > 0) {
-    args.push(randInt(0, ArrayFuzzer.valMax));
-  }
+  while(count-- > 0)
+    args.push(randValue());
 
   return args;
 }
@@ -61,23 +84,38 @@ function randomArrayOperation(arr) {
                        'splice', 'shift',
                        'splice', 'unshift'];
 
-  var operation = operationList[randInt(0, operationList.length - 1)];
-  if (operation == 'delete') {
-    var index = randInt(0, arr.length - 1);
-    delete arr[index];
-  } else if (operation == 'update') {
-    arr[randInt(0, arr.length)] = randInt(0, ArrayFuzzer.valMax);
-  } else {
-    var opArgs = operations[operation]();
-    var func = arr[operation];
-    func.apply(arr, opArgs);
+  var op = {
+    name: operationList[randInt(0, operationList.length - 1)]
+  };
+
+  switch(op.name) {
+    case 'delete':
+      op.index = randInt(0, arr.length - 1);
+      delete arr[op.index];
+      break;
+
+    case 'update':
+      op.index = randInt(0, arr.length);
+      op.value = randValue();
+      arr[op.index] = op.value;
+      break;
+
+    default:
+      op.args = operations[op.name]();
+      arr[op.name].apply(arr, op.args);
+      break;
   }
+
+  return op;
 }
 
 function randomArrayOperations(arr, count) {
+  var ops = []
   for (var i = 0; i < count; i++) {
-    randomArrayOperation(arr);
+    ops.push(randomArrayOperation(arr));
   }
+
+  return ops;
 }
 
 ArrayFuzzer.prototype.go = function() {
@@ -89,7 +127,7 @@ ArrayFuzzer.prototype.go = function() {
     ArrayObserver.applySplices(copy, orig, splices);
   });
 
-  randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
+  this.operations = randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
   observer.deliver();
   observer.disconnect();
 }
