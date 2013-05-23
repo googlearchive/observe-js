@@ -56,6 +56,12 @@
           }
           continue;
         }
+
+        if (op == 'length') {
+          array.length += (i % 2 ? 1 : -1) * Math.floor(elementCount / modVal);
+          continue;
+        }
+
         if (i % 2)
           array[op](j);
         else

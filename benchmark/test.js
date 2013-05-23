@@ -161,4 +161,25 @@ suite('Array Benchmarks', function() {
   test('Array Benchmark - Update - 20% Changed', function() {
     mutateArraysAndDeliver(20, 'update');
   });
+
+  test('Array Benchmark - Length truncate/extend - 0% Changed', function() {
+    mutateArraysAndDeliver(0, 'length');
+  });
+
+  test('Array Benchmark - Length truncate/extend - 1% Changed', function() {
+    mutateArraysAndDeliver(1, 'length');
+  });
+
+  test('Array Benchmark - Length truncate/extend - 5% Changed', function() {
+    mutateArraysAndDeliver(5, 'length');
+  });
+
+  test('Array Benchmark - Length truncate/extend - 10% Changed', function() {
+    mutateArraysAndDeliver(10, 'length');
+  });
+
+  test('Array Benchmark - Length truncate/extend - 20% Changed', function() {
+    mutateArraysAndDeliver(20, 'length');
+  });
+
 });
