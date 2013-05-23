@@ -35,8 +35,9 @@ function ArrayReduction(array, path, reduceFn, initial) {
     var observerArgs = [splice.index, splice.removed.length];
 
     var removeIndex = splice.index;
-    while (removeIndex < splice.removed.length) {
+    while (removeIndex < splice.index + splice.removed.length) {
       observers[removeIndex].close();
+      observers[removeIndex] = undefined;
       removeIndex++;
     }
 
