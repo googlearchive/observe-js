@@ -674,6 +674,29 @@ suite('ArrayObserver Tests', function() {
     callbackInvoked = false;
   }
 
+  function arrayMutationTest(arr, operations) {
+    var copy = arr.slice();
+    observer = new ArrayObserver(arr, callback);
+    operations.forEach(function(op) {
+      switch(op.name) {
+        case 'delete':
+          delete arr[op.index];
+          break;
+
+        case 'update':
+          arr[op.index] = op.value;
+          break;
+
+        default:
+          arr[op.name].apply(arr, op.args);
+          break;
+      }
+    });
+
+    applySplicesAndAssertDeepEqual(arr, copy);
+    observer.close();
+  }
+
   test('Delivery Until No Changes', function() {
     var arr = [0, 1, 2, 3, 4];
     var callbackCount = 0;
@@ -983,187 +1006,134 @@ suite('ArrayObserver Tests', function() {
   });
 
   test('Array Tracker Contained', function() {
-    var model = ['a', 'b'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(1, 1);
-    model.unshift('c', 'd', 'e');
-    model.splice(1, 2, 'f');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b'],
+        [
+          { name: 'splice', args: [1, 1] },
+          { name: 'unshift', args: ['c', 'd', 'e'] },
+          { name: 'splice', args: [1, 2, 'f'] }
+        ]
+    );
   });
 
   test('Array Tracker Delete Empty', function() {
-    var model = [];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    delete model[0];
-    model.splice(0, 0, 'a', 'b', 'c');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        [],
+        [
+          { name: 'delete', index: 0 },
+          { name: 'splice', args: [0, 0, 'a', 'b', 'c'] }
+        ]
+    );
   });
 
   test('Array Tracker Right Non Overlap', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(0, 1, 'e');
-    model.splice(2, 1, 'f', 'g');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'splice', args: [0, 1, 'e'] },
+          { name: 'splice', args: [2, 1, 'f', 'g'] }
+        ]
+    );
   });
 
   test('Array Tracker Left Non Overlap', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(3, 1, 'f', 'g');
-    model.splice(0, 1, 'e');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'splice', args: [3, 1, 'f', 'g'] },
+          { name: 'splice', args: [0, 1, 'e'] }
+        ]
+    );
   });
 
   test('Array Tracker Right Adjacent', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(1, 1, 'e');
-    model.splice(2, 1, 'f', 'g');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'splice', args: [1, 1, 'e'] },
+          { name: 'splice', args: [2, 1, 'f', 'g'] }
+        ]
+    );
   });
 
   test('Array Tracker Left Adjacent', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(2, 2, 'e');
-    model.splice(1, 1, 'f', 'g');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'splice', args: [2, 2, 'e'] },
+          { name: 'splice', args: [1, 1, 'f', 'g'] }
+        ]
+    );
   });
 
   test('Array Tracker Right Overlap', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(1, 1, 'e');
-    model.splice(1, 1, 'f', 'g');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'splice', args: [1, 1, 'e'] },
+          { name: 'splice', args: [1, 1, 'f', 'g'] }
+        ]
+    );
   });
 
   test('Array Tracker Left Overlap', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(2, 1, 'e', 'f', 'g');  // a b [e f g] d
-    model.splice(1, 2, 'h', 'i', 'j'); // a [h i j] f g d
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          // a b [e f g] d
+          { name: 'splice', args: [2, 1, 'e', 'f', 'g'] },
+          // a [h i j] f g d
+          { name: 'splice', args: [1, 2, 'h', 'i', 'j'] }
+        ]
+    );
   });
 
   test('Array Tracker Prefix And Suffix One In', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.unshift('z');
-    model.push('z');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'unshift', args: ['z'] },
+          { name: 'push', arg: ['z'] }
+        ]
+    );
   });
 
   test('Array Tracker Shift One', function() {
-    var model = [16, 15, 15];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.shift('z');
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        [16, 15, 15],
+        [
+          { name: 'shift', args: ['z'] }
+        ]
+    );
   });
 
   test('Array Tracker Update Delete', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model.splice(2, 1, 'e', 'f', 'g');  // a b [e f g] d
-    model[0] = 'h';
-    delete model[1];
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'splice', args: [2, 1, 'e', 'f', 'g'] },
+          { name: 'update', index: 0, value: 'h' },
+          { name: 'delete', index: 1 }
+        ]
+    );
   });
 
   test('Array Tracker Update After Delete', function() {
-    var model = ['a', 'b', 'c', 'd'];
-    delete model[2];
-
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    model[2] = 'e';
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', undefined, 'd'],
+        [
+          { name: 'update', index: 2, value: 'e' }
+        ]
+    );
   });
 
   test('Array Tracker Delete Mid Array', function() {
-    var model = ['a', 'b', 'c', 'd'];
-
-    var copy = model.slice();
-
-    observer = new ArrayObserver(model, callback);
-
-    delete model[2];
-
-    applySplicesAndAssertDeepEqual(model, copy);
-
-    observer.close();
+    arrayMutationTest(
+        ['a', 'b', 'c', 'd'],
+        [
+          { name: 'delete', index: 2 }
+        ]
+    );
   });
 
   test('Array Tracker Fuzzer', function() {

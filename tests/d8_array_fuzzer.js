@@ -24,14 +24,20 @@ function checkEqual(arr1, arr2) {
   }
 }
 
-print(typeof Object.observe);
-
 var t1 = new Date();
-for (var i = 0; i < 256; i++) {
+for (var i = 0; i < 2048 * 1000; i++) {
 	print('pass: ' + i);
   var fuzzer = new ArrayFuzzer();
   fuzzer.go();
-  checkEqual(fuzzer.arr, fuzzer.copy);
+  try {
+    checkEqual(fuzzer.arr, fuzzer.copy);
+  } catch (ex) {
+    console.log('Fail: ' + ex);
+    console.log(JSON.stringify(fuzzer.origCopy));
+    console.log(JSON.stringify(fuzzer.ops));
+    throw ex;
+  }
 }
+
 var t2 = new Date();
 print('Finished in: ' + (t2.getTime() - t1.getTime()) + 'ms');

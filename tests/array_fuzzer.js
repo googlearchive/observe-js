@@ -122,12 +122,13 @@ ArrayFuzzer.prototype.go = function() {
   var orig = this.arr = randArray();
   randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
   var copy = this.copy = this.arr.slice();
+  this.origCopy = this.copy.slice();
 
   var observer = new ArrayObserver(this.arr, function(splices) {
     ArrayObserver.applySplices(copy, orig, splices);
   });
 
-  this.operations = randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
+  this.ops = randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
   observer.deliver();
   observer.disconnect();
 }
