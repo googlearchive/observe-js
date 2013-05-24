@@ -667,6 +667,10 @@
     }
   }
 
+  // TODO(rafaelw): It should be possible for the Object.observe case to have
+  // every PathObserver used by defineProperty share a single Object.observe
+  // callback, and thus get() can simply call observer.deliver() and any changes
+  // to any dependent value will be observed.
   PathObserver.defineProperty = function(object, name, descriptor) {
     // TODO(rafaelw): Validate errors
     var obj = descriptor.object;
@@ -686,16 +690,10 @@
 
     Object.defineProperty(object, name, {
       get: function() {
-        // Chained observations must be 'pulled'. With Object.observe
-        // only getting the value with do this.
-        if (hasObserve)
-          localGetPathValue(obj, path);
-        observer.deliver();
-        return observer.value;
+        return localGetPathValue(obj, path);
       },
       set: function(newValue) {
         setPathValue(obj, path, newValue);
-        observer.deliver();
       },
       configurable: true
     });

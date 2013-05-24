@@ -600,42 +600,6 @@ suite('PathObserver Tests', function() {
       {
         object: target,
         name: 'computed',
-        type: 'updated',
-        oldValue: 2
-      },
-      {
-        object: target,
-        name: 'computed',
-        type: 'updated',
-        oldValue: 3
-      },
-      {
-        object: target,
-        name: 'computed',
-        type: 'updated',
-        oldValue: 5
-      },
-      {
-        object: target,
-        name: 'computed',
-        type: 'updated',
-        oldValue: 6
-      },
-      {
-        object: target,
-        name: 'computed',
-        type: 'updated',
-        oldValue: 7
-      },
-      {
-        object: target,
-        name: 'computed',
-        type: 'updated',
-        oldValue: undefined
-      },
-      {
-        object: target,
-        name: 'computed',
         type: 'deleted'
         // TODO(rafaelw): When notifer.performChange() is implemented, this can
         // a synthetic record can be sent with the correct value.
