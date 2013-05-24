@@ -668,29 +668,33 @@
   }
 
   PathObserver.defineProperty = function(object, name, descriptor) {
+    // TODO(rafaelw): Validate errors
+    var obj = descriptor.object;
+    var path = new Path(descriptor.path);
     var notify = notifyFunction(object, name);
 
-    var observer = new PathObserver(descriptor.object, descriptor.path,
+    var observer = new PathObserver(obj, descriptor.path,
         function(newValue, oldValue) {
           if (notify)
             notify('updated', oldValue);
         }
     );
 
+    var localGetPathValue = getPathValue;
+    if (hasEval)
+      localGetPathValue = newCompiledGetValueAtPath(path);
+
     Object.defineProperty(object, name, {
       get: function() {
-        // TODO(rafaelw): Re-visit the logic here.
-        // This may be needlessly expensive, but we need to make sure
-        //   -notifications get fired
-        //   -observers are setup on the path objects.
-        // It also can be optimized for the non-object observe case.
-        PathObserver.getValueAtPath(descriptor.object, descriptor.path);
+        // Chained observations must be 'pulled'. With Object.observe
+        // only getting the value with do this.
+        if (hasObserve)
+          localGetPathValue(obj, path);
         observer.deliver();
         return observer.value;
       },
       set: function(newValue) {
-        PathObserver.setValueAtPath(descriptor.object, descriptor.path,
-                                    newValue);
+        setPathValue(obj, path, newValue);
         observer.deliver();
       },
       configurable: true
