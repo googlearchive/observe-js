@@ -679,6 +679,12 @@
 
     Object.defineProperty(object, name, {
       get: function() {
+        // TODO(rafaelw): Re-visit the logic here.
+        // This may be needlessly expensive, but we need to make sure
+        //   -notifications get fired
+        //   -observers are setup on the path objects.
+        // It also can be optimized for the non-object observe case.
+        PathObserver.getValueAtPath(descriptor.object, descriptor.path);
         observer.deliver();
         return observer.value;
       },

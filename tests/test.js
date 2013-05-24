@@ -500,6 +500,42 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
+  test('DefineProperty Cascade', function() {
+    var root = {
+      value: 1,
+      a: {
+        b: {}
+      },
+      c: {}
+    };
+
+    var a = {};
+    var b = {};
+    var c = {};
+
+    root.a.observer = PathObserver.defineProperty(root.a, 'value', {
+      object: root,
+      path: 'value'
+    });
+
+    root.a.b.observer = PathObserver.defineProperty(root.a.b, 'value', {
+      object: root.a,
+      path: 'value'
+    });
+
+    root.c.observer = PathObserver.defineProperty(root.c, 'value', {
+      object: root,
+      path: 'value'
+    });
+
+    root.c.value = 2;
+    assert.strictEqual(2, root.a.b.value);
+
+    root.a.observer.close();
+    root.a.b.observer.close();
+    root.c.observer.close();
+  });
+
   test('DefineProperty', function() {
     var source = { foo: { bar: 1 }};
     var target = {};
