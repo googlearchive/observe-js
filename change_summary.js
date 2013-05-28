@@ -270,14 +270,17 @@
 
   var collectObservers = !hasObserve || global.forceCollectObservers;
   var allObservers;
-  if (collectObservers)
+  if (collectObservers) {
     allObservers = [];
+    Observer._allObserversCount = 0;
+  }
 
   function addToAll(observer) {
     if (!collectObservers)
       return;
 
     allObservers.push(observer);
+    Observer._allObserversCount++;
   }
 
   function removeFromAll(observer) {
@@ -287,6 +290,7 @@
     for (var i = 0; i < allObservers.length; i++) {
       if (allObservers[i] === observer) {
         allObservers[i] = undefined;
+        Observer._allObserversCount--;
         break;
       }
     }
@@ -326,6 +330,7 @@
       }
     } while (cycles < MAX_DIRTY_CHECK_CYCLES && results.anyChanged);
 
+    Observer._allObserversCount = allObservers.length;
     runningMicrotaskCheckpoint = false;
   };
 
