@@ -448,6 +448,15 @@
   };
 
   function getPathValue(object, path) {
+    if (!path.length)
+      return object;
+
+    if (!isObject(object))
+      return;
+
+    if (hasEval)
+      return compiledGetValueAtPath(object, path);
+
     var newValue;
     path.walkPropertiesFrom(object, function(prop, value, i) {
       if (i === path.length)
@@ -458,6 +467,9 @@
   }
 
   function setPathValue(obj, path, value) {
+    if (!path.length || !isObject(obj))
+      return false;
+
     var changed = false;
 
     path.walkPropertiesFrom(obj, function(prop, m, i) {
@@ -488,6 +500,7 @@
     return new Function('obj', str);
   }
 
+  // TODO(rafaelw): Implement LRU cache so this doens't get too big.
   var compiledGettersCache = {};
 
   function compiledGetValueAtPath(object, path) {
@@ -573,8 +586,6 @@
       this.observed = new Array(path.length);
       this.observedMap = new Map;
       this.getPathValue = getPathValueObserved;
-    } else if (hasEval) {
-      this.getPathValue = newCompiledGetValueAtPath(this.path);
     } else {
       this.getPathValue = getPathValue;
     }
@@ -623,16 +634,7 @@
       return undefined;
 
     var path = new Path(pathString);
-    if (!path.length)
-      return obj;
-
-    if (!isObject(obj))
-      return;
-
-    if (hasEval)
-      return compiledGetValueAtPath(obj, path);
-    else
-      return getPathValue(obj, path);
+    return getPathValue(obj, path);
   }
 
   PathObserver.setValueAtPath = function(obj, pathString, value) {
@@ -640,12 +642,6 @@
       return;
 
     var path = new Path(pathString);
-    if (!path.length)
-      return;
-
-    if (!isObject(obj))
-      return;
-
     setPathValue(obj, path, value);
   };
 
@@ -689,13 +685,9 @@
         }
     );
 
-    var localGetPathValue = getPathValue;
-    if (hasEval)
-      localGetPathValue = newCompiledGetValueAtPath(path);
-
     Object.defineProperty(object, name, {
       get: function() {
-        return localGetPathValue(obj, path);
+        return getPathValue(obj, path);
       },
       set: function(newValue) {
         setPathValue(obj, path, newValue);

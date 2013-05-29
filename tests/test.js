@@ -609,6 +609,24 @@ suite('PathObserver Tests', function() {
 
     Object.unobserve(target, callback);
   });
+
+  test('DefineProperty - empty path', function() {
+    var target = {}
+    var observer = PathObserver.defineProperty(target, 'foo', {
+      object: 1,
+      path: ''
+    });
+    assert.isTrue(target.hasOwnProperty('foo'));
+    assert.strictEqual(1, target.foo);
+
+    var obj = {};
+    var observer2 = PathObserver.defineProperty(target, 'bar', {
+      object: obj,
+      path: ''
+    });
+    assert.isTrue(target.hasOwnProperty('bar'));
+    assert.strictEqual(obj, target.bar);
+  });
 });
 
 suite('ArrayObserver Tests', function() {
