@@ -63,13 +63,13 @@
       return newObject;
     };
 
-  var pathIndentPart = '[\$a-z0-9_]+[\$a-z0-9_\\d]*';
-  var pathRegExp = new RegExp('^' +
-                              '(?:#?' + pathIndentPart + ')?' +
-                              '(?:' +
-                                '(?:\\.' + pathIndentPart + ')' +
-                              ')*' +
-                              '$', 'i');
+  var identStart = '[\$_a-zA-Z]';
+  var identPart = '[\$_a-zA-Z0-9]';
+  var ident = identStart + '+' + identPart + '*';
+  var elementIndex = '(?:[0-9]|[1-9]+[0-9]+)';
+  var identOrElementIndex = '(?:' + ident + '|' + elementIndex + ')';
+  var path = '(?:' + identOrElementIndex + ')(?:\\.' + identOrElementIndex + ')*';
+  var pathRegExp = new RegExp('^' + path + '$');
 
   function isPathValid(s) {
     if (typeof s != 'string')
