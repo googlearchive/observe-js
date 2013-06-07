@@ -1146,6 +1146,9 @@
 
   global.Observer = Observer;
   global.ArrayObserver = ArrayObserver;
+  global.ArrayObserver.calculateSplices = function(current, previous) {
+    return calcSplices(current, 0, current.length, previous, 0, previous.length);
+  };
   global.ObjectObserver = ObjectObserver;
   global.PathObserver = PathObserver;
 })(this);
