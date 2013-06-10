@@ -15,7 +15,27 @@
 (function(global) {
   'use strict';
 
-  var hasObserve = typeof Object.observe == 'function';
+  function detectObjectObserve() {
+    if (typeof Object.observe !== 'function' &&
+        typeof Array.observe !== 'function') {
+      return false;
+    }
+
+    var gotSplice = false;
+    function callback(records) {
+      if (records[0].type === 'splice' && records[1].type === 'splice')
+        gotSplice = true;
+    }
+
+    var test = [0];
+    Array.observe(test, callback);
+    test[1] = 1;
+    test.length = 0;
+    Object.deliverChangeRecords(callback);
+    return gotSplice;
+  }
+
+  var hasObserve = detectObjectObserve();
 
   var hasEval = false;
   try {
@@ -1145,6 +1165,7 @@
   }
 
   global.Observer = Observer;
+  global.Observer.hasObjectObserve = hasObserve;
   global.ArrayObserver = ArrayObserver;
   global.ArrayObserver.calculateSplices = function(current, previous) {
     return calcSplices(current, 0, current.length, previous, 0, previous.length);
