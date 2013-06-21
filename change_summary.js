@@ -16,7 +16,7 @@
   'use strict';
 
   function detectObjectObserve() {
-    if (typeof Object.observe !== 'function' &&
+    if (typeof Object.observe !== 'function' ||
         typeof Array.observe !== 'function') {
       return false;
     }
