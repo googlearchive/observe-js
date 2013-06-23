@@ -105,6 +105,20 @@
     return pathRegExp.test(s);
   }
 
+  // TODO(rafaelw): Make simple LRU cache
+  var pathCache = {};
+
+  function getPath(str) {
+    var path = pathCache[str];
+    if (path)
+      return path;
+    if (!isPathValid(str))
+      return;
+    var path = new Path(str);
+    pathCache[str] = path;
+    return path;
+  }
+
   function Path(s) {
     if (s.trim() == '')
       return this;
@@ -119,6 +133,10 @@
     }).forEach(function(part) {
       this.push(part);
     }, this);
+
+    if (hasEval && this.length) {
+      this.getValueFrom = this.compiledGetValueFromFn();
+    }
   }
 
   Path.prototype = createObject({
@@ -128,18 +146,68 @@
       return this.join('.');
     },
 
-    walkPropertiesFrom: function(val, f, that) {
-      var caughtException;
-      var prop;
-      for (var i = 0; i < this.length + 1; i++) {
-        prop = this[i];
-        f.call(that, prop, val, i);
-
-        if (i == this.length || val === null || val === undefined)
-          val = undefined;
-        else
-          val = val[prop];
+    getValueFrom: function(obj, allValues) {
+      for (var i = 0; i < this.length; i++) {
+        if (obj === undefined || obj === null)
+          return;
+        obj = obj[this[i]];
       }
+
+      return obj;
+    },
+
+    getValueFromObserved: function(obj, observedSet) {
+      observedSet.reset();
+      for (var i = 0; i < this.length; i++) {
+        if (obj === undefined || obj === null) {
+          observedSet.cleanup();
+          return;
+        }
+        observedSet.observe(obj);
+        obj = obj[this[i]];
+      }
+
+      return obj;
+    },
+
+    compiledGetValueFromFn: function() {
+      var accessors = this.map(function(ident) {
+        return isIndex(ident) ? '["' + ident + '"]' : '.' + ident;
+      });
+
+      var str = '';
+      var pathString = 'obj';
+      str += 'if (obj !== null && obj !== undefined';
+      var i = 0;
+      for (; i < (this.length - 1); i++) {
+        var ident = this[i];
+        pathString += accessors[i];
+        str += ' &&\n     ' + pathString + ' !== null && ' +
+               pathString + ' !== undefined';
+      }
+      str += ')\n';
+
+      pathString += accessors[i];
+
+      str += '  return ' + pathString + ';\nelse\n  return undefined;';
+      return new Function('obj', str);
+    },
+
+    setValueFrom: function(obj, value) {
+      if (!this.length)
+        return false;
+
+      for (var i = 0; i < this.length - 1; i++) {
+        if (obj === undefined || obj === null)
+          return false;
+        obj = obj[this[i]];
+      }
+
+      if (obj === undefined || obj === null)
+        return false;
+
+      obj[this[this.length - 1]] = value;
+      return true;
     }
   });
 
@@ -243,7 +311,6 @@
         return;
       this.disconnect();
       this.valid = false;
-      removeFromAll(this);
     },
 
     deliver: function(testingResults) {
@@ -290,9 +357,10 @@
 
   var collectObservers = !hasObserve || global.forceCollectObservers;
   var allObservers;
+  Observer._allObserversCount = 0;
+
   if (collectObservers) {
     allObservers = [];
-    Observer._allObserversCount = 0;
   }
 
   function addToAll(observer) {
@@ -301,19 +369,6 @@
 
     allObservers.push(observer);
     Observer._allObserversCount++;
-  }
-
-  function removeFromAll(observer) {
-    if (!collectObservers)
-      return;
-
-    for (var i = 0; i < allObservers.length; i++) {
-      if (allObservers[i] === observer) {
-        allObservers[i] = undefined;
-        Observer._allObserversCount--;
-        break;
-      }
-    }
   }
 
   var runningMicrotaskCheckpoint = false;
@@ -336,7 +391,7 @@
 
       for (var i = 0; i < toCheck.length; i++) {
         var observer = toCheck[i];
-        if (!observer || !observer.valid)
+        if (!observer.valid)
           continue;
 
         if (hasObserve) {
@@ -470,129 +525,66 @@
   };
 
   function getPathValue(object, path) {
-    if (!path.length)
-      return object;
-
-    if (!isObject(object))
-      return;
-
-    if (hasEval)
-      return compiledGetValueAtPath(object, path);
-
-    var newValue;
-    path.walkPropertiesFrom(object, function(prop, value, i) {
-      if (i === path.length)
-        newValue = value;
-    });
-
-    return newValue;
+    return path.getValueFrom(object);
   }
 
-  function setPathValue(obj, path, value) {
-    if (!path.length || !isObject(obj))
-      return false;
-
-    var changed = false;
-
-    path.walkPropertiesFrom(obj, function(prop, m, i) {
-      if (isObject(m) && i == path.length - 1) {
-        changed = true;
-        m[prop] = value;
-      }
-    });
-
-    return changed;
+  function ObservedSet(callback) {
+    this.arr = [];
+    this.callback = callback;
+    this.isObserved = true;
   }
 
-  function newCompiledGetValueAtPath(path) {
-    var str = '';
-    var partStr = 'obj';
-    var length = path.length;
-    str += 'if (obj'
-    for (var i = 0; i < (length - 1); i++) {
-      var part = '["' + path[i] + '"]';
-      partStr += part;
-      str += ' && ' + partStr;
-    }
-    str += ') ';
+  // TODO(rafaelw): Probably shouldn't ever observe Object or Array proto.
+  ObservedSet.prototype = {
+    reset: function() {
+      this.isObserved = !this.isObserved;
+    },
 
-    partStr += '["' + path[length - 1] + '"]';
-
-    str += 'return ' + partStr + '; else return undefined;';
-    return new Function('obj', str);
-  }
-
-  // TODO(rafaelw): Implement LRU cache so this doens't get too big.
-  var compiledGettersCache = {};
-
-  function compiledGetValueAtPath(object, path) {
-    var pathString = path.toString();
-    if (!compiledGettersCache[pathString])
-      compiledGettersCache[pathString] = newCompiledGetValueAtPath(path);
-
-    return compiledGettersCache[pathString](object);
-  }
-
-  function getPathValueObserved(object, path, currentlyObserved, observedMap,
-      callback) {
-    var newValue = undefined;
-
-    path.walkPropertiesFrom(object, function(prop, value, i) {
-      if (i === path.length) {
-        newValue = value;
+    observe: function(obj) {
+      if (!isObject(obj))
         return;
-      }
-
-      var observed = currentlyObserved[i];
-      if (observed && value === observed[0])
+      var i = this.arr.indexOf(obj);
+      if (i >= 0 && this.arr[i+1] === this.isObserved)
         return;
 
-      if (observed) {
-        for (var j = 0; j < observed.length; j++) {
-          var obj = observed[j];
-          var count = observedMap.get(obj);
-          if (count == 1) {
-            observedMap.delete(obj);
-            global.unobserveCount++;
-            Object.unobserve(obj, callback);
-          } else {
-            observedMap.set(obj, count - 1);
+      Object.observe(obj, this.callback);
+      if (i < 0) {
+        i = this.arr.length;
+        this.arr[i] = obj;
+      }
+
+      this.arr[i+1] = this.isObserved;
+      this.observe(Object.getPrototypeOf(obj));
+    },
+
+    cleanup: function() {
+      var i = 0, j = 0;
+      var isObserved = this.isObserved;
+      while(j < this.arr.length) {
+        var obj = this.arr[j];
+        if (this.arr[j + 1] == isObserved) {
+          if (i < j) {
+            this.arr[i] = obj;
+            this.arr[i + 1] = isObserved;
           }
-        }
-      }
-
-      observed = value;
-      if (!isObject(observed))
-        return;
-
-      var observed = []
-      while (isObject(value)) {
-        observed.push(value);
-        var count = observedMap.get(value);
-        if (!count) {
-          observedMap.set(value, 1);
-          global.observeCount++;
-          Object.observe(value, callback);
+          i += 2;
         } else {
-          observedMap.set(value, count + 1);
+          Object.unobserve(obj, this.callback);
         }
-
-        value = Object.getPrototypeOf(value);
+        j += 2;
       }
 
-      currentlyObserved[i] = observed;
-    }, this);
-
-    return newValue;
+      this.arr.length = i;
+    }
   };
 
   function PathObserver(object, pathString, callback) {
     this.value = undefined;
 
-    if (!isPathValid(pathString))
+    var path = getPath(pathString);
+    if (!path)
       return;
 
-    var path = new Path(pathString);
     if (!path.length) {
       this.value = object;
       return;
@@ -603,15 +595,6 @@
 
     this.object = object;
     this.path = path;
-
-    if (hasObserve) {
-      this.observed = new Array(path.length);
-      this.observedMap = new Map;
-      this.getPathValue = getPathValueObserved;
-    } else {
-      this.getPathValue = getPathValue;
-    }
-
     Observer.call(this, callback);
   }
 
@@ -619,20 +602,23 @@
     __proto__: Observer.prototype,
 
     connect: function() {
+      if (hasObserve)
+        this.observedSet = new ObservedSet(this.boundInternalCallback);
     },
 
     disconnect: function() {
       this.object = undefined;
       this.value = undefined;
-      this.sync(true);
+      if (hasObserve) {
+        this.observedSet.reset();
+        this.observedSet.cleanup();
+        this.observedSet = undefined;
+      }
     },
 
     check: function() {
-      this.value = this.getPathValue(this.object,
-                                     this.path,
-                                     this.observed,
-                                     this.observedMap,
-                                     this.boundInternalCallback);
+      this.value = !hasObserve ? this.path.getValueFrom(this.object) :
+          this.path.getValueFromObserved(this.object, this.observedSet);
       if (areSameValue(this.value, this.oldValue))
         return false;
 
@@ -641,30 +627,27 @@
     },
 
     sync: function(hard) {
-      if (hard)
-        this.value = this.getPathValue(this.object,
-                                       this.path,
-                                       this.observed,
-                                       this.observedMap,
-                                       this.boundInternalCallback);
+      if (hard) {
+        this.value = !hasObserve ? this.path.getValueFrom(this.object) :
+            this.path.getValueFromObserved(this.object, this.observedSet);
+      }
       this.oldValue = this.value;
     }
   });
 
   PathObserver.getValueAtPath = function(obj, pathString) {
-    if (!isPathValid(pathString))
-      return undefined;
-
-    var path = new Path(pathString);
-    return getPathValue(obj, path);
+    var path = getPath(pathString);
+    if (!path)
+      return;
+    return path.getValueFrom(obj);
   }
 
   PathObserver.setValueAtPath = function(obj, pathString, value) {
-    if (!isPathValid(pathString))
+    var path = getPath(pathString);
+    if (!path)
       return;
 
-    var path = new Path(pathString);
-    setPathValue(obj, path, value);
+    path.setValueFrom(obj, value);
   };
 
   var knownRecordTypes = {
@@ -697,7 +680,7 @@
   PathObserver.defineProperty = function(object, name, descriptor) {
     // TODO(rafaelw): Validate errors
     var obj = descriptor.object;
-    var path = new Path(descriptor.path);
+    var path = getPath(descriptor.path);
     var notify = notifyFunction(object, name);
 
     var observer = new PathObserver(obj, descriptor.path,
@@ -709,10 +692,10 @@
 
     Object.defineProperty(object, name, {
       get: function() {
-        return getPathValue(obj, path);
+        return path.getValueFrom(obj);
       },
       set: function(newValue) {
-        setPathValue(obj, path, newValue);
+        path.setValueFrom(obj, newValue);
       },
       configurable: true
     });
@@ -1172,4 +1155,5 @@
   };
   global.ObjectObserver = ObjectObserver;
   global.PathObserver = PathObserver;
+  global.Path = Path;
 })(this);
