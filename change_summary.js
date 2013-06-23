@@ -534,14 +534,15 @@
     this.isObserved = true;
   }
 
-  // TODO(rafaelw): Probably shouldn't ever observe Object or Array proto.
+  var objProto = Object.getPrototypeOf({});
+  var arrayProto = Object.getPrototypeOf([]);
   ObservedSet.prototype = {
     reset: function() {
       this.isObserved = !this.isObserved;
     },
 
     observe: function(obj) {
-      if (!isObject(obj))
+      if (!isObject(obj) || obj === objProto || obj === arrayProto)
         return;
       var i = this.arr.indexOf(obj);
       if (i >= 0 && this.arr[i+1] === this.isObserved)
