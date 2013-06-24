@@ -26,16 +26,27 @@ var createObject = ('__proto__' in {}) ?
     return newObject;
   };
 
+// IE10 & below don't have mutation observers. Just synchronously invoke
+// callbackFn in this case. Each test iteration with unroll the stack with
+// a setTimeout so that it doesn't get too deep.
+var hasMutationObserver = typeof window.MutationObserver === 'function';
+
 function EndOfMicrotaskRunner(callbackFn) {
-  var observer = new MutationObserver(callbackFn);
-  var div = document.createElement('div');
-  observer.observe(div, { attributes: true });
-  var pingPong = true;
+  if (hasMutationObserver) {
+    var observer = new MutationObserver(callbackFn);
+    var div = document.createElement('div');
+    observer.observe(div, { attributes: true });
+    var pingPong = true;
+  }
 
   this.schedule = function() {
-    div.setAttribute('ping', pingPong);
-    pingPong = !pingPong;
-  }
+    if (hasMutationObserver) {
+      div.setAttribute('ping', pingPong);
+      pingPong = !pingPong;
+    } else {
+      callbackFn();
+    }
+  };
 }
 
 function BenchmarkRunner(benchmark, setups, variants, completeFn, statusFn) {
