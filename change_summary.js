@@ -373,9 +373,20 @@
 
   var runningMicrotaskCheckpoint = false;
 
+  var hasDebugForceFullDelivery = typeof Object.deliverAllChangeRecords == 'function';
+
   global.Platform = global.Platform || {};
+
   global.Platform.performMicrotaskCheckpoint = function() {
-    if (!collectObservers || runningMicrotaskCheckpoint)
+    if (runningMicrotaskCheckpoint)
+      return;
+
+    if (hasDebugForceFullDelivery) {
+      Object.deliverAllChangeRecords();
+      return;
+    }
+
+    if (!collectObservers)
       return;
 
     runningMicrotaskCheckpoint = true;
