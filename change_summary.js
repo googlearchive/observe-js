@@ -548,10 +548,10 @@
       if (i >= 0 && this.arr[i+1] === this.isObserved)
         return;
 
-      Object.observe(obj, this.callback);
       if (i < 0) {
         i = this.arr.length;
         this.arr[i] = obj;
+        Object.observe(obj, this.callback);
       }
 
       this.arr[i+1] = this.isObserved;
