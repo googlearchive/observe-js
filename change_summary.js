@@ -1168,4 +1168,4 @@
   global.ObjectObserver = ObjectObserver;
   global.PathObserver = PathObserver;
   global.Path = Path;
-})(this);
+})(typeof global !== 'undefined' && global ? global : this);
