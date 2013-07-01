@@ -52,15 +52,18 @@
     };
   }
 
-  function BenchmarkRunner(benchmark, setups, variants, completeFn, statusFn) {
+  function BenchmarkRunner(benchmark, tests, variants, completeFn, statusFn) {
     this.benchmark = benchmark;
-    this.setups = setups;
+    this.tests = tests;
     this.variants = variants;
-    this.setup = 0;
+    this.test = 0;
     this.variant = 0;
     this.completeFn = completeFn;
     this.statusFn = statusFn;
     this.results = [];
+    this.microtaskRunner =
+      new EndOfMicrotaskRunner(this.runFinished.bind(this));
+
   }
 
   BenchmarkRunner.INIT = 0;
@@ -83,7 +86,7 @@
 
     nextVariant: function() {
       // Done with all
-      if (this.setup === this.setups.length) {
+      if (this.test === this.tests.length) {
         this.benchmark.destroy();
 
         var self = this;
@@ -95,11 +98,13 @@
         return;
       }
 
-      // Configure this setup.
+      // Configure this test.
       if (this.variant === 0) {
         this.times = [];
-        this.benchmark.setup(this.setups[this.setup]);
+        this.benchmark.setupTest(this.tests[this.test]);
       }
+
+      this.benchmark.setupVariant(this.variant);
 
       // Run the test once before timing.
       this.runSeries(BenchmarkRunner.INIT, 1);
@@ -108,14 +113,16 @@
     variantComplete: function(duration) {
       this.times.push(duration);
 
-      this.statusFn(this.setups[this.setup], this.variants[this.variant],
+      this.statusFn(this.tests[this.test], this.variants[this.variant],
                     this.runCount);
 
+      this.benchmark.teardownVariant(this.variant);
       this.variant++;
 
       if (this.variant == this.variants.length) {
         this.results.push(this.times);
-        this.setup++;
+        this.benchmark.teardownTest(this.test);
+        this.test++;
         this.variant = 0;
       }
 
@@ -136,9 +143,12 @@
 
     runOne: function() {
       this.benchmark.run(this.variants[this.variant], this);
+      this.microtaskRunner.schedule();
     },
 
-    resolve: function() {
+    runFinished: function() {
+      Platform.performMicrotaskCheckpoint();
+
       this.remaining--;
       if (this.remaining > 0) {
         this.runOne();
@@ -171,18 +181,30 @@
     }
   }
 
-  function Benchmark() {
+  function Benchmark() {}
+
+  Benchmark.prototype = {
+    setupTest: function(setup) {},
+    setupVariant: function(variant) {},
+    run: function(variant) {},
+    teardownVariant: function(variant) {},
+    teardownTest: function(test) {},
+    destroy: function() {}
+  };
+
+  function ObservationBenchmark() {
+    Benchmark.call(this);
     this.objects = [];
     this.observers = []
     this.index = 0;
     this.mutationCount = 0;
     this.boundObserverCallback = this.observerCallback.bind(this);
-    this.microtaskRunner =
-        new EndOfMicrotaskRunner(this.microtaskCallback.bind(this));
   }
 
-  Benchmark.prototype = {
-    setup: function(objectCount) {
+  ObservationBenchmark.prototype = createObject({
+    __proto__: Benchmark.prototype,
+
+    setupTest: function(objectCount) {
       while (this.objects.length < objectCount) {
         var obj = this.newObject();
         this.objects.push(obj);
@@ -190,9 +212,7 @@
       }
     },
 
-    run: function(mutationCount, deferred) {
-      this.deferred = deferred;
-
+    run: function(mutationCount) {
       while (mutationCount > 0) {
         var obj = this.objects[this.index];
         mutationCount += -this.mutateObject(obj, mutationCount);
@@ -201,20 +221,15 @@
         if (this.index >= this.objects.length)
           this.index = 0;
       }
+    },
 
-      this.microtaskRunner.schedule();
+    teardownVariant: function() {
+      if (this.mutationCount !== 0)
+        alert('Error: mutationCount == ' + this.mutationCount);
     },
 
     observerCallback: function() {
       this.mutationCount--;
-    },
-
-    microtaskCallback: function() {
-      Platform.performMicrotaskCheckpoint();
-
-      if (this.mutationCount !== 0)
-        alert('Error: mutationCount == ' + this.mutationCount);
-      this.deferred.resolve();
     },
 
     destroy: function() {
@@ -223,10 +238,10 @@
         observer.close();
       }
     }
-  };
+  });
 
   function ObjectBenchmark() {
-    Benchmark.call(this);
+    ObservationBenchmark.call(this);
     this.properties = [];
     for (var i = 0; i < ObjectBenchmark.propertyCount; i++) {
       this.properties.push(String.fromCharCode(97 + i));
@@ -237,7 +252,7 @@
   ObjectBenchmark.propertyCount = 15;
 
   ObjectBenchmark.prototype = createObject({
-    __proto__: Benchmark.prototype,
+    __proto__: ObservationBenchmark.prototype,
 
     newObject: function() {
       var obj = {};
@@ -262,7 +277,7 @@
   });
 
   function ArrayBenchmark(config) {
-    Benchmark.call(this);
+    ObservationBenchmark.call(this);
     var tokens = config.split('/');
     this.operation = tokens[0];
     this.undo = tokens[1];
@@ -272,7 +287,7 @@
   ArrayBenchmark.elementCount = 100;
 
   ArrayBenchmark.prototype = createObject({
-    __proto__: Benchmark.prototype,
+    __proto__: ObservationBenchmark.prototype,
 
     newObject: function() {
       var array = [];
@@ -311,7 +326,7 @@
   });
 
   function PathBenchmark(config) {
-    Benchmark.call(this);
+    ObservationBenchmark.call(this);
     this.leaf = config === 'leaf';
     this.pathParts = ['foo', 'bar', 'baz'];
     this.pathString = this.pathParts.join('.');
@@ -320,7 +335,7 @@
   PathBenchmark.configs = ['leaf', 'root'];
 
   PathBenchmark.prototype = createObject({
-    __proto__: Benchmark.prototype,
+    __proto__: ObservationBenchmark.prototype,
 
     newPath: function(parts, value) {
       var obj = {};
