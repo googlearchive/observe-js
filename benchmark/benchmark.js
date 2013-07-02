@@ -91,7 +91,6 @@
 
         var self = this;
         setTimeout(function() {
-          // Cleans up observers.
           Platform.performMicrotaskCheckpoint();
           self.completeFn(self.results);
         });
@@ -104,7 +103,7 @@
         this.benchmark.setupTest(this.tests[this.test]);
       }
 
-      this.benchmark.setupVariant(this.variant);
+      this.benchmark.setupVariant(this.variants[this.variant]);
 
       // Run the test once before timing.
       this.runSeries(BenchmarkRunner.INIT, 1);
@@ -116,19 +115,19 @@
       this.statusFn(this.tests[this.test], this.variants[this.variant],
                     this.runCount);
 
-      this.benchmark.teardownVariant(this.variant);
+      this.benchmark.teardownVariant(this.variants[this.variant]);
       this.variant++;
 
       if (this.variant == this.variants.length) {
         this.results.push(this.times);
-        this.benchmark.teardownTest(this.test);
+        this.benchmark.teardownTest(this.tests[this.test]);
         this.test++;
         this.variant = 0;
       }
 
       var self = this;
       setTimeout(function() {
-        if (self.statusFn)
+        Platform.performMicrotaskCheckpoint();
         self.nextVariant();
       }, 0);
     },
