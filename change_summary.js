@@ -281,7 +281,8 @@
     return copy;
   }
 
-  function Observer(callback) {
+  function Observer(object, callback) {
+    this.object = object;
     this.callback = callback;
     this.reporting = true;
     if (hasObserve)
@@ -309,7 +310,11 @@
     close: function() {
       if (!this.valid)
         return;
+      if (typeof this.object.unobserved === 'function')
+        this.object.unobserved();
+
       this.disconnect();
+      this.object = undefined;
       this.valid = false;
     },
 
@@ -427,8 +432,7 @@
   }
 
   function ObjectObserver(object, callback) {
-    this.object = object;
-    Observer.call(this, callback);
+    Observer.call(this, object, callback);
   }
 
   ObjectObserver.prototype = createObject({
@@ -476,18 +480,13 @@
         this.oldObject = undefined;
       else if (this.object)
         Object.unobserve(this.object, this.boundInternalCallback);
-
-      this.object = undefined;
     }
   });
 
   function ArrayObserver(array, callback) {
     if (!Array.isArray(array))
       throw Error('Provided object is not an Array');
-
-    this.object = array;
-
-    Observer.call(this, callback);
+    Observer.call(this, array, callback);
   }
 
   ArrayObserver.prototype = createObject({
@@ -605,9 +604,8 @@
     if (!isObject(object))
       return;
 
-    this.object = object;
     this.path = path;
-    Observer.call(this, callback);
+    Observer.call(this, object, callback);
   }
 
   PathObserver.prototype = createObject({
@@ -619,7 +617,6 @@
     },
 
     disconnect: function() {
-      this.object = undefined;
       this.value = undefined;
       if (hasObserve) {
         this.observedSet.reset();

@@ -74,6 +74,10 @@ function ArrayReduction(array, path, reduceFn, initial) {
     arrayObserver.close();
   };
 
+  this.unobserved = function() {
+    self.close();
+  };
+
   this.deliver = function() {
     arrayObserver.deliver();
     observers.forEach(function(observer) {

@@ -131,6 +131,14 @@ suite('PathObserver Tests', function() {
     callbackInvoked = false;
   }
 
+  test('Close Invokes Unobserved', function() {
+    var called = false;
+    var obj = { foo: 1, unobserved: function() { called = true }};
+    var observer = new PathObserver(obj, 'foo', function() {});
+    observer.close();
+    assert.isTrue(called);
+  });
+
   test('Delivery Until No Changes', function() {
     var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
@@ -729,6 +737,15 @@ suite('ArrayObserver Tests', function() {
     observer.close();
   }
 
+  test('Close Invokes Unobserved', function() {
+    var called = false;
+    var obj = [];
+    obj.unobserved = function() { called = true };
+    var observer = new ArrayObserver(obj, function() {});
+    observer.close();
+    assert.isTrue(called);
+  });
+
   test('Delivery Until No Changes', function() {
     var arr = [0, 1, 2, 3, 4];
     var callbackCount = 0;
@@ -1281,6 +1298,16 @@ suite('ObjectObserver Tests', function() {
     callbackArgs = undefined;
     callbackInvoked = false;
   }
+
+  test('Close Invokes Unobserved', function() {
+    var called = false;
+    var obj = {};
+    obj.unobserved = function() { called = true };
+    var observer = new ObjectObserver(obj, function() {});
+    observer.close();
+    assert.isTrue(called);
+  });
+
 
   test('Delivery Until No Changes', function() {
     var obj = { foo: 5 };
