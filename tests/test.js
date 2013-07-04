@@ -139,6 +139,20 @@ suite('PathObserver Tests', function() {
     assert.isTrue(called);
   });
 
+  test('Optional target for callback', function() {
+    var target = {
+      changed: function() {
+        this.called = true;
+      }
+    };
+    var obj = { foo: 1 };
+    var observer = new PathObserver(obj, 'foo', target.changed, target);
+    obj.foo = 2;
+    observer.deliver();
+    assert.isTrue(target.called);
+    observer.close();
+  });
+
   test('Delivery Until No Changes', function() {
     var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
@@ -746,6 +760,20 @@ suite('ArrayObserver Tests', function() {
     assert.isTrue(called);
   });
 
+  test('Optional target for callback', function() {
+    var target = {
+      changed: function() {
+        this.called = true;
+      }
+    };
+    var obj = [];
+    var observer = new ArrayObserver(obj, target.changed, target);
+    obj.length = 1;
+    observer.deliver();
+    assert.isTrue(target.called);
+    observer.close();
+  });
+
   test('Delivery Until No Changes', function() {
     var arr = [0, 1, 2, 3, 4];
     var callbackCount = 0;
@@ -1308,6 +1336,19 @@ suite('ObjectObserver Tests', function() {
     assert.isTrue(called);
   });
 
+  test('Optional target for callback', function() {
+    var target = {
+      changed: function() {
+        this.called = true;
+      }
+    };
+    var obj = {};
+    var observer = new ObjectObserver(obj, target.changed, target);
+    obj.foo = 1;
+    observer.deliver();
+    assert.isTrue(target.called);
+    observer.close();
+  });
 
   test('Delivery Until No Changes', function() {
     var obj = { foo: 5 };
