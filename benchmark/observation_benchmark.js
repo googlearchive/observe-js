@@ -155,7 +155,7 @@
           return size * 2;
 
         default:
-          val = array[this.undo]();
+          var val = array[this.undo]();
           array[this.operation](val + 1);
           return 2;
       }
