@@ -54,6 +54,17 @@ function ArrayReduction(array, path, reduceFn, initial) {
 
     Array.prototype.splice.apply(values, valueArgs);
     Array.prototype.splice.apply(observers, observerArgs);
+
+    // Correct the index/path being watched by the observers that watched indices
+    // after the splice.
+    var curIndex = splice.index + splice.addedCount;
+    while(curIndex < values.length) {
+      var expectedItemPath = (path ? (curIndex + '.' + path) : String(curIndex));
+
+      observers[curIndex].close();
+      observers[curIndex] = new PathObserver(array, expectedItemPath, newCallback(curIndex));
+      curIndex++;
+    }
   }
 
   var arrayObserver = new ArrayObserver(array, function(splices) {
@@ -102,8 +113,8 @@ ArrayReduction.defineProperty = function(object, name, descriptor) {
     }
   });
 
-  if (typeof Object.observe !== 'function')
-    return;
+  if (Observer.hasObjectObserve)
+    return observer;
 
   var value = observer.value;
   Object.defineProperty(observer, 'value', {
@@ -111,12 +122,14 @@ ArrayReduction.defineProperty = function(object, name, descriptor) {
       return value;
     },
     set: function(newValue) {
-      Object.getNotifier(object).notify({
-        object: object,
-        type: 'updated',
-        name: name,
-        oldValue: value
-      });
+      if (Observer.hasObjectObserve) {
+        Object.getNotifier(object).notify({
+          object: object,
+          type: 'updated',
+          name: name,
+          oldValue: value
+        });
+      }
       value = newValue;
     }
   })
