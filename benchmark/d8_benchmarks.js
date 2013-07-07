@@ -42,10 +42,60 @@ function reportStatus(setup, variant) {
   console.log('Running: ' + setup + ' object count, ' + variant + ' mutations');
 }
 
-var test = new ArrayBenchmark('splice');
+function ObserveUnobserveBenchmark(preobserved) {
+  this.objects = [];
+  this.preobserver = preobserved ? function() {} : undefined;
+}
 
-var runner = new BenchmarkRunner(test, [64000], [1600],
+ObserveUnobserveBenchmark.prototype = {
+  __proto__: Benchmark.prototype,
+
+  newObserver: function() {
+    return function() {};
+  },
+
+  setupTest: function(count) {
+    for (var i = 0; i < count; i++) {
+      var obj = {}
+      if (this.preobserver)
+        Object.observe(obj, this.preobserver);
+      this.objects.push({});
+    }
+  },
+
+  setupVariant: function(observerCount) {
+    this.observers = [];
+    for (var i = 0; i < observerCount; i++) {
+      this.observers.push(this.newObserver());
+    }
+  },
+
+  run: function() {
+    for (var i = 0; i < this.objects.length; i++) {
+      for (var j = 0; j < this.observers.length; j++)
+        Object.observe(this.objects[i], this.observers[j]);
+    }
+
+    for (var i = 0; i < this.objects.length; i++) {
+      for (var j = 0; j < this.observers.length; j++)
+        Object.unobserve(this.objects[i], this.observers[j]);
+    }
+  },
+
+  teardownVariant: function() {},
+  teardownTest: function(count) {
+    if (!this.preobserver)
+      return;
+    for (var i = 0; i < this.objects.length; i++) {
+      var obj = this.objects[i];
+      Object.unobserve(obj, this.preobserver);
+    }
+  },
+  destroy: function() {}
+};
+
+var test = new ObserveUnobserveBenchmark(false);
+
+var runner = new BenchmarkRunner(test, [64000], [1],
                                  reportResults, reportStatus);
 runner.go();
-
-print('Record count: ' + recordCount);
