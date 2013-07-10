@@ -715,15 +715,15 @@
 
     return {
       close: function() {
-        var oldValue;
+        var oldValue = path.getValueFrom(obj);
         if (notify)
           observer.deliver();
         observer.close();
-        delete object[name];
-        // FIXME: When notifier.performChange is available, suppress the
-        // underlying delete
-        // if (notify)
-        //  notify('deleted', oldValue);
+        Object.defineProperty(object, name, {
+          value: oldValue,
+          writable: true,
+          configurable: true
+        });
       }
     };
   }

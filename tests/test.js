@@ -619,7 +619,8 @@ suite('PathObserver Tests', function() {
     assert.strictEqual(9, target.computed);
 
     observer.close();
-    assert.isFalse(target.hasOwnProperty('computed'));
+    assert.isTrue(target.hasOwnProperty('computed'));
+    assert.strictEqual(9, target.computed);
 
     if (!changeRecords)
       return;
