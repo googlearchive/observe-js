@@ -140,16 +140,20 @@ suite('PathObserver Tests', function() {
   });
 
   test('Optional target for callback', function() {
+    var returnedToken;
     var target = {
-      changed: function() {
+      changed: function(value, oldValue, token) {
         this.called = true;
+        returnedToken = token;
       }
     };
     var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo', target.changed, target);
+    var observer = new PathObserver(obj, 'foo', target.changed, target, 'token');
     obj.foo = 2;
     observer.deliver();
     assert.isTrue(target.called);
+    assert.strictEqual('token', returnedToken)
+
     observer.close();
   });
 
@@ -761,16 +765,19 @@ suite('ArrayObserver Tests', function() {
   });
 
   test('Optional target for callback', function() {
+    var returnedToken;
     var target = {
-      changed: function() {
+      changed: function(splices, token) {
         this.called = true;
+        returnedToken = token;
       }
     };
     var obj = [];
-    var observer = new ArrayObserver(obj, target.changed, target);
+    var observer = new ArrayObserver(obj, target.changed, target, 'token');
     obj.length = 1;
     observer.deliver();
     assert.isTrue(target.called);
+    assert.strictEqual('token', returnedToken);
     observer.close();
   });
 
@@ -1337,16 +1344,38 @@ suite('ObjectObserver Tests', function() {
   });
 
   test('Optional target for callback', function() {
+    var returnedToken;
     var target = {
-      changed: function() {
+      changed: function(value, oldValue, token) {
         this.called = true;
+        returnedToken = token;
+      }
+    };
+    var obj = { foo: 1 };
+    var observer = new PathObserver(obj, 'foo', target.changed, target, 'token');
+    obj.foo = 2;
+    observer.deliver();
+    assert.isTrue(target.called);
+    assert.strictEqual('token', returnedToken)
+
+    observer.close();
+  });
+
+  test('Optional target for callback', function() {
+    var returnedToken;
+    var target = {
+      changed: function(added, removed, changed, oldValues, token) {
+        this.called = true;
+        returnedToken = token;
       }
     };
     var obj = {};
-    var observer = new ObjectObserver(obj, target.changed, target);
+    var observer = new ObjectObserver(obj, target.changed, target, 'token');
     obj.foo = 1;
     observer.deliver();
     assert.isTrue(target.called);
+    assert.strictEqual('token', returnedToken)
+
     observer.close();
   });
 

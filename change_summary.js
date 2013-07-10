@@ -281,11 +281,12 @@
     return copy;
   }
 
-  function Observer(object, callback, target) {
+  function Observer(object, callback, target, token) {
     this.object = object;
     this.callback = callback;
     // TODO(rafaelw): Hold this.target weakly when WeakRef is available.
     this.target = target;
+    this.token = token;
     this.reporting = true;
     if (hasObserve)
       this.boundInternalCallback = this.internalCallback.bind(this);
@@ -337,6 +338,7 @@
         return;
 
       this.sync(false);
+      this.reportArgs.push(this.token);
 
       try {
         this.callback.apply(this.target, this.reportArgs);
@@ -433,8 +435,8 @@
     };
   }
 
-  function ObjectObserver(object, callback, target) {
-    Observer.call(this, object, callback, target);
+  function ObjectObserver(object, callback, target, token) {
+    Observer.call(this, object, callback, target, token);
   }
 
   ObjectObserver.prototype = createObject({
@@ -485,10 +487,10 @@
     }
   });
 
-  function ArrayObserver(array, callback, target) {
+  function ArrayObserver(array, callback, target, token) {
     if (!Array.isArray(array))
       throw Error('Provided object is not an Array');
-    Observer.call(this, array, callback, target);
+    Observer.call(this, array, callback, target, token);
   }
 
   ArrayObserver.prototype = createObject({
@@ -591,7 +593,7 @@
     }
   };
 
-  function PathObserver(object, pathString, callback, target) {
+  function PathObserver(object, pathString, callback, target, token) {
     this.value = undefined;
 
     var path = getPath(pathString);
@@ -607,7 +609,7 @@
       return;
 
     this.path = path;
-    Observer.call(this, object, callback, target);
+    Observer.call(this, object, callback, target, token);
   }
 
   PathObserver.prototype = createObject({
