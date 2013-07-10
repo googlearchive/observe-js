@@ -34,6 +34,8 @@
   // a setTimeout so that it doesn't get too deep.
   var hasMutationObserver = typeof global.MutationObserver === 'function';
 
+  var hasForceGc = typeof global.gc === 'function';
+
   function EndOfMicrotaskRunner(callbackFn) {
     if (hasMutationObserver) {
       var observer = new MutationObserver(callbackFn);
@@ -136,6 +138,11 @@
       this.state = state;
       this.runCount = count;
       this.remaining = count;
+      if (hasForceGc) {
+        global.gc();
+        global.gc();
+        global.gc();
+      }
       this.start = this.now();
       this.runOne();
     },
