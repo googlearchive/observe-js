@@ -42,9 +42,8 @@ function reportStatus(setup, variant) {
   console.log('Running: ' + setup + ' object count, ' + variant + ' mutations');
 }
 
-function ObserveUnobserveBenchmark(preobserved) {
+function ObserveUnobserveBenchmark() {
   this.objects = [];
-  this.preobserver = preobserved ? function() {} : undefined;
 }
 
 ObserveUnobserveBenchmark.prototype = {
@@ -56,9 +55,6 @@ ObserveUnobserveBenchmark.prototype = {
 
   setupTest: function(count) {
     for (var i = 0; i < count; i++) {
-      var obj = {}
-      if (this.preobserver)
-        Object.observe(obj, this.preobserver);
       this.objects.push({});
     }
   },
@@ -83,19 +79,18 @@ ObserveUnobserveBenchmark.prototype = {
   },
 
   teardownVariant: function() {},
-  teardownTest: function(count) {
-    if (!this.preobserver)
-      return;
-    for (var i = 0; i < this.objects.length; i++) {
-      var obj = this.objects[i];
-      Object.unobserve(obj, this.preobserver);
-    }
-  },
+  teardownTest: function(count) {},
   destroy: function() {}
 };
 
-var test = new ObserveUnobserveBenchmark(false);
-
-var runner = new BenchmarkRunner(test, [64000], [1],
+/*
+var test = new ArrayBenchmark('update');
+var runner = new BenchmarkRunner(test, [6400], [1600],
                                  reportResults, reportStatus);
+*/
+
+var test = new ObserveUnobserveBenchmark();
+var runner = new BenchmarkRunner(test, [100000], [16],
+                                 reportResults, reportStatus);
+
 runner.go();
