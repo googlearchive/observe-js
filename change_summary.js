@@ -282,6 +282,7 @@
   }
 
   function Observer(object, callback, target, token) {
+    this.closed = false;
     this.object = object;
     this.callback = callback;
     // TODO(rafaelw): Hold this.target weakly when WeakRef is available.
@@ -291,17 +292,14 @@
     if (hasObserve)
       this.boundInternalCallback = this.internalCallback.bind(this);
 
-    this.valid = true;
     addToAll(this);
     this.connect();
     this.sync(true);
   }
 
   Observer.prototype = {
-    valid: false,
-
     internalCallback: function(records) {
-      if (!this.valid)
+      if (this.closed)
         return;
       if (this.reporting && this.check(records)) {
         this.report();
@@ -311,18 +309,18 @@
     },
 
     close: function() {
-      if (!this.valid)
+      if (this.closed)
         return;
-      if (typeof this.object.unobserved === 'function')
+      if (this.object && typeof this.object.unobserved === 'function')
         this.object.unobserved();
 
       this.disconnect();
       this.object = undefined;
-      this.valid = false;
+      this.closed = true;
     },
 
     deliver: function(testingResults) {
-      if (!this.valid)
+      if (this.closed)
         return;
       if (hasObserve) {
         this.testingResults = testingResults;
@@ -339,19 +337,21 @@
 
       this.sync(false);
       this.reportArgs.push(this.token);
+      this.invokeCallback(this.reportArgs);
+      this.reportArgs = undefined;
+    },
 
+    invokeCallback: function(args) {
       try {
-        this.callback.apply(this.target, this.reportArgs);
+        this.callback.apply(this.target, args);
       } catch (ex) {
         Observer._errorThrownDuringCallback = true;
         console.error('Exception caught during observer callback: ' + ex);
       }
-
-      this.reportArgs = undefined;
     },
 
     reset: function() {
-      if (!this.valid)
+      if (this.closed)
         return;
 
       if (hasObserve) {
@@ -411,7 +411,7 @@
 
       for (var i = 0; i < toCheck.length; i++) {
         var observer = toCheck[i];
-        if (!observer.valid)
+        if (observer.closed)
           continue;
 
         if (hasObserve) {
@@ -597,8 +597,9 @@
     this.value = undefined;
 
     var path = getPath(pathString);
-    if (!path)
+    if (!path) {
       return;
+    }
 
     if (!path.length) {
       this.value = object;
