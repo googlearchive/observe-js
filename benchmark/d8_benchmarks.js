@@ -83,14 +83,93 @@ ObserveUnobserveBenchmark.prototype = {
   destroy: function() {}
 };
 
-/*
-var test = new ArrayBenchmark('update');
-var runner = new BenchmarkRunner(test, [6400], [1600],
-                                 reportResults, reportStatus);
-*/
+var test;
+var runner;
 
-var test = new ObserveUnobserveBenchmark();
-var runner = new BenchmarkRunner(test, [100000], [16],
-                                 reportResults, reportStatus);
+console.log('-----Observe/Unobserve Benchmarks-----');
 
+var objectCount = 100000;
+
+console.log('ObserveUnobserveBenchmark - 1');
+test = new ObserveUnobserveBenchmark();
+runner = new BenchmarkRunner(test, [objectCount], [1], reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ObserveUnobserveBenchmark - 2');
+test = new ObserveUnobserveBenchmark();
+runner = new BenchmarkRunner(test, [objectCount], [2], reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ObserveUnobserveBenchmark - 4');
+test = new ObserveUnobserveBenchmark();
+runner = new BenchmarkRunner(test, [objectCount], [4], reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ObserveUnobserveBenchmark - 8');
+test = new ObserveUnobserveBenchmark();
+runner = new BenchmarkRunner(test, [objectCount], [8], reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ObserveUnobserveBenchmark - 16');
+test = new ObserveUnobserveBenchmark();
+runner = new BenchmarkRunner(test, [objectCount], [16], reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('-----Mutation Benchmarks-----');
+
+var objectCount = 6400;
+var mutationCount = 1600;
+
+console.log('PathBenchmark - leaf');
+test = new PathBenchmark('leaf');
+runner = new BenchmarkRunner(test, [objectCount], [mutationCount],
+                             reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('PathBenchmark - root');
+test = new PathBenchmark('root');
+runner = new BenchmarkRunner(test, [objectCount], [mutationCount],
+                             reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ArrayBenchmark - push/pop');
+test = new ArrayBenchmark('push/pop');
+runner = new BenchmarkRunner(test, [objectCount], [mutationCount],
+                             reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ArrayBenchmark - update');
+test = new ArrayBenchmark('update');
+runner = new BenchmarkRunner(test, [objectCount], [mutationCount],
+                             reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ArrayBenchmark - splice');
+test = new ArrayBenchmark('splice');
+runner = new BenchmarkRunner(test, [objectCount], [mutationCount],
+                             reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('ArrayBenchmark - shift/unshift');
+test = new ArrayBenchmark('shift/unshift');
+runner = new BenchmarkRunner(test, [objectCount], [mutationCount],
+                             reportResults,
+                             reportStatus);
+runner.go();
+
+console.log('Object');
+test = new ObjectBenchmark();
+runner = new BenchmarkRunner(test, [objectCount], [mutationCount],
+                             reportResults,
+                             reportStatus);
 runner.go();
