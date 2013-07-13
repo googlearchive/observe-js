@@ -598,16 +598,22 @@
 
     var path = getPath(pathString);
     if (!path) {
+      this.closed = true;
+      this.value = undefined;
       return;
     }
 
     if (!path.length) {
+      this.closed = true;
       this.value = object;
       return;
     }
 
-    if (!isObject(object))
+    if (!isObject(object)) {
+      this.closed = true;
+      this.value = undefined;
       return;
+    }
 
     this.path = path;
     Observer.call(this, object, callback, target, token);

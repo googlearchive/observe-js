@@ -641,10 +641,7 @@ suite('PathObserver Tests', function() {
       {
         object: target,
         name: 'computed',
-        type: 'deleted'
-        // TODO(rafaelw): When notifer.performChange() is implemented, this can
-        // a synthetic record can be sent with the correct value.
-        // oldValue: 9
+        type: 'reconfigured'
       }
     ]);
 
