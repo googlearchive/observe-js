@@ -289,8 +289,12 @@
     this.target = target;
     this.token = token;
     this.reporting = true;
-    if (hasObserve)
-      this.boundInternalCallback = this.internalCallback.bind(this);
+    if (hasObserve) {
+      var self = this;
+      this.boundInternalCallback = function(records) {
+        self.internalCallback(records);
+      };
+    }
 
     addToAll(this);
     this.connect();
