@@ -21,9 +21,7 @@
 */
 
 var console = {
-  log: print,
-  profile: enableProfiler,
-  profileEnd: disableProfiler
+  log: print
 };
 
 var setTimeout = function(callback) {
