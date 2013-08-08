@@ -1,8 +1,8 @@
 ## Learn the tech
 
-### Why ChangeSummary?
+### Why ObserveJS?
 
-ChangeSummary is a library for observing changes in JavaScript data. It exposes a high-level API and uses Object.observe if available, and otherwise performs dirty-checking.
+ObserveJS is a library for observing changes in JavaScript data. It exposes a high-level API and uses Object.observe if available, and otherwise performs dirty-checking.
 
 ### Basic Usage
 
