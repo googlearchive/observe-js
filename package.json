@@ -1,8 +1,8 @@
 {
-  "name": "ChangeSummary",
+  "name": "ObserveJS",
   "version": "0.0.0",
-  "description": "ChangeSummary =============",
-  "main": "change_summary.js",
+  "description": "ObserveJS =============",
+  "main": "observe.js",
   "directories": {
     "example": "examples",
     "test": "tests"
@@ -12,7 +12,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/rafaelw/ChangeSummary.git"
+    "url": "https://github.com/Polymer/ObserveJS.git"
   },
   "author": "",
   "license": "BSD",
