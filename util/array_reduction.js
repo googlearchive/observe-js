@@ -13,98 +13,69 @@
 // limitations under the License.
 
 function ArrayReduction(array, path, reduceFn, initial) {
-  var values = [];
-  var observers = [];
-  var self = this;
-  var hasInitial = arguments.length == 4;
+  this.array = array;
+  this.path = path ? path.trim() : undefined;
+  this.reduceFn = reduceFn;
+  this.initial = initial;
+  this.arrayObserver = new ArrayObserver(array, this.handleSplices, this);
+  this.observers = this.path ? [] : undefined;
 
-  function reduce() {
-    self.value = hasInitial ?
-      values.reduce(reduceFn, initial) : values.reduce(reduceFn);
-  }
-
-  function newCallback(index) {
-    return function(value) {
-      values[index] = value;
-      reduce();
-    }
-  }
-
-  function handleSplice(splice) {
-    var valueArgs = [splice.index, splice.removed.length];
-    var observerArgs = [splice.index, splice.removed.length];
-
-    var removeIndex = splice.index;
-    while (removeIndex < splice.index + splice.removed.length) {
-      observers[removeIndex].close();
-      observers[removeIndex] = undefined;
-      removeIndex++;
-    }
-
-    var addIndex = splice.index;
-    while (addIndex < splice.index + splice.addedCount) {
-      var itemPath = String(addIndex);
-      if (path)
-        itemPath += '.' + path;
-
-      valueArgs.push(PathObserver.getValueAtPath(array, itemPath));
-      observerArgs.push(new PathObserver(array, itemPath, newCallback(addIndex)));
-      addIndex++;
-    }
-
-    Array.prototype.splice.apply(values, valueArgs);
-    Array.prototype.splice.apply(observers, observerArgs);
-
-    // Correct the index/path being watched by the observers that watched indices
-    // after the splice.
-    var curIndex = splice.index + splice.addedCount;
-    while(curIndex < values.length) {
-      var expectedItemPath = (path ? (curIndex + '.' + path) : String(curIndex));
-
-      observers[curIndex].close();
-      observers[curIndex] = new PathObserver(array, expectedItemPath, newCallback(curIndex));
-      curIndex++;
-    }
-  }
-
-  var arrayObserver = new ArrayObserver(array, function(splices) {
-    splices.forEach(handleSplice);
-    reduce();
-  });
-
-  handleSplice({
+  this.handleSplices([{
     index: 0,
     removed: [],
     addedCount: array.length
-  });
+  }]);
+}
 
-  this.close = function() {
-    observers.forEach(function(observer) {
+ArrayReduction.prototype = {
+  updateObservers: function(splices) {
+    for (var i = 0; i < splices.length; i++) {
+      var splice = splices[i];
+      var added = [];
+      for (var j = 0; j < splice.addedCount; j++) {
+        added.push(new PathObserver(this.array[splice.index + j], this.path,
+                                    this.reduce, this));
+      }
+
+      var spliceArgs = [splice.index, splice.removed.length].concat(added);
+      var removed = Array.prototype.splice.apply(this.observers, spliceArgs);
+
+      for (var j = 0; j < removed.length; j++) {
+        removed[j].close();
+      }
+    }
+  },
+
+  handleSplices: function(splices) {
+    if (this.observers)
+      this.updateObservers(splices);
+
+    this.reduce();
+  },
+
+  reduce: function() {
+    this.value = this.array.reduce(this.reduceFn, this.initial);
+  },
+
+  close: function() {
+    this.observers.forEach(function(observer) {
       observer.close();
     });
-    arrayObserver.close();
-  };
+    this.arrayObserver.close();
+  },
 
-  this.unobserved = function() {
-    self.close();
-  };
-
-  this.deliver = function() {
-    arrayObserver.deliver();
-    observers.forEach(function(observer) {
+  deliver: function() {
+    this.arrayObserver.deliver();
+    this.observers.forEach(function(observer) {
       observer.deliver();
     });
   }
-
-  reduce();
 }
 
 ArrayReduction.defineProperty = function(object, name, descriptor) {
-  var observer;
-  if (descriptor.hasOwnProperty('initial'))
-    observer = new ArrayReduction(descriptor.array, descriptor.path, descriptor.reduce, descriptor.initial);
-  else
-    observer = new ArrayReduction(descriptor.array, descriptor.path, descriptor.reduce);
+  var observer = new ArrayReduction(descriptor.array, descriptor.path,
+                                    descriptor.reduce,
+                                    descriptor.initial);
 
   Object.defineProperty(object, name, {
     get: function() {

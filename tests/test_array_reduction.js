@@ -15,7 +15,7 @@ suite('ArrayReduction Tests',function(){
       path: 'id',
       initial: [],
       reduce: function(value,cur,i){
-        value.push([cur,i]);
+        value.push([cur.id,i]);
         return value;
       }
     });
