@@ -160,7 +160,7 @@ suite('PathObserver Tests', function() {
   test('Delivery Until No Changes', function() {
     var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
-    var observer = new PathObserver(obj, 'foo.bar', function() {
+    var observer = new PathObserver(obj, 'foo . bar', function() {
       callbackCount++;
       if (!obj.foo.bar)
         return;
@@ -1601,5 +1601,22 @@ suite('ObjectObserver Tests', function() {
     });
 
     observer.close();
+  });
+
+  test('Path.isValid', function() {
+    assert.isTrue(Path.isValid('a'));
+    assert.isTrue(Path.isValid('a.b'));
+    assert.isTrue(Path.isValid('a. b'));
+    assert.isTrue(Path.isValid('a .b'));
+    assert.isTrue(Path.isValid('a . b'));
+
+    assert.isFalse(Path.isValid(42));
+    assert.isTrue(Path.isValid(''));
+    assert.isTrue(Path.isValid(' '));
+
+    assert.isFalse(Path.isValid('a b'));
+    assert.isFalse(Path.isValid('.'));
+    assert.isFalse(Path.isValid(' . '));
+    assert.isFalse(Path.isValid('..'));
   });
 });

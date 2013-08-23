@@ -88,13 +88,13 @@
   var ident = identStart + '+' + identPart + '*';
   var elementIndex = '(?:[0-9]|[1-9]+[0-9]+)';
   var identOrElementIndex = '(?:' + ident + '|' + elementIndex + ')';
-  var path = '(?:' + identOrElementIndex + ')(?:\\.' + identOrElementIndex + ')*';
+  var path = '(?:' + identOrElementIndex + ')(?:\\s*\\.\\s*' + identOrElementIndex + ')*';
   var pathRegExp = new RegExp('^' + path + '$');
 
   function isPathValid(s) {
     if (typeof s != 'string')
       return false;
-    s = s.replace(/\s/g, '');
+    s = s.trim();
 
     if (s == '')
       return true;
@@ -128,7 +128,7 @@
       return this;
     }
 
-    s.split(/\./).filter(function(part) {
+    s.split(/\s*\.\s*/).filter(function(part) {
       return part;
     }).forEach(function(part) {
       this.push(part);
