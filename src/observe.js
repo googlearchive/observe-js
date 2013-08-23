@@ -139,6 +139,8 @@
     }
   }
 
+  Path.isValid = isPathValid;
+
   Path.prototype = createObject({
     __proto__: [],
 
