@@ -179,13 +179,12 @@
 
       var str = '';
       var pathString = 'obj';
-      str += 'if (obj !== null && obj !== undefined';
+      str += 'if (obj != null';
       var i = 0;
       for (; i < (this.length - 1); i++) {
         var ident = this[i];
         pathString += accessors[i];
-        str += ' &&\n     ' + pathString + ' !== null && ' +
-               pathString + ' !== undefined';
+        str += ' &&\n     ' + pathString + ' != null';
       }
       str += ')\n';
 
