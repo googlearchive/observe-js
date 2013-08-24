@@ -345,6 +345,28 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
+  test('valueFn', function() {
+    var model = { };
+
+    function valueFn(value) {
+      return isNaN(value) ? value : value * 3;
+    }
+
+    observer = new PathObserver(model, 'foo', callback, undefined, undefined,
+                                valueFn);
+
+    model.foo = 1;
+    assertPathChanges(3, undefined);
+
+    model.foo = 2;
+    assertPathChanges(6, 3);
+
+    delete model.foo;
+    assertPathChanges(undefined, 6);
+
+    observer.close();
+  });
+
   test('Path With Indices', function() {
     var model = [];
 

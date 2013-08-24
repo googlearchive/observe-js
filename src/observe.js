@@ -587,25 +587,28 @@
     }
   };
 
-  function PathObserver(object, pathString, callback, target, token) {
-    this.value = undefined;
+  function PathObserver(object, pathString, callback, target, token, valueFn) {
+    this.valueFn = valueFn;
 
     var path = getPath(pathString);
     if (!path) {
+      // Invalid path.
       this.closed = true;
-      this.value = undefined;
+      this.value = this.valueFn ? this.valueFn() : undefined;
       return;
     }
 
     if (!path.length) {
+      // 0-length path.
       this.closed = true;
-      this.value = object;
+      this.value = this.valueFn ? this.valueFn(object) : object;
       return;
     }
 
     if (!isObject(object)) {
+      // non-object & non-0-length path.
       this.closed = true;
-      this.value = undefined;
+      this.value = this.valueFn ? this.valueFn() : undefined;
       return;
     }
 
@@ -631,7 +634,10 @@
     },
 
     check: function() {
-      this.value = this.path.getValueFrom(this.object, this.observedSet);
+      // Note: Extracting this to a member function for use here and below
+      // regresses dirty-checking path perf by about 25% =-(.
+      var newValue = this.path.getValueFrom(this.object, this.observedSet)
+      this.value = this.valueFn ? this.valueFn(newValue) : newValue;
 
       if (areSameValue(this.value, this.oldValue))
         return false;
@@ -641,8 +647,10 @@
     },
 
     sync: function(hard) {
-      if (hard)
-        this.value = this.path.getValueFrom(this.object, this.observedSet);
+      if (hard) {
+        var newValue = this.path.getValueFrom(this.object, this.observedSet)
+        this.value = this.valueFn ? this.valueFn(newValue) : newValue;
+      }
 
       this.oldValue = this.value;
     }
