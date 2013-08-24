@@ -134,7 +134,7 @@
       this.push(part);
     }, this);
 
-    if (hasEval && this.length) {
+    if (hasEval && !hasObserve && this.length) {
       this.getValueFrom = this.compiledGetValueFromFn();
     }
   }
@@ -148,24 +148,17 @@
       return this.join('.');
     },
 
-    getValueFrom: function(obj, allValues) {
-      for (var i = 0; i < this.length; i++) {
-        if (obj === undefined || obj === null)
-          return;
-        obj = obj[this[i]];
-      }
-
-      return obj;
-    },
-
-    getValueFromObserved: function(obj, observedSet) {
-      observedSet.reset();
+    getValueFrom: function(obj, observedSet) {
+      if (observedSet)
+        observedSet.reset();
       for (var i = 0; i < this.length; i++) {
         if (obj === undefined || obj === null) {
-          observedSet.cleanup();
+          if (observedSet)
+            observedSet.cleanup();
           return;
         }
-        observedSet.observe(obj);
+        if (observedSet)
+          observedSet.observe(obj);
         obj = obj[this[i]];
       }
 
@@ -543,10 +536,6 @@
     });
   };
 
-  function getPathValue(object, path) {
-    return path.getValueFrom(object);
-  }
-
   function ObservedSet(callback) {
     this.arr = [];
     this.callback = callback;
@@ -634,7 +623,7 @@
 
     disconnect: function() {
       this.value = undefined;
-      if (hasObserve) {
+      if (this.observedSet) {
         this.observedSet.reset();
         this.observedSet.cleanup();
         this.observedSet = undefined;
@@ -642,8 +631,8 @@
     },
 
     check: function() {
-      this.value = !hasObserve ? this.path.getValueFrom(this.object) :
-          this.path.getValueFromObserved(this.object, this.observedSet);
+      this.value = this.path.getValueFrom(this.object, this.observedSet);
+
       if (areSameValue(this.value, this.oldValue))
         return false;
 
@@ -652,10 +641,9 @@
     },
 
     sync: function(hard) {
-      if (hard) {
-        this.value = !hasObserve ? this.path.getValueFrom(this.object) :
-            this.path.getValueFromObserved(this.object, this.observedSet);
-      }
+      if (hard)
+        this.value = this.path.getValueFrom(this.object, this.observedSet);
+
       this.oldValue = this.value;
     }
   });
