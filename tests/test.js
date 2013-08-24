@@ -131,9 +131,9 @@ suite('PathObserver Tests', function() {
     callbackInvoked = false;
   }
 
-  test('Close Invokes Unobserved', function() {
+  test('Close Invokes Close', function() {
     var called = false;
-    var obj = { foo: 1, unobserved: function() { called = true }};
+    var obj = { foo: 1, close: function() { called = true }};
     var observer = new PathObserver(obj, 'foo', function() {});
     observer.close();
     assert.isTrue(called);
@@ -775,10 +775,10 @@ suite('ArrayObserver Tests', function() {
     observer.close();
   }
 
-  test('Close Invokes Unobserved', function() {
+  test('Close Invokes Close', function() {
     var called = false;
     var obj = [];
-    obj.unobserved = function() { called = true };
+    obj.close = function() { called = true };
     var observer = new ArrayObserver(obj, function() {});
     observer.close();
     assert.isTrue(called);
@@ -1354,10 +1354,10 @@ suite('ObjectObserver Tests', function() {
     callbackInvoked = false;
   }
 
-  test('Close Invokes Unobserved', function() {
+  test('Close Invokes Close', function() {
     var called = false;
     var obj = {};
-    obj.unobserved = function() { called = true };
+    obj.close = function() { called = true };
     var observer = new ObjectObserver(obj, function() {});
     observer.close();
     assert.isTrue(called);

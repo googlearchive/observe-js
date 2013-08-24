@@ -309,8 +309,8 @@
     close: function() {
       if (this.closed)
         return;
-      if (this.object && typeof this.object.unobserved === 'function')
-        this.object.unobserved();
+      if (this.object && typeof this.object.close === 'function')
+        this.object.close();
 
       this.disconnect();
       this.object = undefined;
