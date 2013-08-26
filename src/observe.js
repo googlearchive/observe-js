@@ -150,7 +150,7 @@
 
     getValueFrom: function(obj, observedSet) {
       for (var i = 0; i < this.length; i++) {
-        if (obj === undefined || obj === null)
+        if (obj == null)
           return;
         if (observedSet)
           observedSet.observe(obj);
