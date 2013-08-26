@@ -1,3 +1,5 @@
+[![Build status](http://www.polymer-project.org/build/observe-js/status.png "Build status")](http://build.chromium.org/p/client.polymer/waterfall)
+
 ## Learn the tech
 
 ### Why observe-js?
