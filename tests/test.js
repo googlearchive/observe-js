@@ -689,6 +689,54 @@ suite('PathObserver Tests', function() {
   });
 });
 
+
+suite('CompoundPathObserver Tests', function() {
+
+  setup(doSetup);
+
+  teardown(doTeardown);
+
+  function assertPathChanges(expectNewValue, expectOldValue) {
+    observer.deliver();
+
+    assert.isTrue(callbackInvoked);
+
+    var newValue = callbackArgs[0];
+    var oldValue = callbackArgs[1];
+    assert.deepEqual(expectNewValue, newValue);
+    assert.deepEqual(expectOldValue, oldValue);
+
+    callbackArgs = undefined;
+    callbackInvoked = false;
+  }
+
+  test('CompoundPath Simple', function() {
+    var model = { a: 1, b: 2, c: 3 };
+
+    function valueFn(values) {
+      return values.reduce(function(last, cur) {
+        return typeof cur === 'number' ? last + cur : undefined;
+      }, 0);
+    }
+
+    observer = new CompoundPathObserver(callback, undefined, undefined,
+                                        valueFn);
+    observer.addPath(model, 'a');
+    observer.addPath(model, 'b');
+    observer.addPath(model, 'c');
+    observer.start();
+
+    assert.strictEqual(6, observer.value);
+
+    model.a = -10;
+    model.b = 20;
+    model.c = 30;
+    assertPathChanges(40, 6);
+
+    observer.close();
+  });
+});
+
 suite('ArrayObserver Tests', function() {
 
   setup(doSetup);

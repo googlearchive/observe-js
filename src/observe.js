@@ -149,19 +149,13 @@
     },
 
     getValueFrom: function(obj, observedSet) {
-      if (observedSet)
-        observedSet.reset();
       for (var i = 0; i < this.length; i++) {
-        if (obj === undefined || obj === null) {
-          if (observedSet)
-            observedSet.cleanup();
+        if (obj === undefined || obj === null)
           return;
-        }
         if (observedSet)
           observedSet.observe(obj);
         obj = obj[this[i]];
       }
-
       return obj;
     },
 
@@ -291,8 +285,6 @@
     }
 
     addToAll(this);
-    this.connect();
-    this.sync(true);
   }
 
   Observer.prototype = {
@@ -334,8 +326,10 @@
         return;
 
       this.sync(false);
-      this.reportArgs.push(this.token);
-      this.invokeCallback(this.reportArgs);
+      if (this.callback) {
+        this.reportArgs.push(this.token);
+        this.invokeCallback(this.reportArgs);
+      }
       this.reportArgs = undefined;
     },
 
@@ -435,6 +429,8 @@
 
   function ObjectObserver(object, callback, target, token) {
     Observer.call(this, object, callback, target, token);
+    this.connect();
+    this.sync(true);
   }
 
   ObjectObserver.prototype = createObject({
@@ -488,7 +484,7 @@
   function ArrayObserver(array, callback, target, token) {
     if (!Array.isArray(array))
       throw Error('Provided object is not an Array');
-    Observer.call(this, array, callback, target, token);
+    ObjectObserver.call(this, array, callback, target, token);
   }
 
   ArrayObserver.prototype = createObject({
@@ -588,8 +584,6 @@
   };
 
   function PathObserver(object, pathString, callback, target, token, valueFn) {
-    this.valueFn = valueFn;
-
     var path = getPath(pathString);
     if (!path) {
       // Invalid path.
@@ -612,8 +606,12 @@
       return;
     }
 
-    this.path = path;
     Observer.call(this, object, callback, target, token);
+    this.valueFn = valueFn;
+    this.path = path;
+
+    this.connect();
+    this.sync(true);
   }
 
   PathObserver.prototype = createObject({
@@ -636,8 +634,14 @@
     check: function() {
       // Note: Extracting this to a member function for use here and below
       // regresses dirty-checking path perf by about 25% =-(.
+      if (this.observedSet)
+        this.observedSet.reset();
+
       var newValue = this.path.getValueFrom(this.object, this.observedSet)
       this.value = this.valueFn ? this.valueFn(newValue) : newValue;
+
+      if (this.observedSet)
+        this.observedSet.cleanup();
 
       if (areSameValue(this.value, this.oldValue))
         return false;
@@ -648,8 +652,14 @@
 
     sync: function(hard) {
       if (hard) {
+        if (this.observedSet)
+          this.observedSet.reset();
+
         var newValue = this.path.getValueFrom(this.object, this.observedSet)
         this.value = this.valueFn ? this.valueFn(newValue) : newValue;
+
+        if (this.observedSet)
+          this.observedSet.cleanup();
       }
 
       this.oldValue = this.value;
@@ -670,6 +680,107 @@
 
     path.setValueFrom(obj, value);
   };
+
+  function CompoundPathObserver(callback, target, token, valueFn) {
+    Observer.call(this, undefined, callback, target, token);
+    this.valueFn = valueFn;
+
+    this.observed = [];
+    this.values = [];
+    this.started = false;
+  }
+
+  CompoundPathObserver.prototype = createObject({
+    __proto__: PathObserver.prototype,
+
+    addPath: function(object, pathString) {
+      if (this.started)
+        throw Error('Cannot add more paths once started.');
+
+      var path = getPath(pathString);
+      var value = undefined;
+
+      if (!path) {
+        // Invalid path.
+      } else if (!path.length) {
+        // 0-length path.
+        path = undefined;
+        value = object;
+      } else if (!isObject(object)) {
+        // non-object & non-0-length path.
+        path = undefined;
+        value = undefined;
+      }
+
+      this.observed.push(object, path);
+      this.values.push(value);
+    },
+
+    start: function() {
+      this.connect();
+      this.sync(true);
+    },
+
+    getValues: function() {
+      if (this.observedSet)
+        this.observedSet.reset();
+
+      var anyChanged = false;
+      for (var i = 0; i < this.observed.length; i = i+2) {
+        var path = this.observed[i+1];
+        if (!path)
+          continue;
+        var object = this.observed[i];
+        var value = path.getValueFrom(object, this.observedSet);
+        var oldValue = this.values[i/2];
+        if (!areSameValue(value, oldValue)) {
+          this.values[i/2] = value;
+          anyChanged = true;
+        }
+      }
+
+      if (this.observedSet)
+        this.observedSet.cleanup();
+
+      return anyChanged;
+    },
+
+    check: function() {
+      if (!this.getValues())
+        return;
+
+      this.value = this.valueFn(this.values);
+
+      if (areSameValue(this.value, this.oldValue))
+        return false;
+
+      this.reportArgs = [this.value, this.oldValue];
+      return true;
+    },
+
+    sync: function(hard) {
+      if (hard) {
+        this.getValues();
+        this.value = this.valueFn(this.values);
+      }
+
+      this.oldValue = this.value;
+    },
+
+    close: function() {
+      if (this.observed) {
+        for (var i = 0; i < this.observed.length; i = i + 2) {
+          var object = this.observed[i];
+          if (object && typeof object.close === 'function')
+            object.close();
+        }
+        this.observed = undefined;
+        this.values = undefined;
+      }
+
+      Observer.prototype.close.call(this);
+    }
+  });
 
   var knownRecordTypes = {
     'new': true,
@@ -1176,5 +1287,6 @@
   };
   global.ObjectObserver = ObjectObserver;
   global.PathObserver = PathObserver;
+  global.CompoundPathObserver = CompoundPathObserver;
   global.Path = Path;
 })(typeof global !== 'undefined' && global ? global : this);
