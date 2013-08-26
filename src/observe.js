@@ -588,21 +588,21 @@
     if (!path) {
       // Invalid path.
       this.closed = true;
-      this.value = this.valueFn ? this.valueFn() : undefined;
+      this.value = valueFn ? valueFn() : undefined;
       return;
     }
 
     if (!path.length) {
       // 0-length path.
       this.closed = true;
-      this.value = this.valueFn ? this.valueFn(object) : object;
+      this.value = valueFn ? valueFn(object) : object;
       return;
     }
 
     if (!isObject(object)) {
       // non-object & non-0-length path.
       this.closed = true;
-      this.value = this.valueFn ? this.valueFn() : undefined;
+      this.value = valueFn ? valueFn() : undefined;
       return;
     }
 
