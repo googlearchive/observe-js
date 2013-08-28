@@ -20,6 +20,12 @@
   "gitHead": "123e411687c6199c240b709d582b0e939cb14080",
   "devDependencies": {
     "chai": "*",
-    "mocha": "*"
+    "mocha": "*",
+    "grunt": "*",
+    "grunt-karma": "*",
+    "karma-mocha": "*",
+    "karma-ie-launcher": "*",
+    "karma-script-launcher": "*",
+    "karma-crbot-reporter": "*"
   }
 }
