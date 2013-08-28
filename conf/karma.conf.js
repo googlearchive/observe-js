@@ -9,13 +9,14 @@ module.exports = function(karma) {
       'conf/mocha.conf.js',
       'src/observe.js',
       'util/array_reduction.js',
-      'tests/array_fuzzer.js',
-      'tests/test.js',
-      'tests/test_array_reduction.js',
+      'tests/*.js'
     ],
 
     // list of files to exclude
-    exclude: [],
+    exclude: [
+      'tests/d8_array_fuzzer.js',
+      'tests/d8_planner_test.js'
+    ],
 
     frameworks: ['mocha'],
 
