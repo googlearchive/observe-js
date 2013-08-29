@@ -583,7 +583,8 @@
     }
   };
 
-  function PathObserver(object, pathString, callback, target, token, valueFn) {
+  function PathObserver(object, pathString, callback, target, token, valueFn,
+                        setValueFn) {
     var path = getPath(pathString);
     if (!path) {
       // Invalid path.
@@ -608,6 +609,7 @@
 
     Observer.call(this, object, callback, target, token);
     this.valueFn = valueFn;
+    this.setValueFn = setValueFn;
     this.path = path;
 
     this.connect();
@@ -663,6 +665,14 @@
       }
 
       this.oldValue = this.value;
+    },
+
+    setValue: function(newValue) {
+      if (!this.path)
+        return;
+      if (typeof this.setValueFn === 'function')
+        newValue = this.setValueFn(newValue);
+      this.path.setValueFrom(this.object, newValue);
     }
   });
 

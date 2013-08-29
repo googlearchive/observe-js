@@ -209,6 +209,24 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
+  test('Path setValue', function() {
+    var arr = {};
+
+    arr.foo = 'bar';
+    observer = new PathObserver(arr, 'foo', callback);
+    arr.foo = 'baz';
+
+    observer.setValue('bat');
+    assert.strictEqual(arr.foo, 'bat');
+    assertPathChanges('bat', 'bar');
+
+    observer.setValue('bot');
+    observer.reset();
+    assertNoChanges();
+
+    observer.close();
+  });
+
   test('Degenerate Values', function() {
     observer = new PathObserver(null, '', callback);
     assert.equal(null, observer.value);
