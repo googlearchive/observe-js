@@ -207,6 +207,8 @@
       observer.report();
       cycles++;
     }
+    if (global.testingExposeCycleCount)
+      global.dirtyCheckCycleCount = cycles;
   }
 
   function objectIsEmpty(object) {
@@ -417,6 +419,9 @@
       }
     } while (cycles < MAX_DIRTY_CHECK_CYCLES && results.anyChanged);
 
+    if (global.testingExposeCycleCount)
+      global.dirtyCheckCycleCount = cycles;
+
     Observer._allObserversCount = allObservers.length;
     runningMicrotaskCheckpoint = false;
   };
@@ -589,21 +594,24 @@
     if (!path) {
       // Invalid path.
       this.closed = true;
-      this.value = valueFn ? valueFn() : undefined;
+      this.value_ = undefined;
+      this.value = valueFn ? valueFn(this.value_) : this.value_;
       return;
     }
 
     if (!path.length) {
       // 0-length path.
       this.closed = true;
-      this.value = valueFn ? valueFn(object) : object;
+      this.value_ = object;
+      this.value = valueFn ? valueFn(this.value_) : this.value_;
       return;
     }
 
     if (!isObject(object)) {
       // non-object & non-0-length path.
       this.closed = true;
-      this.value = valueFn ? valueFn() : undefined;
+      this.value_ = undefined;
+      this.value = valueFn ? valueFn(this.value_) : this.value_;
       return;
     }
 
@@ -626,6 +634,7 @@
 
     disconnect: function() {
       this.value = undefined;
+      this.value_ = undefined;
       if (this.observedSet) {
         this.observedSet.reset();
         this.observedSet.cleanup();
@@ -639,15 +648,15 @@
       if (this.observedSet)
         this.observedSet.reset();
 
-      var newValue = this.path.getValueFrom(this.object, this.observedSet)
-      this.value = this.valueFn ? this.valueFn(newValue) : newValue;
+      this.value_ = this.path.getValueFrom(this.object, this.observedSet);
 
       if (this.observedSet)
         this.observedSet.cleanup();
 
-      if (areSameValue(this.value, this.oldValue))
+      if (areSameValue(this.value_, this.oldValue_))
         return false;
 
+      this.value = this.valueFn ? this.valueFn(this.value_) : this.value_;
       this.reportArgs = [this.value, this.oldValue];
       return true;
     },
@@ -657,13 +666,14 @@
         if (this.observedSet)
           this.observedSet.reset();
 
-        var newValue = this.path.getValueFrom(this.object, this.observedSet)
-        this.value = this.valueFn ? this.valueFn(newValue) : newValue;
+        this.value_ = this.path.getValueFrom(this.object, this.observedSet);
+        this.value = this.valueFn ? this.valueFn(this.value_) : this.value_;
 
         if (this.observedSet)
           this.observedSet.cleanup();
       }
 
+      this.oldValue_ = this.value_;
       this.oldValue = this.value;
     },
 

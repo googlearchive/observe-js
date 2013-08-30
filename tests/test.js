@@ -16,6 +16,8 @@ var observer;
 var callbackArgs = undefined;
 var callbackInvoked = false;
 
+window.testingExposeCycleCount = true;
+
 function callback() {
   callbackArgs = Array.prototype.slice.apply(arguments);
   callbackInvoked = true;
@@ -32,6 +34,23 @@ function assertNoChanges() {
     observer.deliver();
   assert.isFalse(callbackInvoked);
   assert.isUndefined(callbackArgs);
+}
+
+function assertPathChanges(expectNewValue, expectOldValue) {
+  observer.deliver();
+
+  assert.isTrue(callbackInvoked);
+
+  var newValue = callbackArgs[0];
+  var oldValue = callbackArgs[1];
+  assert.deepEqual(expectNewValue, newValue);
+  assert.deepEqual(expectOldValue, oldValue);
+
+  assert.isTrue(window.dirtyCheckCycleCount === undefined ||
+                window.dirtyCheckCycleCount === 1);
+
+  callbackArgs = undefined;
+  callbackInvoked = false;
 }
 
 var createObject = ('__proto__' in {}) ?
@@ -116,20 +135,6 @@ suite('PathObserver Tests', function() {
   setup(doSetup);
 
   teardown(doTeardown);
-
-  function assertPathChanges(expectNewValue, expectOldValue) {
-    observer.deliver();
-
-    assert.isTrue(callbackInvoked);
-
-    var newValue = callbackArgs[0];
-    var oldValue = callbackArgs[1];
-    assert.deepEqual(expectNewValue, newValue);
-    assert.deepEqual(expectOldValue, oldValue);
-
-    callbackArgs = undefined;
-    callbackInvoked = false;
-  }
 
   test('Close Invokes Close', function() {
     var called = false;
@@ -384,6 +389,26 @@ suite('PathObserver Tests', function() {
 
     observer.close();
   });
+
+  test('valueFn - return object literal', function() {
+    var model = { };
+
+    function valueFn(value) {
+      return isNaN(value) ? value : [ value ];
+    }
+
+    observer = new PathObserver(model, 'foo', callback, undefined, undefined,
+                                valueFn);
+
+    model.foo = 1;
+    assertPathChanges([1], undefined);
+
+    model.foo = 3;
+    assertPathChanges([3], [1]);
+
+    observer.close();
+  });
+
 
   test('Path With Indices', function() {
     var model = [];
@@ -713,20 +738,6 @@ suite('CompoundPathObserver Tests', function() {
   setup(doSetup);
 
   teardown(doTeardown);
-
-  function assertPathChanges(expectNewValue, expectOldValue) {
-    observer.deliver();
-
-    assert.isTrue(callbackInvoked);
-
-    var newValue = callbackArgs[0];
-    var oldValue = callbackArgs[1];
-    assert.deepEqual(expectNewValue, newValue);
-    assert.deepEqual(expectOldValue, oldValue);
-
-    callbackArgs = undefined;
-    callbackInvoked = false;
-  }
 
   test('CompoundPath Simple', function() {
     var model = { a: 1, b: 2, c: 3 };
