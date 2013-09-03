@@ -147,7 +147,7 @@
     if (path)
       return path;
     if (!isPathValid(pathString))
-      return;
+      return invalidPath;
     var path = new Path(pathString, constructorIsPrivate);
     pathCache[pathString] = path;
     return path;
@@ -157,6 +157,7 @@
 
   Path.prototype = createObject({
     __proto__: [],
+    valid: true,
 
     toString: function() {
       return this.join('.');
@@ -212,6 +213,10 @@
       return true;
     }
   });
+
+  var invalidPath = new Path('', constructorIsPrivate);
+  invalidPath.valid = false;
+  invalidPath.getValueFrom = invalidPath.setValueFrom = function() {};
 
   var MAX_DIRTY_CHECK_CYCLES = 1000;
 
@@ -605,28 +610,10 @@
   function PathObserver(object, path, callback, target, token, valueFn,
                         setValueFn) {
     var path = path instanceof Path ? path : getPath(path);
-
-    if (!path) {
-      // Invalid path.
-      this.closed = true;
-      this.value_ = undefined;
+    if (!path || !path.length || !isObject(object)) {
+      this.value_ = path ? path.getValueFrom(object) : undefined;
       this.value = valueFn ? valueFn(this.value_) : this.value_;
-      return;
-    }
-
-    if (!path.length) {
-      // 0-length path.
       this.closed = true;
-      this.value_ = object;
-      this.value = valueFn ? valueFn(this.value_) : this.value_;
-      return;
-    }
-
-    if (!isObject(object)) {
-      // non-object & non-0-length path.
-      this.closed = true;
-      this.value_ = undefined;
-      this.value = valueFn ? valueFn(this.value_) : this.value_;
       return;
     }
 
@@ -718,19 +705,7 @@
         throw Error('Cannot add more paths once started.');
 
       var path = path instanceof Path ? path : getPath(path);
-      var value = undefined;
-
-      if (!path) {
-        // Invalid path.
-      } else if (!path.length) {
-        // 0-length path.
-        path = undefined;
-        value = object;
-      } else if (!isObject(object)) {
-        // non-object & non-0-length path.
-        path = undefined;
-        value = undefined;
-      }
+      var value = path ? path.getValueFrom(object) : undefined;
 
       this.observed.push(object, path);
       this.values.push(value);
@@ -1309,9 +1284,4 @@
   global.PathObserver = PathObserver;
   global.CompoundPathObserver = CompoundPathObserver;
   global.Path = Path;
-
-  global.Path.isValid = function(pathString) {
-    return Path.get(pathString) !== undefined;
-  };
-
 })(typeof global !== 'undefined' && global ? global : this);

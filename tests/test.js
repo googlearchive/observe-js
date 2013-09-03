@@ -75,24 +75,27 @@ suite('Path', function() {
   });
 
   test('valid paths', function() {
-    assert.isTrue(Path.isValid('a'));
-    assert.isTrue(Path.isValid('a.b'));
-    assert.isTrue(Path.isValid('a. b'));
-    assert.isTrue(Path.isValid('a .b'));
-    assert.isTrue(Path.isValid('a . b'));
-    assert.isTrue(Path.isValid(''));
-    assert.isTrue(Path.isValid(' '));
-    assert.isTrue(Path.isValid(null));
-    assert.isTrue(Path.isValid(undefined));
-    assert.isTrue(Path.isValid());
-    assert.isTrue(Path.isValid(42));
+    assert.isTrue(Path.get('a').valid);
+    assert.isTrue(Path.get('a.b').valid);
+    assert.isTrue(Path.get('a. b').valid);
+    assert.isTrue(Path.get('a .b').valid);
+    assert.isTrue(Path.get('a . b').valid);
+    assert.isTrue(Path.get('').valid);
+    assert.isTrue(Path.get(' ').valid);
+    assert.isTrue(Path.get(null).valid);
+    assert.isTrue(Path.get(undefined).valid);
+    assert.isTrue(Path.get().valid);
+    assert.isTrue(Path.get(42).valid);
   });
 
   test('invalid paths', function() {
-    assert.isFalse(Path.isValid('a b'));
-    assert.isFalse(Path.isValid('.'));
-    assert.isFalse(Path.isValid(' . '));
-    assert.isFalse(Path.isValid('..'));
+    var p = Path.get('a b');
+    assert.isFalse(p.valid);
+    assert.isUndefined(p.getValueFrom({ a: { b: 2 }}));
+
+    assert.isFalse(Path.get('.').valid);
+    assert.isFalse(Path.get(' . ').valid);
+    assert.isFalse(Path.get('..').valid);
   });
 
   test('Paths are interned', function() {
@@ -819,7 +822,7 @@ suite('CompoundPathObserver Tests', function() {
 
   teardown(doTeardown);
 
-  test('CompoundPath Simple', function() {
+  test('Simple', function() {
     var model = { a: 1, b: 2, c: 3 };
 
     function valueFn(values) {
@@ -842,6 +845,27 @@ suite('CompoundPathObserver Tests', function() {
     model.c = 30;
     assertPathChanges(40, 6);
 
+    observer.close();
+  });
+
+  test('Degenerate Values', function() {
+    var model = {};
+
+    function valueFn(values) {
+      assert.strictEqual(4, values.length);
+      assert.strictEqual(undefined, values[0]);
+      assert.strictEqual('obj-value', values[1]);
+      assert.strictEqual(undefined, values[2]);
+      assert.strictEqual(undefined, values[3]);
+    }
+
+    observer = new CompoundPathObserver(callback, undefined, undefined,
+                                        valueFn);
+    observer.addPath({}, '.'); // invalid path
+    observer.addPath('obj-value', ''); // empty path
+    observer.addPath({}, 'foo'); // unreachable
+    observer.addPath(3, 'bar'); // non-object with non-empty path
+    observer.start();
     observer.close();
   });
 });
