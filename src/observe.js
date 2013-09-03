@@ -1309,4 +1309,9 @@
   global.PathObserver = PathObserver;
   global.CompoundPathObserver = CompoundPathObserver;
   global.Path = Path;
+
+  global.Path.isValid = function(pathString) {
+    return Path.get(pathString) !== undefined;
+  };
+
 })(typeof global !== 'undefined' && global ? global : this);

@@ -75,24 +75,24 @@ suite('Path', function() {
   });
 
   test('valid paths', function() {
-    assert.isDefined(Path.get('a'));
-    assert.isDefined(Path.get('a.b'));
-    assert.isDefined(Path.get('a. b'));
-    assert.isDefined(Path.get('a .b'));
-    assert.isDefined(Path.get('a . b'));
-    assert.isDefined(Path.get(''));
-    assert.isDefined(Path.get(' '));
-    assert.isDefined(Path.get(null));
-    assert.isDefined(Path.get(undefined));
-    assert.isDefined(Path.get());
-    assert.isDefined(Path.get(42));
+    assert.isTrue(Path.isValid('a'));
+    assert.isTrue(Path.isValid('a.b'));
+    assert.isTrue(Path.isValid('a. b'));
+    assert.isTrue(Path.isValid('a .b'));
+    assert.isTrue(Path.isValid('a . b'));
+    assert.isTrue(Path.isValid(''));
+    assert.isTrue(Path.isValid(' '));
+    assert.isTrue(Path.isValid(null));
+    assert.isTrue(Path.isValid(undefined));
+    assert.isTrue(Path.isValid());
+    assert.isTrue(Path.isValid(42));
   });
 
   test('invalid paths', function() {
-    assert.isUndefined(Path.get('a b'));
-    assert.isUndefined(Path.get('.'));
-    assert.isUndefined(Path.get(' . '));
-    assert.isUndefined(Path.get('..'));
+    assert.isFalse(Path.isValid('a b'));
+    assert.isFalse(Path.isValid('.'));
+    assert.isFalse(Path.isValid(' . '));
+    assert.isFalse(Path.isValid('..'));
   });
 
   test('Paths are interned', function() {
