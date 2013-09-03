@@ -39,8 +39,12 @@
 
   var hasEval = false;
   try {
-    var f = new Function('', 'return true;');
-    hasEval = f();
+    if ('securityPolicy' in document) {
+      hasEval = document.securityPolicy.allowsEval === true;
+    } else {
+      var f = new Function('', 'return true;');
+      hasEval = f();
+    }
   } catch (ex) {
   }
 
