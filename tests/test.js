@@ -67,6 +67,112 @@ var createObject = ('__proto__' in {}) ?
     return newObject;
   };
 
+suite('Path', function() {
+  test('constructor throws', function() {
+    assert.throws(function() {
+      new Path('foo')
+    });
+  });
+
+  test('valid paths', function() {
+    assert.isDefined(Path.get('a'));
+    assert.isDefined(Path.get('a.b'));
+    assert.isDefined(Path.get('a. b'));
+    assert.isDefined(Path.get('a .b'));
+    assert.isDefined(Path.get('a . b'));
+    assert.isDefined(Path.get(''));
+    assert.isDefined(Path.get(' '));
+    assert.isDefined(Path.get(null));
+    assert.isDefined(Path.get(undefined));
+    assert.isDefined(Path.get());
+    assert.isDefined(Path.get(42));
+  });
+
+  test('invalid paths', function() {
+    assert.isUndefined(Path.get('a b'));
+    assert.isUndefined(Path.get('.'));
+    assert.isUndefined(Path.get(' . '));
+    assert.isUndefined(Path.get('..'));
+  });
+
+  test('Paths are interned', function() {
+    var p = Path.get('foo.bar');
+    var p2 = Path.get('foo.bar');
+    assert.strictEqual(p, p2);
+
+    var p3 = Path.get('');
+    var p4 = Path.get('');
+    assert.strictEqual(p3, p4);
+  });
+
+  test('null is empty path', function() {
+    assert.strictEqual(Path.get(''), Path.get(null));
+  });
+
+  test('undefined is empty path', function() {
+    assert.strictEqual(Path.get(undefined), Path.get(null));
+  });
+
+  test('Path.getValueFrom', function() {
+    var obj = {
+      a: {
+        b: {
+          c: 1
+        }
+      }
+    };
+
+    var p1 = Path.get('a');
+    var p2 = Path.get('a.b');
+    var p3 = Path.get('a.b.c');
+
+    assert.strictEqual(obj.a, p1.getValueFrom(obj));
+    assert.strictEqual(obj.a.b, p2.getValueFrom(obj));
+    assert.strictEqual(1, p3.getValueFrom(obj));
+
+    obj.a.b.c = 2;
+    assert.strictEqual(2, p3.getValueFrom(obj));
+
+    obj.a.b = {
+      c: 3
+    };
+    assert.strictEqual(3, p3.getValueFrom(obj));
+
+    obj.a = {
+      b: 4
+    };
+    assert.strictEqual(undefined, p3.getValueFrom(obj));
+    assert.strictEqual(4, p2.getValueFrom(obj));
+  });
+
+  test('Path.setValueFrom', function() {
+    var obj = {};
+    var p2 = Path.get('bar');
+
+    Path.get('foo').setValueFrom(obj, 3);
+    assert.equal(3, obj.foo);
+
+    var bar = { baz: 3 };
+
+    Path.get('bar').setValueFrom(obj, bar);
+    assert.equal(bar, obj.bar);
+
+    var p = Path.get('bar.baz.bat');
+    p.setValueFrom(obj, 'not here');
+    assert.equal(undefined, p.getValueFrom(obj));
+  });
+
+  test('Degenerate Values', function() {
+    var emptyPath = Path.get();
+    var foo = {};
+
+    assert.equal(null, emptyPath.getValueFrom(null));
+    assert.equal(foo, emptyPath.getValueFrom(foo));
+    assert.equal(3, emptyPath.getValueFrom(3));
+    assert.equal(undefined, Path.get('a').getValueFrom(undefined));
+  });
+});
+
 suite('Basic Tests', function() {
 
   test('Exception Doesnt Stop Notification', function() {
@@ -233,31 +339,27 @@ suite('PathObserver Tests', function() {
   });
 
   test('Degenerate Values', function() {
+    var emptyPath = Path.get();
     observer = new PathObserver(null, '', callback);
     assert.equal(null, observer.value);
-    assert.equal(null, PathObserver.getValueAtPath(null, ''));
     observer.close();
 
     var foo = {};
     observer = new PathObserver(foo, '', callback);
     assert.equal(foo, observer.value);
-    assert.equal(foo, PathObserver.getValueAtPath(foo, ''));
     observer.close();
 
     observer = new PathObserver(3, '', callback);
     assert.equal(3, observer.value);
-    assert.equal(3, PathObserver.getValueAtPath(3, ''));
     observer.close();
 
     observer = new PathObserver(undefined, 'a', callback);
     assert.equal(undefined, observer.value);
-    assert.equal(undefined, PathObserver.getValueAtPath(undefined, 'a'));
     observer.close();
 
     var bar = { id: 23 };
     observer = new PathObserver(undefined, 'a/3!', callback);
     assert.equal(undefined, observer.value);
-    assert.equal(undefined, PathObserver.getValueAtPath(bar, 'a/3!'));
     observer.close();
   });
 
@@ -274,61 +376,21 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
-  test('Path GetValueAtPath', function() {
-    var obj = {
-      a: {
-        b: {
-          c: 1
-        }
-      }
-    };
-
-    assert.strictEqual(obj.a, PathObserver.getValueAtPath(obj, 'a'));
-    assert.strictEqual(obj.a.b, PathObserver.getValueAtPath(obj, 'a.b'));
-    assert.strictEqual(1, PathObserver.getValueAtPath(obj, 'a.b.c'));
-
-    obj.a.b.c = 2;
-    assert.strictEqual(2, PathObserver.getValueAtPath(obj, 'a.b.c'));
-
-    obj.a.b = {
-      c: 3
-    };
-    assert.strictEqual(3, PathObserver.getValueAtPath(obj, 'a.b.c'));
-
-    obj.a = {
-      b: 4
-    };
-    assert.strictEqual(undefined, PathObserver.getValueAtPath(obj, 'a.b.c'));
-    assert.strictEqual(4, PathObserver.getValueAtPath(obj, 'a.b'));
-  });
-
-  test('Path SetValueAtPath', function() {
-    var obj = {};
-    PathObserver.setValueAtPath(obj, 'foo', 3);
-    assert.equal(3, obj.foo);
-
-    var bar = { baz: 3 };
-
-    PathObserver.setValueAtPath(obj, 'bar', bar);
-    assert.equal(bar, obj.bar);
-
-    PathObserver.setValueAtPath(obj, 'bar.baz.bat', 'not here');
-    assert.equal(undefined, PathObserver.getValueAtPath(obj, 'bar.baz.bat'));
-  });
-
   test('Path Set Value Back To Same', function() {
     var obj = {};
-    PathObserver.setValueAtPath(obj, 'foo', 3);
+    var path = Path.get('foo');
+
+    path.setValueFrom(obj, 3);
     assert.equal(3, obj.foo);
 
     observer = new PathObserver(obj, 'foo', callback);
     assert.equal(3, observer.value);
 
-    PathObserver.setValueAtPath(obj, 'foo', 2);
+    path.setValueFrom(obj, 2);
     observer.reset();
     assert.equal(2, observer.value);
 
-    PathObserver.setValueAtPath(obj, 'foo', 3);
+    path.setValueFrom(obj, 3);
     observer.reset();
     assert.equal(3, observer.value);
 
@@ -355,6 +417,24 @@ suite('PathObserver Tests', function() {
     var model = { };
 
     observer = new PathObserver(model, 'foo', callback);
+
+    model.foo = 1;
+    assertPathChanges(1, undefined);
+
+    model.foo = 2;
+    assertPathChanges(2, 1);
+
+    delete model.foo;
+    assertPathChanges(undefined, 2);
+
+    observer.close();
+  });
+
+  test('Path Simple - path object', function() {
+    var model = { };
+
+    var path = Path.get('foo');
+    observer = new PathObserver(model, path, callback);
 
     model.foo = 1;
     assertPathChanges(1, undefined);
@@ -752,7 +832,7 @@ suite('CompoundPathObserver Tests', function() {
                                         valueFn);
     observer.addPath(model, 'a');
     observer.addPath(model, 'b');
-    observer.addPath(model, 'c');
+    observer.addPath(model, Path.get('c'));
     observer.start();
 
     assert.strictEqual(6, observer.value);
@@ -1700,22 +1780,5 @@ suite('ObjectObserver Tests', function() {
     });
 
     observer.close();
-  });
-
-  test('Path.isValid', function() {
-    assert.isTrue(Path.isValid('a'));
-    assert.isTrue(Path.isValid('a.b'));
-    assert.isTrue(Path.isValid('a. b'));
-    assert.isTrue(Path.isValid('a .b'));
-    assert.isTrue(Path.isValid('a . b'));
-
-    assert.isFalse(Path.isValid(42));
-    assert.isTrue(Path.isValid(''));
-    assert.isTrue(Path.isValid(' '));
-
-    assert.isFalse(Path.isValid('a b'));
-    assert.isFalse(Path.isValid('.'));
-    assert.isFalse(Path.isValid(' . '));
-    assert.isFalse(Path.isValid('..'));
   });
 });

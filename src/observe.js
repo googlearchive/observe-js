@@ -105,26 +105,17 @@
     return pathRegExp.test(s);
   }
 
-  // TODO(rafaelw): Make simple LRU cache
-  var pathCache = {};
+  var constructorIsPrivate = {};
 
-  function getPath(str) {
-    var path = pathCache[str];
-    if (path)
-      return path;
-    if (!isPathValid(str))
-      return;
-    var path = new Path(str);
-    pathCache[str] = path;
-    return path;
-  }
+  function Path(s, privateToken) {
+    if (privateToken !== constructorIsPrivate)
+      throw Error('Use Path.get to retrieve path objects');
 
-  function Path(s) {
     if (s.trim() == '')
       return this;
 
     if (isIndex(s)) {
-      this.push(String(s));
+      this.push(s);
       return this;
     }
 
@@ -139,7 +130,30 @@
     }
   }
 
-  Path.isValid = isPathValid;
+  // TODO(rafaelw): Make simple LRU cache
+  var pathCache = {};
+
+  function getPath(pathString) {
+    if (pathString instanceof Path)
+      return pathString;
+
+    if (pathString == null)
+      pathString = '';
+
+    if (typeof pathString !== 'string')
+      pathString = String(pathString);
+
+    var path = pathCache[pathString];
+    if (path)
+      return path;
+    if (!isPathValid(pathString))
+      return;
+    var path = new Path(pathString, constructorIsPrivate);
+    pathCache[pathString] = path;
+    return path;
+  }
+
+  Path.get = getPath;
 
   Path.prototype = createObject({
     __proto__: [],
@@ -588,9 +602,10 @@
     }
   };
 
-  function PathObserver(object, pathString, callback, target, token, valueFn,
+  function PathObserver(object, path, callback, target, token, valueFn,
                         setValueFn) {
-    var path = getPath(pathString);
+    var path = path instanceof Path ? path : getPath(path);
+
     if (!path) {
       // Invalid path.
       this.closed = true;
@@ -686,21 +701,6 @@
     }
   });
 
-  PathObserver.getValueAtPath = function(obj, pathString) {
-    var path = getPath(pathString);
-    if (!path)
-      return;
-    return path.getValueFrom(obj);
-  }
-
-  PathObserver.setValueAtPath = function(obj, pathString, value) {
-    var path = getPath(pathString);
-    if (!path)
-      return;
-
-    path.setValueFrom(obj, value);
-  };
-
   function CompoundPathObserver(callback, target, token, valueFn) {
     Observer.call(this, undefined, callback, target, token);
     this.valueFn = valueFn;
@@ -713,11 +713,11 @@
   CompoundPathObserver.prototype = createObject({
     __proto__: PathObserver.prototype,
 
-    addPath: function(object, pathString) {
+    addPath: function(object, path) {
       if (this.started)
         throw Error('Cannot add more paths once started.');
 
-      var path = getPath(pathString);
+      var path = path instanceof Path ? path : getPath(path);
       var value = undefined;
 
       if (!path) {
