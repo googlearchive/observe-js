@@ -165,8 +165,8 @@
   function PathBenchmark(config) {
     ObservationBenchmark.call(this);
     this.leaf = config === 'leaf';
-    this.pathParts = ['foo', 'bar', 'baz'];
-    this.pathString = this.pathParts.join('.');
+    this.path = Path.get('foo.bar.baz');
+    this.firstPathProp = Path.get(this.path[0]);
   }
 
   PathBenchmark.configs = ['leaf', 'root'];
@@ -191,20 +191,19 @@
     },
 
     newObject: function() {
-      return this.newPath(this.pathParts, 1);
+      return this.newPath(this.path, 1);
     },
 
     newObserver: function(obj) {
-      return new PathObserver(obj, this.pathString, this.boundObserverCallback);
+      return new PathObserver(obj, this.path, this.boundObserverCallback);
     },
 
     mutateObject: function(obj) {
-      var val = PathObserver.getValueAtPath(obj, this.pathString);
+      var val = this.path.getValueFrom(obj);
       if (this.leaf) {
-        PathObserver.setValueAtPath(obj, this.pathString, val + 1);
+        this.path.setValueFrom(obj, val + 1);
       } else {
-        PathObserver.setValueAtPath(obj, this.pathParts[0],
-            this.newPath(this.pathParts.slice(1), val + 1));
+        this.firstPathProp.setValueFrom(obj, this.newPath(this.path.slice(1), val + 1));
       }
 
       return 1;
