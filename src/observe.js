@@ -364,7 +364,7 @@
         this.callback.apply(this.target, args);
       } catch (ex) {
         Observer._errorThrownDuringCallback = true;
-        console.error('Exception caught during observer callback: ' + ex);
+        console.error('Exception caught during observer callback: ' + (ex.stack || ex));
       }
     },
 
