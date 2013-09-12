@@ -492,7 +492,6 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
-
   test('Path With Indices', function() {
     var model = [];
 
@@ -866,6 +865,26 @@ suite('CompoundPathObserver Tests', function() {
     observer.addPath({}, 'foo'); // unreachable
     observer.addPath(3, 'bar'); // non-object with non-empty path
     observer.start();
+    observer.close();
+  });
+
+  test('valueFn - return object literal', function() {
+    var model = { a: 1};
+
+    function valueFn(values) {
+      return {};
+    }
+
+    observer = new CompoundPathObserver(callback, undefined, undefined,
+                                        valueFn);
+
+    observer.addPath(model, 'a');
+    observer.start();
+    model.a = 2;
+
+    observer.deliver();
+    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
+                  window.dirtyCheckCycleCount === 1);
     observer.close();
   });
 });
