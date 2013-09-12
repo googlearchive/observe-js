@@ -37,17 +37,25 @@
 
   var hasObserve = detectObjectObserve();
 
-  // don't test for eval if document has CSP securityPolicy object and we can see that
-  // eval is not supported. This avoids an error message in console even when the exception
-  // is caught
-  var hasEval =  ! ('securityPolicy' in document) || document.securityPolicy.allowsEval;
-  if (hasEval) {
+  function detectEval() {
+    // don't test for eval if document has CSP securityPolicy object and we can see that
+    // eval is not supported. This avoids an error message in console even when the exception
+    // is caught
+    if (global.document &&
+        'securityPolicy' in global.document &&
+        !global.document.securityPolicy.allowsEval) {
+      return false;
+    }
+
     try {
       var f = new Function('', 'return true;');
-      hasEval = f();
+      return f();
     } catch (ex) {
+      return false;
     }
   }
+
+  var hasEval = detectEval();
 
   function isIndex(s) {
     return +s === s >>> 0;
