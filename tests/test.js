@@ -53,6 +53,23 @@ function assertPathChanges(expectNewValue, expectOldValue) {
   callbackInvoked = false;
 }
 
+function assertCompoundPathChanges(expectNewValues, expectOldValues) {
+  observer.deliver();
+
+  assert.isTrue(callbackInvoked);
+
+  var newValues = callbackArgs[0];
+  var oldValues = callbackArgs[1];
+  assert.deepEqual(expectNewValues, newValues);
+  assert.deepEqual(expectOldValues, oldValues);
+
+  assert.isTrue(window.dirtyCheckCycleCount === undefined ||
+                window.dirtyCheckCycleCount === 1);
+
+  callbackArgs = undefined;
+  callbackInvoked = false;
+}
+
 var createObject = ('__proto__' in {}) ?
   function(obj) { return obj; } :
   function(obj) {
@@ -822,6 +839,29 @@ suite('CompoundPathObserver Tests', function() {
   teardown(doTeardown);
 
   test('Simple', function() {
+    var model = { a: 1, b: 2, c: 3 };
+
+    observer = new CompoundPathObserver(callback, undefined, undefined);
+    observer.addPath(model, 'a');
+    observer.addPath(model, 'b');
+    observer.addPath(model, Path.get('c'));
+    observer.start();
+
+    model.a = -10;
+    model.b = 20;
+    model.c = 30;
+    assertCompoundPathChanges([-10, 20, 30], [1, 2, 3]);
+
+    model.a = 'a';
+    model.b = 'b';
+    model.c = 'c';
+    assertCompoundPathChanges(['a', 'b', 'c'], [-10, 20, 30]);
+
+    observer.close();
+  });
+
+
+  test('Simple - valueFn', function() {
     var model = { a: 1, b: 2, c: 3 };
 
     function valueFn(values) {

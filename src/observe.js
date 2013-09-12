@@ -707,6 +707,9 @@
 
     this.observed = [];
     this.values = [];
+    this.value = undefined;
+    this.oldValue = undefined;
+    this.oldValues = undefined;
     this.started = false;
   }
 
@@ -742,6 +745,13 @@
         var value = path.getValueFrom(object, this.observedSet);
         var oldValue = this.values[i/2];
         if (!areSameValue(value, oldValue)) {
+          if (!anyChanged && !this.valueFn) {
+            this.oldValues = this.oldValues || [];
+            for (var j = 0; j < this.values.length; j++) {
+              this.oldValues[j] = this.values[j];
+            }
+          }
+
           this.values[i/2] = value;
           anyChanged = true;
         }
@@ -757,22 +767,29 @@
       if (!this.getValues())
         return;
 
-      this.value = this.valueFn(this.values);
+      if (this.valueFn) {
+        this.value = this.valueFn(this.values);
 
-      if (areSameValue(this.value, this.oldValue))
-        return false;
+        if (areSameValue(this.value, this.oldValue))
+          return false;
 
-      this.reportArgs = [this.value, this.oldValue];
+        this.reportArgs = [this.value, this.oldValue];
+      } else {
+        this.reportArgs = [this.values, this.oldValues];
+      }
+
       return true;
     },
 
     sync: function(hard) {
       if (hard) {
         this.getValues();
-        this.value = this.valueFn(this.values);
+        if (this.valueFn)
+          this.value = this.valueFn(this.values);
       }
 
-      this.oldValue = this.value;
+      if (this.valueFn)
+        this.oldValue = this.value;
     },
 
     close: function() {
