@@ -206,15 +206,15 @@
         return false;
 
       for (var i = 0; i < this.length - 1; i++) {
-        if (obj === undefined || obj === null)
+        if (!isObject(obj))
           return false;
         obj = obj[this[i]];
       }
 
-      if (obj === undefined || obj === null)
+      if (!isObject(obj))
         return false;
 
-      obj[this[this.length - 1]] = value;
+      obj[this[i]] = value;
       return true;
     }
   });
