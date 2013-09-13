@@ -710,6 +710,7 @@
     this.value = undefined;
     this.oldValue = undefined;
     this.oldValues = undefined;
+    this.changeFlags = undefined;
     this.started = false;
   }
 
@@ -747,10 +748,15 @@
         if (!areSameValue(value, oldValue)) {
           if (!anyChanged && !this.valueFn) {
             this.oldValues = this.oldValues || [];
+            this.changeFlags = this.changeFlags || [];
             for (var j = 0; j < this.values.length; j++) {
               this.oldValues[j] = this.values[j];
+              this.changeFlags[j] = false;
             }
           }
+
+          if (!this.valueFn)
+            this.changeFlags[i/2] = true;
 
           this.values[i/2] = value;
           anyChanged = true;
@@ -775,7 +781,7 @@
 
         this.reportArgs = [this.value, this.oldValue];
       } else {
-        this.reportArgs = [this.values, this.oldValues];
+        this.reportArgs = [this.values, this.oldValues, this.changeFlags];
       }
 
       return true;

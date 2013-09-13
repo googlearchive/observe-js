@@ -53,15 +53,18 @@ function assertPathChanges(expectNewValue, expectOldValue) {
   callbackInvoked = false;
 }
 
-function assertCompoundPathChanges(expectNewValues, expectOldValues) {
+function assertCompoundPathChanges(expectNewValues, expectOldValues,
+                                   expectChangeFlags) {
   observer.deliver();
 
   assert.isTrue(callbackInvoked);
 
   var newValues = callbackArgs[0];
   var oldValues = callbackArgs[1];
+  var changeFlags = callbackArgs[2];
   assert.deepEqual(expectNewValues, newValues);
   assert.deepEqual(expectOldValues, oldValues);
+  assert.deepEqual(expectChangeFlags, changeFlags);
 
   assert.isTrue(window.dirtyCheckCycleCount === undefined ||
                 window.dirtyCheckCycleCount === 1);
@@ -850,12 +853,11 @@ suite('CompoundPathObserver Tests', function() {
     model.a = -10;
     model.b = 20;
     model.c = 30;
-    assertCompoundPathChanges([-10, 20, 30], [1, 2, 3]);
+    assertCompoundPathChanges([-10, 20, 30], [1, 2, 3], [true, true, true]);
 
     model.a = 'a';
-    model.b = 'b';
     model.c = 'c';
-    assertCompoundPathChanges(['a', 'b', 'c'], [-10, 20, 30]);
+    assertCompoundPathChanges(['a', 20, 'c'], [-10, 20, 30], [true, false, true]);
 
     observer.close();
   });
