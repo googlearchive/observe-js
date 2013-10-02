@@ -54,7 +54,7 @@ function assertPathChanges(expectNewValue, expectOldValue) {
 }
 
 function assertCompoundPathChanges(expectNewValues, expectOldValues,
-                                   expectChangeFlags) {
+                                   expectChangeFlags, expectObserverArg) {
   observer.deliver();
 
   assert.isTrue(callbackInvoked);
@@ -62,9 +62,11 @@ function assertCompoundPathChanges(expectNewValues, expectOldValues,
   var newValues = callbackArgs[0];
   var oldValues = callbackArgs[1];
   var changeFlags = callbackArgs[2];
+  var observerArg = callbackArgs[3];
   assert.deepEqual(expectNewValues, newValues);
   assert.deepEqual(expectOldValues, oldValues);
   assert.deepEqual(expectChangeFlags, changeFlags);
+  assert.deepEqual(expectObserverArg, observerArg);
 
   assert.isTrue(window.dirtyCheckCycleCount === undefined ||
                 window.dirtyCheckCycleCount === 1);
@@ -850,18 +852,24 @@ suite('CompoundPathObserver Tests', function() {
     observer.addPath(model, Path.get('c'));
     observer.start();
 
+    var observerCallbackArg = [model, Path.get('a'),
+                               model, Path.get('b'),
+                               model, Path.get('c')];
     model.a = -10;
     model.b = 20;
     model.c = 30;
-    assertCompoundPathChanges([-10, 20, 30], [1, 2, 3], [true, true, true]);
+    assertCompoundPathChanges([-10, 20, 30], [1, 2, 3],
+                              [true, true, true],
+                              observerCallbackArg);
 
     model.a = 'a';
     model.c = 'c';
-    assertCompoundPathChanges(['a', 20, 'c'], [-10, 20, 30], [true, false, true]);
+    assertCompoundPathChanges(['a', 20, 'c'], [-10, 20, 30],
+                              [true, false, true],
+                              observerCallbackArg);
 
     observer.close();
   });
-
 
   test('Simple - valueFn', function() {
     var model = { a: 1, b: 2, c: 3 };

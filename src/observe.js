@@ -781,7 +781,8 @@
 
         this.reportArgs = [this.value, this.oldValue];
       } else {
-        this.reportArgs = [this.values, this.oldValues, this.changeFlags];
+        this.reportArgs = [this.values, this.oldValues, this.changeFlags,
+                           this.observed];
       }
 
       return true;
