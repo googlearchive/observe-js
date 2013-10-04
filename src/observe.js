@@ -575,6 +575,8 @@
     this.isObserved = true;
   }
 
+  // TODO(rafaelw): Consider surfacing a way to avoid observing prototype
+  // ancestors which are expected not to change (e.g. Element, Node...).
   var objProto = Object.getPrototypeOf({});
   var arrayProto = Object.getPrototypeOf([]);
   ObservedSet.prototype = {
@@ -717,6 +719,8 @@
   CompoundPathObserver.prototype = createObject({
     __proto__: PathObserver.prototype,
 
+    // TODO(rafaelw): Consider special-casing when |object| is a PathObserver
+    // and path 'value' to avoid explicit observation.
     addPath: function(object, path) {
       if (this.started)
         throw Error('Cannot add more paths once started.');
