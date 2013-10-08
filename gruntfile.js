@@ -28,9 +28,10 @@ module.exports = function(grunt) {
     }
   });
 
+  grunt.loadTasks('../tools/tasks');
   grunt.loadNpmTasks('grunt-karma');
 
   grunt.registerTask('default', 'test');
-  grunt.registerTask('test', ['karma:observe-js']);
-  grunt.registerTask('test-buildbot', ['karma:buildbot']);
+  grunt.registerTask('test', ['override-chrome-launcher', 'karma:observe-js']);
+  grunt.registerTask('test-buildbot', ['override-chrome-launcher', 'karma:buildbot']);
 };
