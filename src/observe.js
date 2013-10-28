@@ -733,6 +733,7 @@
     },
 
     start: function() {
+      this.started = true;
       this.connect();
       this.sync(true);
     },
