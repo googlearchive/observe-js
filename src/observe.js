@@ -15,24 +15,66 @@
 (function(global) {
   'use strict';
 
+  var changeRecordTypes = {
+    add: 'add',
+    update: 'update',
+    reconfigure: 'reconfigure',
+    'delete': 'delete',
+    splice: 'splice'
+  };
+
+  // Detect and do basic sanity checking on Object/Array.observe.
   function detectObjectObserve() {
     if (typeof Object.observe !== 'function' ||
         typeof Array.observe !== 'function') {
       return false;
     }
 
-    var gotSplice = false;
-    function callback(records) {
-      if (records[0].type === 'splice' && records[1].type === 'splice')
-        gotSplice = true;
+    var records = [];
+
+    function callback(recs) {
+      records = recs;
     }
 
-    var test = [0];
+    var test = {};
+    Object.observe(test, callback);
+    test.id = 1;
+    test.id = 2;
+    delete test.id;
+    Object.deliverChangeRecords(callback);
+    if (records.length !== 3)
+      return false;
+
+    // TODO(rafaelw): Remove this when new change record type names make it to
+    // chrome release.
+    if (records[0].type == 'new' &&
+        records[1].type == 'updated' &&
+        records[2].type == 'deleted') {
+      changeRecordTypes.add = 'new';
+      changeRecordTypes.update = 'updated';
+      changeRecordTypes.reconfigure = 'reconfigured';
+      changeRecordTypes['delete'] = 'deleted';
+    } else if (records[0].type != 'add' ||
+               records[1].type != 'update' ||
+               records[2].type != 'delete') {
+      console.error('Unexpected change record names for Object.observe. ' +
+                    'Using dirty-checking instead');
+      return false;
+    }
+    Object.unobserve(test, callback);
+
+    test = [0];
     Array.observe(test, callback);
     test[1] = 1;
     test.length = 0;
     Object.deliverChangeRecords(callback);
-    return gotSplice;
+    if (records.length != 2)
+      return false;
+    if (records[0].type != 'splice' || records[1].type != 'splice')
+      return false;
+    Array.unobserve(test, callback);
+
+    return true;
   }
 
   var hasObserve = detectObjectObserve();
@@ -819,11 +861,10 @@
     }
   });
 
-  var knownRecordTypes = {
-    'new': true,
-    'updated': true,
-    'deleted': true
-  };
+  var expectedRecordTypes = {};
+  expectedRecordTypes[changeRecordTypes.add] = true;
+  expectedRecordTypes[changeRecordTypes.update] = true;
+  expectedRecordTypes[changeRecordTypes['delete']] = true;
 
   function notifyFunction(object, name) {
     if (typeof Object.observe !== 'function')
@@ -855,7 +896,7 @@
     var observer = new PathObserver(obj, descriptor.path,
         function(newValue, oldValue) {
           if (notify)
-            notify('updated', oldValue);
+            notify(changeRecordTypes.update, oldValue);
         }
     );
 
@@ -890,7 +931,7 @@
 
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
-      if (!knownRecordTypes[record.type]) {
+      if (!expectedRecordTypes[record.type]) {
         console.error('Unknown changeRecord type: ' + record.type);
         console.error(record);
         continue;
@@ -899,10 +940,10 @@
       if (!(record.name in oldValues))
         oldValues[record.name] = record.oldValue;
 
-      if (record.type == 'updated')
+      if (record.type == changeRecordTypes.update)
         continue;
 
-      if (record.type == 'new') {
+      if (record.type == changeRecordTypes.add) {
         if (record.name in removed)
           delete removed[record.name];
         else
@@ -911,7 +952,7 @@
         continue;
       }
 
-      // type = 'deleted'
+      // type = 'delete'
       if (record.name in added) {
         delete added[record.name];
         delete oldValues[record.name];
@@ -1299,12 +1340,12 @@
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
       switch(record.type) {
-        case 'splice':
+        case changeRecordTypes.splice:
           mergeSplice(splices, record.index, record.removed.slice(), record.addedCount);
           break;
-        case 'new':
-        case 'updated':
-        case 'deleted':
+        case changeRecordTypes.add:
+        case changeRecordTypes.update:
+        case changeRecordTypes['delete']:
           if (!isIndex(record.name))
             continue;
           var index = toNumber(record.name);
@@ -1351,4 +1392,8 @@
   global.PathObserver = PathObserver;
   global.CompoundPathObserver = CompoundPathObserver;
   global.Path = Path;
+
+  // TODO(rafaelw): Only needed for testing until new change record names
+  // make it to release.
+  global.Observer.changeRecordTypes = changeRecordTypes;
 })(typeof global !== 'undefined' && global ? global : this);

@@ -690,7 +690,7 @@ suite('PathObserver Tests', function() {
       get: function() { return _b; },
       set: function(b) {
         Object.getNotifier(this).notify({
-          type: 'updated',
+          type: Observer.changeRecordTypes.update,
           name: 'b',
           oldValue: _b
         });
@@ -799,18 +799,18 @@ suite('PathObserver Tests', function() {
       {
         object: target,
         name: 'computed',
-        type: 'new'
+        type: Observer.changeRecordTypes.add
       },
       {
         object: target,
         name: 'computed',
-        type: 'updated',
+        type: Observer.changeRecordTypes.update,
         oldValue: 1
       },
       {
         object: target,
         name: 'computed',
-        type: 'reconfigured'
+        type: Observer.changeRecordTypes.reconfigure
       }
     ]);
 
