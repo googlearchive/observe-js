@@ -1399,7 +1399,7 @@
     add: PROP_ADD_TYPE,
     update: PROP_UPDATE_TYPE,
     reconfigure: PROP_RECONFIGURE_TYPE,
-    delete: PROP_DELETE_TYPE,
+    'delete': PROP_DELETE_TYPE,
     splice: ARRAY_SPLICE_TYPE
   };
 })(typeof global !== 'undefined' && global ? global : this);
