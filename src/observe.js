@@ -15,13 +15,11 @@
 (function(global) {
   'use strict';
 
-  var changeRecordTypes = {
-    add: 'add',
-    update: 'update',
-    reconfigure: 'reconfigure',
-    'delete': 'delete',
-    splice: 'splice'
-  };
+  var PROP_ADD_TYPE = 'add';
+  var PROP_UPDATE_TYPE = 'update';
+  var PROP_RECONFIGURE_TYPE = 'reconfigure';
+  var PROP_DELETE_TYPE = 'delete';
+  var ARRAY_SPLICE_TYPE = 'splice';
 
   // Detect and do basic sanity checking on Object/Array.observe.
   function detectObjectObserve() {
@@ -50,10 +48,10 @@
     if (records[0].type == 'new' &&
         records[1].type == 'updated' &&
         records[2].type == 'deleted') {
-      changeRecordTypes.add = 'new';
-      changeRecordTypes.update = 'updated';
-      changeRecordTypes.reconfigure = 'reconfigured';
-      changeRecordTypes['delete'] = 'deleted';
+      PROP_ADD_TYPE = 'new';
+      PROP_UPDATE_TYPE = 'updated';
+      PROP_RECONFIGURE_TYPE = 'reconfigured';
+      PROP_DELETE_TYPE = 'deleted';
     } else if (records[0].type != 'add' ||
                records[1].type != 'update' ||
                records[2].type != 'delete') {
@@ -70,8 +68,10 @@
     Object.deliverChangeRecords(callback);
     if (records.length != 2)
       return false;
-    if (records[0].type != 'splice' || records[1].type != 'splice')
+    if (records[0].type != ARRAY_SPLICE_TYPE ||
+        records[1].type != ARRAY_SPLICE_TYPE) {
       return false;
+    }
     Array.unobserve(test, callback);
 
     return true;
@@ -862,9 +862,9 @@
   });
 
   var expectedRecordTypes = {};
-  expectedRecordTypes[changeRecordTypes.add] = true;
-  expectedRecordTypes[changeRecordTypes.update] = true;
-  expectedRecordTypes[changeRecordTypes['delete']] = true;
+  expectedRecordTypes[PROP_ADD_TYPE] = true;
+  expectedRecordTypes[PROP_UPDATE_TYPE] = true;
+  expectedRecordTypes[PROP_DELETE_TYPE] = true;
 
   function notifyFunction(object, name) {
     if (typeof Object.observe !== 'function')
@@ -896,7 +896,7 @@
     var observer = new PathObserver(obj, descriptor.path,
         function(newValue, oldValue) {
           if (notify)
-            notify(changeRecordTypes.update, oldValue);
+            notify(PROP_UPDATE_TYPE, oldValue);
         }
     );
 
@@ -940,10 +940,10 @@
       if (!(record.name in oldValues))
         oldValues[record.name] = record.oldValue;
 
-      if (record.type == changeRecordTypes.update)
+      if (record.type == PROP_UPDATE_TYPE)
         continue;
 
-      if (record.type == changeRecordTypes.add) {
+      if (record.type == PROP_ADD_TYPE) {
         if (record.name in removed)
           delete removed[record.name];
         else
@@ -1340,12 +1340,12 @@
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
       switch(record.type) {
-        case changeRecordTypes.splice:
+        case ARRAY_SPLICE_TYPE:
           mergeSplice(splices, record.index, record.removed.slice(), record.addedCount);
           break;
-        case changeRecordTypes.add:
-        case changeRecordTypes.update:
-        case changeRecordTypes['delete']:
+        case PROP_ADD_TYPE:
+        case PROP_UPDATE_TYPE:
+        case PROP_DELETE_TYPE:
           if (!isIndex(record.name))
             continue;
           var index = toNumber(record.name);
@@ -1395,5 +1395,11 @@
 
   // TODO(rafaelw): Only needed for testing until new change record names
   // make it to release.
-  global.Observer.changeRecordTypes = changeRecordTypes;
+  global.Observer.changeRecordTypes = {
+    add: PROP_ADD_TYPE,
+    update: PROP_UPDATE_TYPE,
+    reconfigure: PROP_RECONFIGURE_TYPE,
+    delete: PROP_DELETE_TYPE,
+    splice: ARRAY_SPLICE_TYPE
+  };
 })(typeof global !== 'undefined' && global ? global : this);
