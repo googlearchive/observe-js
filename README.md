@@ -107,18 +107,18 @@ assert(3 == obj.foo.bar);
 Defining an accessor which creates a synchronous "alias" for a path-value from an object. The created accessor property notifies (if Object.observe is available) when the dependent value changes.
 
 ```JavaScript
-var target = { a: 1 };
+var obj = { a: { b: 1 } };
 var alias = { };
 
-var closer = PathObserver.defineProperty(alias, 'val', { object: target, path: 'a' });
+var closer = PathObserver.defineProperty(alias, 'val', obj, 'a.b' );
 
-assert(target.a === alias.val);
+assert(obj.a.b === alias.val);
 
-target.a = 2;
-assert(target.a === alias.val);
+obj.a.b = 2;
+assert(obj.a.b === alias.val);
 
 alias.val = 3;
-assert(target.a === alias.val);
+assert(obj.a.b === alias.val);
 ```
 
 Array observation:
