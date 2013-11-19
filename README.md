@@ -60,10 +60,10 @@ function sum(values) {
 }
 
 function compoundObserverCallback(newValue, // new compound value (sum(newValues))
-                               oldValue, // old comoound value (sum(oldValues)) 
-                               changedFlags, // array of boolean where true indicates that a changed value
-                               observedObjects, // array of root objects for observed values
-                               opt_token) { 
+                                  oldValue, // old comoound value (sum(oldValues)) 
+                                  changedFlags, // array of boolean where true indicates that a changed value
+                                  observedObjects, // array of root objects for observed values
+                                  opt_token) { 
   // respond to compound value having changed
 }
 
