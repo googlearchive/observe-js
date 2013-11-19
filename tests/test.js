@@ -722,20 +722,14 @@ suite('PathObserver Tests', function() {
     var b = {};
     var c = {};
 
-    root.a.observer = PathObserver.defineProperty(root.a, 'value', {
-      object: root,
-      path: 'value'
-    });
+    root.a.observer = PathObserver.defineProperty(root.a, 'value',
+                                                  root, 'value');
 
-    root.a.b.observer = PathObserver.defineProperty(root.a.b, 'value', {
-      object: root.a,
-      path: 'value'
-    });
+    root.a.b.observer = PathObserver.defineProperty(root.a.b, 'value',
+                                                    root.a, 'value');
 
-    root.c.observer = PathObserver.defineProperty(root.c, 'value', {
-      object: root,
-      path: 'value'
-    });
+    root.c.observer = PathObserver.defineProperty(root.c, 'value',
+                                                  root, 'value');
 
     root.c.value = 2;
     assert.strictEqual(2, root.a.b.value);
@@ -759,10 +753,8 @@ suite('PathObserver Tests', function() {
       Object.observe(target, callback);
     }
 
-    var observer = PathObserver.defineProperty(target, 'computed', {
-      object: source,
-      path: 'foo.bar'
-    });
+    var observer = PathObserver.defineProperty(target, 'computed',
+                                               source, 'foo.bar');
     assert.isTrue(target.hasOwnProperty('computed'));
     assert.strictEqual(1, target.computed);
 
@@ -819,18 +811,12 @@ suite('PathObserver Tests', function() {
 
   test('DefineProperty - empty path', function() {
     var target = {}
-    var observer = PathObserver.defineProperty(target, 'foo', {
-      object: 1,
-      path: ''
-    });
+    var observer = PathObserver.defineProperty(target, 'foo', 1, '');
     assert.isTrue(target.hasOwnProperty('foo'));
     assert.strictEqual(1, target.foo);
 
     var obj = {};
-    var observer2 = PathObserver.defineProperty(target, 'bar', {
-      object: obj,
-      path: ''
-    });
+    var observer2 = PathObserver.defineProperty(target, 'bar', obj, '');
     assert.isTrue(target.hasOwnProperty('bar'));
     assert.strictEqual(obj, target.bar);
   });
