@@ -10,16 +10,104 @@ observe-js is a library for observing changes in JavaScript data. It exposes a h
 
 Path observation:
 
-```HTML
-var observer = new PathObserver(obj, 'foo.bar.baz', function(newValue, oldValue) {
+```JavaScript
+var observer = new PathObserver(obj, 'foo.bar.baz', function(newValue, oldValue, opt_token) {
   // respond to obj.foo.bar.baz having changed value.
 });
 ```
 
+Constructor:
+
+```JavaScript
+function PathObserver(
+  object,     // root object from which path-value is observed
+  path,       // Path object or path string
+  callback,   // function to be invoked when the observed path-value has changed.
+  target,     // optional - context object (this) for provided callback
+  token,      // optional - value to be passed back as last argument to callback
+  valueFn,    // optional - changed values are reported as the result of valueFn(pathValue)
+  setValueFn  // optional - setValue(newValue) sets the path value to setValueFn(newValue)
+)
+```
+
+Compound-value observation:
+
+```JavaScript
+function sum(values) {
+  var value = 0;
+  for (var i = 0; i < values.length; i++)
+    value += values[i]
+  return value;
+}
+
+var observer = new CompoundPathObserver(function(newValue, oldValue, opt_token) {
+  // respond to compound value having changed.
+}, target, token, sum);
+
+var obj = {
+  a: 1,
+  b: 2,
+  c: 3
+};
+
+observer.addPath(obj, 'a');
+observer.addPath(obj, 'b');
+observer.addPath(obj, 'c');
+observer.start();
+
+```
+
+Constructor:
+
+```JavaScript
+function CompoundPathObserver(
+  callback,   // function to be invoked when the compound-value changes
+  target,     // optional - context object (this) for provided callback
+  token,     // optional - value to be passed back as last argument to callback
+  setValueFn  // optional - setValue(newValue) sets the path value to setValueFn(newValue)
+)
+```
+
+Path objects:
+
+```JavaScript
+// Path.get() takes a string which is a sequence of dot-separated ECMAScript identifiers or integer index values.
+var path = Path.get('foo.bar.baz');
+
+// There is a 1:1 correspondence between logical path strings and path objects.
+assert(Path.get('foo.bar.baz') === Path.get('foo.bar.baz'));
+assert(Path.get('foo.bar.baz') !== Path.get('foo.bar.bat'));
+
+// The value from an object can be retrieved via getValueFrom()
+assert(2 == Path.get('foo.bar').getValueFrom({ foo: { bar: 2 }});
+
+// The value from an object can be set via setValueFrom()
+var obj = { foo: { bar: 2 }};
+Path.get('foo.bar').setValueFrom(obj, 3);
+assert(3 == obj.foo.bar);
+```
+
+Defining an accessor which creates a synchronous "alias" for a path-value from an object. The created accessor property notifies (if Object.observe is available) when the dependent value changes.
+
+```JavaScript
+var target = { a: 1 };
+var alias = { };
+
+var closer = PathObserver.defineProperty(alias, 'val', { object: target, path: 'a' });
+
+assert(target.a === alias.val);
+
+target.a = 2;
+assert(target.a === alias.val);
+
+alias.val = 3;
+assert(target.a === alias.val);
+```
+
 Array observation:
 
-```HTML
-var observer = new ArrayObserver(arr, function(splices) {
+```JavaScript
+var observer = new ArrayObserver(arr, function(splices, opt_token) {
   // respond to changes to the elements of arr.
   splices.forEach(function(splice) {
     splice.index; // index position that the change occurred.
@@ -29,10 +117,22 @@ var observer = new ArrayObserver(arr, function(splices) {
 });
 ```
 
+Constructor:
+
+```JavaScript
+function ArrayObserver(
+  object,     // array to be observed
+  callback,   // function to be invoked when the changes occur to the array's index storage
+  target,     // optional - context object (this) for provided callback
+  token       // optional - value to be passed back as last argument to callback
+)
+```
+
+
 Object observation:
 
-```HTML
-var observer = new ObjectObserver(obj, function(added, removed, changed, getOldValueFn) {
+```JavaScript
+var observer = new ObjectObserver(obj, function(added, removed, changed, getOldValueFn, opt_token) {
   // respond to changes to the obj.
   Object.keys(added).forEach(function(property) {
     property; // a property which has been been added to obj
@@ -49,8 +149,58 @@ var observer = new ObjectObserver(obj, function(added, removed, changed, getOldV
   });
 });
 ```
+
+Constructor:
+
+```JavaScript
+function ObjectObserver(
+  object,     // object to be observed
+  callback,   // function to be invoked when the changes occur to one or more properties of the object
+  target,     // optional - context object (this) for provided callback
+  token       // optional - value to be passed back as last argument to callback
+)
+```
+
+Compound-value observation:
+
+```JavaScript
+function sum(values) {
+  var value = 0;
+  for (var i = 0; i < values.length; i++)
+    value += values[i]
+  return value;
+}
+
+var observer = new CompoundPathObserver(function(newValue, oldValue, opt_token) {
+  // respond to compound value having changed.
+}, target, token, sum);
+
+var obj = {
+  a: 1,
+  b: 2,
+  c: 3
+};
+
+observer.addPath(obj, 'a');
+observer.addPath(obj, 'b');
+observer.addPath(obj, 'c');
+observer.start();
+
+```
+
+Constructor:
+
+```JavaScript
+function CompoundPathObserver(
+  callback,   // function to be invoked when the compound-value changes
+  target,     // optional - context object (this) for provided callback
+  token,     // optional - value to be passed back as last argument to callback
+  setValueFn  // optional - setValue(newValue) sets the path value to setValueFn(newValue)
+)
+```
+
 Force delivery of any changes:
-```HTML
+```JavaScript
 var obj = { id: 1 }
 var observer = new ObjectObserve(obj, function(added, removed, changed, getOldValueFn) {
   // react.
@@ -61,7 +211,7 @@ observer.deliver(); // causes the callback to be invoked reporting the change in
 ```
 
 Reset an observer to discard any previous changes:
-```HTML
+```JavaScript
 var arr = [1, 2, 3];
 var observer = new ArrayObserver(arr, function(splices) {
   // react.
@@ -73,7 +223,7 @@ observer.deliver(); // because of the reset, there is nothing to report so callb
 ```
 
 Close an observer
-```HTML
+```JavaScript
 var obj = { foo: { bar: 2 } };
 var observer = new PathObserver(arr, function(newValue, oldValue) {
   // react.
@@ -81,15 +231,16 @@ var observer = new PathObserver(arr, function(newValue, oldValue) {
 obj.foo.bar = 3;
 observer.close(); // the observer is now invalid and will never fire its callback
 ```
+### About path-values
+
+* If a path is unreachable from the provided object, its value is `undefined`
+* If a path is empty (`''`), its value is the object provided
+
 ### About observing paths
 
 `PathObserver` allows code to react to changes to a `path value`. Details:
 
-* If a path is unreachable from the provided object, its value is `undefined`
-* If a path is empty (`''`), its value is the object provided
 * Path observation respects prototype values.
-* `PathObserver.getValueAtPath(obj, 'foo.bar.baz')` is provided in order to retrieve a `path value` without observing it.
-* `PathObserver.setValueAtPath(obj, 'foo.bar.baz')` is provided in order to set the `path value`. Setting will create a final property, but not create objects.
 
 ### About observing Arrays
 
