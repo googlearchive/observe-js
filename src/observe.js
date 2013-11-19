@@ -1401,4 +1401,4 @@
     'delete': PROP_DELETE_TYPE,
     splice: ARRAY_SPLICE_TYPE
   };
-})(typeof global !== 'undefined' && global ? global : this);
+})(typeof global !== 'undefined' && global ? global : this || window);
