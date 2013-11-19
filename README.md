@@ -4,8 +4,7 @@
 
 ### Why observe-js?
 
-observe-js is a library for observing changes in JavaScript data. It exposes a high-level API and uses Object.observe if available, and otherwise performs dirty-checking.
-
+observe-js is a library for observing changes in JavaScript data. It exposes a high-level API and uses Object.observe if available, and otherwise performs dirty-checking. observe-js requires ECMAScript 5.
 ### Basic Usage
 
 Path observation:
