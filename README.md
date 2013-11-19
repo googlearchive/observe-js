@@ -40,7 +40,7 @@ var obj = {
 
 function multiObserverCallback(newValues, // array of current path-values, in addPath order
                                oldValues, // array of old path-values, in addPath order
-                               changedFlags, // array of boolean where true indicates that a new value was detected
+                               changedFlags, // array of boolean where true indicates a changed value
                                observedObjects, // array of root objects for observed values
                                opt_token) { 
   // respond to one or more path values having changed
@@ -67,7 +67,7 @@ function compoundObserverCallback(newValue, // new compound value (sum(newValues
   // respond to compound value having changed
 }
 
-var compooundObserver = new CompoundPathObserver(compoundObserverCallback);
+var compooundObserver = new CompoundPathObserver(compoundObserverCallback, null, null, sum);
 compooundObserver.addPath(obj, 'a');
 compooundObserver.addPath(obj, 'b');
 compooundObserver.addPath(obj, 'c');
@@ -78,10 +78,10 @@ Constructor:
 
 ```JavaScript
 function CompoundPathObserver(
-  callback,   // function to be invoked when the compound-value changes
-  target,     // optional - context object (this) for provided callback
+  callback,  // function to be invoked when the compound-value changes
+  target,    // optional - context object (this) for provided callback
   token,     // optional - value to be passed back as last argument to callback
-  setValueFn  // optional - setValue(newValue) sets the path value to setValueFn(newValue)
+  valueFn    // optional - if provided, callback reports changes in the value of valueFn(pathValues)  
 )
 ```
 
