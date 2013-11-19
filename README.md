@@ -29,9 +29,29 @@ function PathObserver(
 )
 ```
 
-Compound-value observation:
+Multiple path and compound-value observation:
 
 ```JavaScript
+var obj = {
+  a: 1,
+  b: 2,
+  c: 3
+};
+
+function multiObserverCallback(newValues, // array of current path-values, in addPath order
+                               oldValues, // array of old path-values, in addPath order
+                               changedFlags, // array of boolean where true indicates that a new value was detected
+                               observedObjects, // array of root objects for observed values
+                               opt_token) { 
+  // respond to one or more path values having changed
+}
+
+var multiObserver = new CompoundPathObserver(multiObserverCallback);
+multiObserver.addPath(obj, 'a');
+multiObserver.addPath(obj, 'b');
+multiObserver.addPath(obj, 'c');
+multiObserver.start();
+
 function sum(values) {
   var value = 0;
   for (var i = 0; i < values.length; i++)
@@ -39,21 +59,19 @@ function sum(values) {
   return value;
 }
 
-var observer = new CompoundPathObserver(function(newValue, oldValue, opt_token) {
-  // respond to compound value having changed.
-}, target, token, sum);
+function compoundObserverCallback(newValue, // new compound value (sum(newValues))
+                               oldValue, // old comoound value (sum(oldValues)) 
+                               changedFlags, // array of boolean where true indicates that a changed value
+                               observedObjects, // array of root objects for observed values
+                               opt_token) { 
+  // respond to compound value having changed
+}
 
-var obj = {
-  a: 1,
-  b: 2,
-  c: 3
-};
-
-observer.addPath(obj, 'a');
-observer.addPath(obj, 'b');
-observer.addPath(obj, 'c');
-observer.start();
-
+var compooundObserver = new CompoundPathObserver(compoundObserverCallback);
+compooundObserver.addPath(obj, 'a');
+compooundObserver.addPath(obj, 'b');
+compooundObserver.addPath(obj, 'c');
+compooundObserver.start();
 ```
 
 Constructor:
