@@ -10,7 +10,7 @@ observe-js is a library for observing changes in JavaScript data. It exposes a h
 Path observation:
 
 ```JavaScript
-var observer = new PathObserver(obj, 'foo.bar.baz', function(newValue, oldValue, opt_token) {
+var observer = new PathObserver(obj, 'foo.bar.baz', function(newValue, oldValue) {
   // respond to obj.foo.bar.baz having changed value.
 });
 ```
@@ -23,7 +23,6 @@ function PathObserver(
   path,       // Path object or path string
   callback,   // function to be invoked when the observed path-value has changed.
   target,     // optional - context object (this) for provided callback
-  token,      // optional - value to be passed back as last argument to callback
   valueFn,    // optional - changed values are reported as the result of valueFn(pathValue)
   setValueFn  // optional - setValue(newValue) sets the path value to setValueFn(newValue)
 )
@@ -41,8 +40,7 @@ var obj = {
 function multiObserverCallback(newValues, // array of current path-values, in addPath order
                                oldValues, // array of old path-values, in addPath order
                                changedFlags, // array of boolean where true indicates a changed value
-                               observedObjects, // array of root objects for observed values
-                               opt_token) { 
+                               observedObjects) { // array of root objects for observed values
   // respond to one or more path values having changed
 }
 
@@ -62,12 +60,12 @@ function sum(values) {
 function compoundObserverCallback(newValue, // new compound value (sum(newValues))
                                   oldValue, // old comoound value (sum(oldValues)) 
                                   changedFlags, // array of boolean where true indicates that a changed value
-                                  observedObjects, // array of root objects for observed values
-                                  opt_token) { 
+                                  observedObjects) { // array of root objects for observed values
+                                  
   // respond to compound value having changed
 }
 
-var compooundObserver = new CompoundPathObserver(compoundObserverCallback, null, null, sum);
+var compooundObserver = new CompoundPathObserver(compoundObserverCallback, null, sum);
 compooundObserver.addPath(obj, 'a');
 compooundObserver.addPath(obj, 'b');
 compooundObserver.addPath(obj, 'c');
@@ -80,7 +78,6 @@ Constructor:
 function CompoundPathObserver(
   callback,  // function to be invoked when the compound-value changes
   target,    // optional - context object (this) for provided callback
-  token,     // optional - value to be passed back as last argument to callback
   valueFn    // optional - if provided, callback reports changes in the value of valueFn(pathValues)  
 )
 ```
@@ -124,7 +121,7 @@ assert(obj.a.b === alias.val);
 Array observation:
 
 ```JavaScript
-var observer = new ArrayObserver(arr, function(splices, opt_token) {
+var observer = new ArrayObserver(arr, function(splices) {
   // respond to changes to the elements of arr.
   splices.forEach(function(splice) {
     splice.index; // index position that the change occurred.
@@ -140,8 +137,7 @@ Constructor:
 function ArrayObserver(
   object,     // array to be observed
   callback,   // function to be invoked when the changes occur to the array's index storage
-  target,     // optional - context object (this) for provided callback
-  token       // optional - value to be passed back as last argument to callback
+  target     // optional - context object (this) for provided callback
 )
 ```
 
@@ -149,7 +145,7 @@ function ArrayObserver(
 Object observation:
 
 ```JavaScript
-var observer = new ObjectObserver(obj, function(added, removed, changed, getOldValueFn, opt_token) {
+var observer = new ObjectObserver(obj, function(added, removed, changed, getOldValueFn) {
   // respond to changes to the obj.
   Object.keys(added).forEach(function(property) {
     property; // a property which has been been added to obj
@@ -173,46 +169,7 @@ Constructor:
 function ObjectObserver(
   object,     // object to be observed
   callback,   // function to be invoked when the changes occur to one or more properties of the object
-  target,     // optional - context object (this) for provided callback
-  token       // optional - value to be passed back as last argument to callback
-)
-```
-
-Compound-value observation:
-
-```JavaScript
-function sum(values) {
-  var value = 0;
-  for (var i = 0; i < values.length; i++)
-    value += values[i]
-  return value;
-}
-
-var observer = new CompoundPathObserver(function(newValue, oldValue, opt_token) {
-  // respond to compound value having changed.
-}, target, token, sum);
-
-var obj = {
-  a: 1,
-  b: 2,
-  c: 3
-};
-
-observer.addPath(obj, 'a');
-observer.addPath(obj, 'b');
-observer.addPath(obj, 'c');
-observer.start();
-
-```
-
-Constructor:
-
-```JavaScript
-function CompoundPathObserver(
-  callback,   // function to be invoked when the compound-value changes
-  target,     // optional - context object (this) for provided callback
-  token,     // optional - value to be passed back as last argument to callback
-  setValueFn  // optional - setValue(newValue) sets the path value to setValueFn(newValue)
+  target      // optional - context object (this) for provided callback
 )
 ```
 
