@@ -276,19 +276,16 @@ suite('PathObserver Tests', function() {
   });
 
   test('Optional target for callback', function() {
-    var returnedToken;
     var target = {
-      changed: function(value, oldValue, token) {
+      changed: function(value, oldValue) {
         this.called = true;
-        returnedToken = token;
       }
     };
     var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo', target.changed, target, 'token');
+    var observer = new PathObserver(obj, 'foo', target.changed, target);
     obj.foo = 2;
     observer.deliver();
     assert.isTrue(target.called);
-    assert.strictEqual('token', returnedToken)
 
     observer.close();
   });
@@ -480,8 +477,7 @@ suite('PathObserver Tests', function() {
       return isNaN(value) ? value : value * 3;
     }
 
-    observer = new PathObserver(model, 'foo', callback, undefined, undefined,
-                                valueFn);
+    observer = new PathObserver(model, 'foo', callback, undefined, valueFn);
 
     model.foo = 1;
     assertPathChanges(3, undefined);
@@ -502,8 +498,7 @@ suite('PathObserver Tests', function() {
       return isNaN(value) ? value : [ value ];
     }
 
-    observer = new PathObserver(model, 'foo', callback, undefined, undefined,
-                                valueFn);
+    observer = new PathObserver(model, 'foo', callback, undefined, valueFn);
 
     model.foo = 1;
     assertPathChanges([1], undefined);
@@ -832,7 +827,7 @@ suite('CompoundPathObserver Tests', function() {
   test('Simple', function() {
     var model = { a: 1, b: 2, c: 3 };
 
-    observer = new CompoundPathObserver(callback, undefined, undefined);
+    observer = new CompoundPathObserver(callback);
     observer.addPath(model, 'a');
     observer.addPath(model, 'b');
     observer.addPath(model, Path.get('c'));
@@ -866,8 +861,7 @@ suite('CompoundPathObserver Tests', function() {
       }, 0);
     }
 
-    observer = new CompoundPathObserver(callback, undefined, undefined,
-                                        valueFn);
+    observer = new CompoundPathObserver(callback, undefined, valueFn);
     observer.addPath(model, 'a');
     observer.addPath(model, 'b');
     observer.addPath(model, Path.get('c'));
@@ -911,8 +905,7 @@ suite('CompoundPathObserver Tests', function() {
       return {};
     }
 
-    observer = new CompoundPathObserver(callback, undefined, undefined,
-                                        valueFn);
+    observer = new CompoundPathObserver(callback, undefined, valueFn);
 
     observer.addPath(model, 'a');
     observer.start();
@@ -1021,19 +1014,16 @@ suite('ArrayObserver Tests', function() {
   });
 
   test('Optional target for callback', function() {
-    var returnedToken;
     var target = {
-      changed: function(splices, token) {
+      changed: function(splices) {
         this.called = true;
-        returnedToken = token;
       }
     };
     var obj = [];
-    var observer = new ArrayObserver(obj, target.changed, target, 'token');
+    var observer = new ArrayObserver(obj, target.changed, target);
     obj.length = 1;
     observer.deliver();
     assert.isTrue(target.called);
-    assert.strictEqual('token', returnedToken);
     observer.close();
   });
 
@@ -1600,37 +1590,31 @@ suite('ObjectObserver Tests', function() {
   });
 
   test('Optional target for callback', function() {
-    var returnedToken;
     var target = {
-      changed: function(value, oldValue, token) {
+      changed: function(value, oldValue) {
         this.called = true;
-        returnedToken = token;
       }
     };
     var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo', target.changed, target, 'token');
+    var observer = new PathObserver(obj, 'foo', target.changed, target);
     obj.foo = 2;
     observer.deliver();
     assert.isTrue(target.called);
-    assert.strictEqual('token', returnedToken)
 
     observer.close();
   });
 
   test('Optional target for callback', function() {
-    var returnedToken;
     var target = {
-      changed: function(added, removed, changed, oldValues, token) {
+      changed: function(added, removed, changed, oldValues) {
         this.called = true;
-        returnedToken = token;
       }
     };
     var obj = {};
-    var observer = new ObjectObserver(obj, target.changed, target, 'token');
+    var observer = new ObjectObserver(obj, target.changed, target);
     obj.foo = 1;
     observer.deliver();
     assert.isTrue(target.called);
-    assert.strictEqual('token', returnedToken)
 
     observer.close();
   });

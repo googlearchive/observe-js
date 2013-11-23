@@ -345,13 +345,12 @@
     return copy;
   }
 
-  function Observer(object, callback, target, token) {
+  function Observer(object, callback, target) {
     this.closed = false;
     this.object = object;
     this.callback = callback;
     // TODO(rafaelw): Hold this.target weakly when WeakRef is available.
     this.target = target;
-    this.token = token;
     this.reporting = true;
     if (hasObserve) {
       var self = this;
@@ -403,7 +402,6 @@
 
       this.sync(false);
       if (this.callback) {
-        this.reportArgs.push(this.token);
         this.invokeCallback(this.reportArgs);
       }
       this.reportArgs = undefined;
@@ -506,8 +504,8 @@
     };
   }
 
-  function ObjectObserver(object, callback, target, token) {
-    Observer.call(this, object, callback, target, token);
+  function ObjectObserver(object, callback, target) {
+    Observer.call(this, object, callback, target);
     this.connect();
     this.sync(true);
   }
@@ -560,10 +558,10 @@
     }
   });
 
-  function ArrayObserver(array, callback, target, token) {
+  function ArrayObserver(array, callback, target) {
     if (!Array.isArray(array))
       throw Error('Provided object is not an Array');
-    ObjectObserver.call(this, array, callback, target, token);
+    ObjectObserver.call(this, array, callback, target);
   }
 
   ArrayObserver.prototype = createObject({
@@ -664,8 +662,7 @@
     }
   };
 
-  function PathObserver(object, path, callback, target, token, valueFn,
-                        setValueFn) {
+  function PathObserver(object, path, callback, target, valueFn, setValueFn) {
     var path = path instanceof Path ? path : getPath(path);
     if (!path || !path.length || !isObject(object)) {
       this.value_ = path ? path.getValueFrom(object) : undefined;
@@ -674,7 +671,7 @@
       return;
     }
 
-    Observer.call(this, object, callback, target, token);
+    Observer.call(this, object, callback, target);
     this.valueFn = valueFn;
     this.setValueFn = setValueFn;
     this.path = path;
@@ -745,8 +742,8 @@
     }
   });
 
-  function CompoundPathObserver(callback, target, token, valueFn) {
-    Observer.call(this, undefined, callback, target, token);
+  function CompoundPathObserver(callback, target, valueFn) {
+    Observer.call(this, undefined, callback, target);
     this.valueFn = valueFn;
 
     this.observed = [];
