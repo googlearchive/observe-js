@@ -343,17 +343,38 @@ suite('PathObserver Tests', function() {
   });
 
   test('Path setValue', function() {
-    var arr = {};
+    var obj = {};
 
-    arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo', callback);
-    arr.foo = 'baz';
+    obj.foo = 'bar';
+    observer = new PathObserver(obj, 'foo', callback);
+    obj.foo = 'baz';
 
     observer.setValue('bat');
-    assert.strictEqual(arr.foo, 'bat');
+    assert.strictEqual(obj.foo, 'bat');
     assertPathChanges('bat', 'bar');
 
     observer.setValue('bot');
+    observer.reset();
+    assertNoChanges();
+
+    observer.close();
+  });
+
+  test('Path setValueFn', function() {
+    var obj = { foo: 1 };
+    function setValueFn(value) {
+      obj.foo = 2*value;
+    }
+
+    observer = new PathObserver(obj, 'foo', callback, undefined, undefined,
+                                setValueFn);
+    obj.foo = 2;
+
+    observer.setValue(2);
+    assert.strictEqual(obj.foo, 4);
+    assertPathChanges(4, 1);
+
+    observer.setValue(8);
     observer.reset();
     assertNoChanges();
 
@@ -876,6 +897,35 @@ suite('CompoundPathObserver Tests', function() {
 
     observer.close();
   });
+
+  test('setValueFn', function() {
+    var obj = { foo: 1, bar: 2 };
+
+    function valueFn(values) {
+      return values[0] + values[1];
+    }
+
+    function setValueFn(value) {
+      obj.foo = value;
+    }
+
+    observer = new CompoundPathObserver(callback, undefined, valueFn,
+                                        setValueFn);
+    observer.addPath(obj, 'foo');
+    observer.addPath(obj, 'bar');
+    observer.start();
+
+    observer.setValue(2);
+    assert.strictEqual(obj.foo, 2);
+    assertPathChanges(4, 3);
+
+    observer.setValue(8);
+    observer.reset();
+    assertNoChanges();
+
+    observer.close();
+  });
+
 
   test('Degenerate Values', function() {
     var model = {};

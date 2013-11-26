@@ -662,17 +662,18 @@
     }
   };
 
-  function PathObserver(object, path, callback, target, valueFn, setValueFn) {
+  function PathObserver(object, path, callback, target, transformFn,
+                        setValueFn) {
     var path = path instanceof Path ? path : getPath(path);
     if (!path || !path.length || !isObject(object)) {
       this.value_ = path ? path.getValueFrom(object) : undefined;
-      this.value = valueFn ? valueFn(this.value_) : this.value_;
+      this.value = transformFn ? transformFn(this.value_) : this.value_;
       this.closed = true;
       return;
     }
 
     Observer.call(this, object, callback, target);
-    this.valueFn = valueFn;
+    this.transformFn = transformFn;
     this.setValueFn = setValueFn;
     this.path = path;
 
@@ -712,7 +713,8 @@
       if (areSameValue(this.value_, this.oldValue_))
         return false;
 
-      this.value = this.valueFn ? this.valueFn(this.value_) : this.value_;
+      this.value = this.transformFn ? this.transformFn(this.value_)
+                                    : this.value_;
       this.reportArgs = [this.value, this.oldValue];
       return true;
     },
@@ -723,7 +725,8 @@
           this.observedSet.reset();
 
         this.value_ = this.path.getValueFrom(this.object, this.observedSet);
-        this.value = this.valueFn ? this.valueFn(this.value_) : this.value_;
+        this.value = this.transformFn ? this.transformFn(this.value_)
+                                      : this.value_;
 
         if (this.observedSet)
           this.observedSet.cleanup();
@@ -734,17 +737,17 @@
     },
 
     setValue: function(newValue) {
-      if (!this.path)
-        return;
-      if (typeof this.setValueFn === 'function')
-        newValue = this.setValueFn(newValue);
-      this.path.setValueFrom(this.object, newValue);
+      if (this.setValueFn)
+        this.setValueFn(newValue);
+      else if (this.path)
+        this.path.setValueFrom(this.object, newValue);
     }
   });
 
-  function CompoundPathObserver(callback, target, valueFn) {
+  function CompoundPathObserver(callback, target, transformFn, setValueFn) {
     Observer.call(this, undefined, callback, target);
-    this.valueFn = valueFn;
+    this.transformFn = transformFn;
+    this.setValueFn = setValueFn;
 
     this.observed = [];
     this.values = [];
@@ -790,7 +793,7 @@
         var value = path.getValueFrom(object, this.observedSet);
         var oldValue = this.values[i/2];
         if (!areSameValue(value, oldValue)) {
-          if (!anyChanged && !this.valueFn) {
+          if (!anyChanged && !this.transformFn) {
             this.oldValues = this.oldValues || [];
             this.changeFlags = this.changeFlags || [];
             for (var j = 0; j < this.values.length; j++) {
@@ -799,7 +802,7 @@
             }
           }
 
-          if (!this.valueFn)
+          if (!this.transformFn)
             this.changeFlags[i/2] = true;
 
           this.values[i/2] = value;
@@ -817,8 +820,8 @@
       if (!this.getValues())
         return;
 
-      if (this.valueFn) {
-        this.value = this.valueFn(this.values);
+      if (this.transformFn) {
+        this.value = this.transformFn(this.values);
 
         if (areSameValue(this.value, this.oldValue))
           return false;
@@ -835,11 +838,11 @@
     sync: function(hard) {
       if (hard) {
         this.getValues();
-        if (this.valueFn)
-          this.value = this.valueFn(this.values);
+        if (this.transformFn)
+          this.value = this.transformFn(this.values);
       }
 
-      if (this.valueFn)
+      if (this.transformFn)
         this.oldValue = this.value;
     },
 
