@@ -363,7 +363,7 @@ suite('PathObserver Tests', function() {
   test('Path setValueFn', function() {
     var obj = { foo: 1 };
     function setValueFn(value) {
-      obj.foo = 2*value;
+      obj.foo = 2 * value;
     }
 
     observer = new PathObserver(obj, 'foo', callback, undefined, undefined,
