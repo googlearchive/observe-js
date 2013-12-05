@@ -130,7 +130,7 @@ ArrayFuzzer.prototype.go = function() {
 
   this.ops = randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
   observer.deliver();
-  observer.disconnect();
+  observer.close();
 }
 
 global.ArrayFuzzer = ArrayFuzzer;
