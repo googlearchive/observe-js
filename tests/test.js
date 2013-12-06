@@ -267,6 +267,13 @@ suite('PathObserver Tests', function() {
 
   teardown(doTeardown);
 
+  test('invalid', function() {
+    var observer = new PathObserver({ a: { b: 1 }} , 'a b', callback);
+    assert.strictEqual(undefined, observer.value);
+    observer.deliver();
+    assert.isFalse(callbackInvoked);
+  });
+
   test('Close Invokes Close', function() {
     var called = false;
     var obj = { foo: 1, close: function() { called = true }};

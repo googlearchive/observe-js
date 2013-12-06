@@ -665,8 +665,8 @@
   function PathObserver(object, path, callback, target, transformFn,
                         setValueFn) {
     var path = path instanceof Path ? path : getPath(path);
-    if (!path || !path.length || !isObject(object)) {
-      this.value_ = path ? path.getValueFrom(object) : undefined;
+    if (!path.valid || !path.length || !isObject(object)) {
+      this.value_ = path.getValueFrom(object);
       this.value = transformFn ? transformFn(this.value_) : this.value_;
       this.closed_ = true;
       return;
@@ -768,7 +768,7 @@
         throw Error('Cannot add more paths once started.');
 
       var path = path instanceof Path ? path : getPath(path);
-      var value = path ? path.getValueFrom(object) : undefined;
+      var value = path.getValueFrom(object);
 
       this.observed_.push(object, path);
       this.values_.push(value);
@@ -787,8 +787,6 @@
       var anyChanged = false;
       for (var i = 0; i < this.observed_.length; i = i+2) {
         var path = this.observed_[i+1];
-        if (!path)
-          continue;
         var object = this.observed_[i];
         var value = path.getValueFrom(object, this.observedSet_);
         var oldValue = this.values_[i/2];
