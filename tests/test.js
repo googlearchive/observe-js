@@ -328,12 +328,12 @@ suite('ObserverTransform', function() {
 
     obj.foo = 2;
 
-    assert.strictEqual(4, observer.reset());
+    assert.strictEqual(4, observer.discardChanges());
     assertNoChanges();
 
     observer.setValue(2);
     assert.strictEqual(obj.foo, 1);
-    assert.strictEqual(2, observer.reset());
+    assert.strictEqual(2, observer.discardChanges());
     assertNoChanges();
 
     observer.close();
@@ -451,7 +451,7 @@ suite('PathObserver Tests', function() {
     assertNoChanges();
   });
 
-  test('Path reset', function() {
+  test('Path discardChanges', function() {
     var arr = {};
 
     arr.foo = 'bar';
@@ -462,7 +462,7 @@ suite('PathObserver Tests', function() {
     assertPathChanges('baz', 'bar');
 
     arr.foo = 'bat';
-    observer.reset();
+    observer.discardChanges();
     assertNoChanges();
 
     arr.foo = 'bag';
@@ -483,7 +483,7 @@ suite('PathObserver Tests', function() {
     assertPathChanges('bat', 'bar');
 
     observer.setValue('bot');
-    observer.reset();
+    observer.discardChanges();
     assertNoChanges();
 
     observer.close();
@@ -540,10 +540,10 @@ suite('PathObserver Tests', function() {
     assert.equal(3, observer.open(callback));
 
     path.setValueFrom(obj, 2);
-    assert.equal(2, observer.reset());
+    assert.equal(2, observer.discardChanges());
 
     path.setValueFrom(obj, 3);
-    assert.equal(3, observer.reset());
+    assert.equal(3, observer.discardChanges());
 
     assertNoChanges();
 
@@ -821,14 +821,14 @@ suite('PathObserver Tests', function() {
     var b = {};
     var c = {};
 
-    root.a.observer = PathObserver.defineProperty(root.a, 'value',
-                                                  root, 'value');
+    root.a.observer = Observer.defineProperty(root.a, 'value',
+        new PathObserver(root, 'value'));
 
-    root.a.b.observer = PathObserver.defineProperty(root.a.b, 'value',
-                                                    root.a, 'value');
+    root.a.b.observer = Observer.defineProperty(root.a.b, 'value',
+        new PathObserver(root.a, 'value'));
 
-    root.c.observer = PathObserver.defineProperty(root.c, 'value',
-                                                  root, 'value');
+    root.c.observer = Observer.defineProperty(root.c, 'value',
+        new PathObserver(root, 'value'));
 
     root.c.value = 2;
     assert.strictEqual(2, root.a.b.value);
@@ -852,8 +852,9 @@ suite('PathObserver Tests', function() {
       Object.observe(target, callback);
     }
 
-    var observer = PathObserver.defineProperty(target, 'computed',
-                                               source, 'foo.bar');
+    var observer = Observer.defineProperty(target, 'computed',
+        new PathObserver(source, 'foo.bar'));
+
     assert.isTrue(target.hasOwnProperty('computed'));
     assert.strictEqual(1, target.computed);
 
@@ -895,12 +896,6 @@ suite('PathObserver Tests', function() {
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.update,
-        oldValue: 1
-      },
-      {
-        object: target,
-        name: 'computed',
         type: Observer.changeRecordTypes.reconfigure
       }
     ]);
@@ -910,12 +905,14 @@ suite('PathObserver Tests', function() {
 
   test('DefineProperty - empty path', function() {
     var target = {}
-    var observer = PathObserver.defineProperty(target, 'foo', 1, '');
+    var observer = Observer.defineProperty(target, 'foo',
+                                               new PathObserver(1));
     assert.isTrue(target.hasOwnProperty('foo'));
     assert.strictEqual(1, target.foo);
 
     var obj = {};
-    var observer2 = PathObserver.defineProperty(target, 'bar', obj, '');
+    var observer2 = Observer.defineProperty(target, 'bar',
+                                                new PathObserver(obj));
     assert.isTrue(target.hasOwnProperty('bar'));
     assert.strictEqual(obj, target.bar);
   });
@@ -1175,7 +1172,7 @@ suite('ArrayObserver Tests', function() {
     assertNoChanges();
   });
 
-  test('Array reset', function() {
+  test('Array discardChanges', function() {
     var arr = [];
 
     arr.push(1);
@@ -1190,7 +1187,7 @@ suite('ArrayObserver Tests', function() {
     }]);
 
     arr.push(3);
-    observer.reset();
+    observer.discardChanges();
     assertNoChanges();
 
     arr.pop();
@@ -1784,7 +1781,7 @@ suite('ObjectObserver Tests', function() {
     assertNoChanges();
   });
 
-  test('Object reset', function() {
+  test('Object discardChanges', function() {
     var obj = {};
 
     obj.foo = 'bar';
@@ -1804,7 +1801,7 @@ suite('ObjectObserver Tests', function() {
     });
 
     obj.blaz = 'bat';
-    observer.reset();
+    observer.discardChanges();
     assertNoChanges();
 
     obj.bat = 'bag';

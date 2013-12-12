@@ -385,6 +385,10 @@
       return this.value_;
     },
 
+    getValue: function() {
+      return this.value_;
+    },
+
     internalCallback_: function(records) {
       if (this.state_ != OPENED)
         return;
@@ -435,11 +439,12 @@
         this.callback_.apply(this.target_, args);
       } catch (ex) {
         Observer._errorThrownDuringCallback = true;
-        console.error('Exception caught during observer callback: ' + (ex.stack || ex));
+        console.error('Exception caught during observer callback: ' +
+                       (ex.stack || ex));
       }
     },
 
-    reset: function() {
+    discardChanges: function() {
       if (this.state_ != OPENED)
         throw Error('Observer is not open');
 
@@ -696,6 +701,10 @@
   PathObserver.prototype = createObject({
     __proto__: Observer.prototype,
 
+    getValue: function() {
+      return this.path_.getValueFrom(this.object_);
+    },
+
     connect_: function() {
       if (hasObserve)
         this.observedSet_ = new ObservedSet(this.boundInternalCallback_);
@@ -791,7 +800,8 @@
       for (var i = 0; i < this.observed_.length; i = i + 2) {
         var pathOrObserver = this.observed_[i+1];
         var object = this.observed_[i];
-        var value = object === observerSentinel ? pathOrObserver.reset() :
+        var value = object === observerSentinel ?
+            pathOrObserver.discardChanges() :
             pathOrObserver.getValueFrom(object, this.observedSet_)
 
         if (sync) {
@@ -874,9 +884,12 @@
       this.callback_.call(this.target_, this.value_, oldValue);
     },
 
-    reset: function() {
-      this.value_ = this.getValueFn_(this.observable_.reset());
-      return this.value_;
+    getValue: function() {
+      return this.observable_.getValue();
+    },
+
+    discardChanges: function() {
+      return this.getValueFn_(this.observable_.discardChanges());
     },
 
     deliver: function() {
@@ -925,40 +938,30 @@
     }
   }
 
-  // TODO(rafaelw): It should be possible for the Object.observe case to have
-  // every PathObserver used by defineProperty share a single Object.observe
-  // callback, and thus get() can simply call observer.deliver() and any changes
-  // to any dependent value will be observed.
-  PathObserver.defineProperty = function(target, name, object, path) {
-    // TODO(rafaelw): Validate errors
-    path = getPath(path);
+  Observer.defineProperty = function(target, name, observable) {
     var notify = notifyFunction(target, name);
-
-    var observer = new PathObserver(object, path,
-        function(newValue, oldValue) {
-          if (notify)
-            notify(PROP_UPDATE_TYPE, oldValue);
-        }
-    );
+    observable.open(function(newValue, oldValue) {
+      if (notify)
+        notify(PROP_UPDATE_TYPE, oldValue);
+    });
 
     Object.defineProperty(target, name, {
       get: function() {
-        return path.getValueFrom(object);
+        return observable.getValue();
       },
       set: function(newValue) {
-        path.setValueFrom(object, newValue);
+        observable.setValue(newValue);
+        return newValue;
       },
       configurable: true
     });
 
     return {
       close: function() {
-        var oldValue = path.getValueFrom(object);
-        if (notify)
-          observer.deliver();
-        observer.close();
+        var lastValue = observable.getValue();
+        observable.close();
         Object.defineProperty(target, name, {
-          value: oldValue,
+          value: lastValue,
           writable: true,
           configurable: true
         });
