@@ -803,7 +803,7 @@
       if (!this.hasObservers_)
         return;
 
-      for (var i = 0; i < this.observed_.length; i = i + 2) {
+      for (var i = 0; i < this.observed_.length; i += 2) {
         if (this.observed_[i] === observerSentinel)
           this.observed_[i + 1].deliver();
       }
@@ -826,7 +826,7 @@
         this.observedSet_.reset();
 
       var oldValues;
-      for (var i = 0; i < this.observed_.length; i = i + 2) {
+      for (var i = 0; i < this.observed_.length; i += 2) {
         var pathOrObserver = this.observed_[i+1];
         var object = this.observed_[i];
         var value = object === observerSentinel ?
