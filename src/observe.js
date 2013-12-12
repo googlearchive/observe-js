@@ -415,6 +415,9 @@
         return;
 
       if (hasObserve) {
+        if (this.deliverDeps_)
+          this.deliverDeps_();
+
         this.testingResults = testingResults;
         Object.deliverChangeRecords(this.boundInternalCallback_);
         this.testingResults = undefined;
@@ -762,6 +765,8 @@
 
     this.observed_ = [];
     this.value_ = [];
+    this.hasObservers_ = false;
+    this.depsChanged_ = undefined;
   }
 
   var observerSentinel = {};
@@ -785,11 +790,35 @@
       if (!isObservable(observer))
         throw Error('Object must be observable');
 
-      observer.open(this.deliver, this);
+      this.hasObservers_ = true;
+
+      observer.open(this.observerChanged_, this);
       var value = observer.value;
 
       this.observed_.push(observerSentinel, observer);
       this.value_.push(value);
+    },
+
+    deliverDeps_: function() {
+      if (!this.hasObservers_)
+        return;
+
+      for (var i = 0; i < this.observed_.length; i = i + 2) {
+        if (this.observed_[i] === observerSentinel)
+          this.observed_[i + 1].deliver();
+      }
+    },
+
+    observerChanged_: function() {
+      if (!hasObserve)
+        return this.deliver();
+
+      if (!this.depsChanged_) {
+        this.depsChanged_ = {};
+        Object.observe(this.depsChanged_, this.boundInternalCallback_);
+      }
+
+      this.depsChanged_.changed = !this.depsChanged_.changed;
     },
 
     getValues_: function(sync) {
@@ -838,13 +867,19 @@
     },
 
     close: function() {
-      if (this.observed_) {
+      if (this.hasObservers_) {
         for (var i = 0; i < this.observed_.length; i += 2) {
           if (this.observed_[i] === observerSentinel)
             this.observed_[i + 1].close();
         }
+
         this.observed_ = undefined;
         this.value_ = undefined;
+      }
+
+      if (this.depsChanged_) {
+        Object.unobserve(this.depsChanged_, this.boundInternalCallback_);
+        this.depsChanged_ = undefined;
       }
 
       Observer.prototype.close.call(this);

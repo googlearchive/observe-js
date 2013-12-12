@@ -951,6 +951,34 @@ suite('CompoundObserver Tests', function() {
     observer.close();
   });
 
+  test('All Observers', function() {
+    function ident(value) { return value; }
+
+    var model = { a: 1, b: 2, c: 3 };
+
+    observer = new CompoundObserver();
+    observer.addObserver(new PathObserver(model, 'a'));
+    observer.addObserver(new PathObserver(model, 'b'));
+    observer.addObserver(new PathObserver(model, Path.get('c')));
+    observer.open(callback);
+
+    var observerCallbackArg = [model, Path.get('a'),
+                               model, Path.get('b'),
+                               model, Path.get('c')];
+    model.a = -10;
+    model.b = 20;
+    model.c = 30;
+    assertCompoundPathChanges([-10, 20, 30], [1, 2, 3],
+                              observerCallbackArg);
+
+    model.a = 'a';
+    model.c = 'c';
+    assertCompoundPathChanges(['a', 20, 'c'], [-10,, 30],
+                              observerCallbackArg);
+
+    observer.close();
+  });
+
   test('Degenerate Values', function() {
     var model = {};
     observer = new CompoundObserver();
