@@ -17,7 +17,8 @@ function ArrayReduction(array, path, reduceFn, initial) {
   this.path = path ? path.trim() : undefined;
   this.reduceFn = reduceFn;
   this.initial = initial;
-  this.arrayObserver = new ArrayObserver(array, this.handleSplices, this);
+  this.arrayObserver = new ArrayObserver(array);
+  this.arrayObserver.open(this.handleSplices, this);
   this.observers = this.path ? [] : undefined;
 
   this.handleSplices([{
@@ -33,8 +34,10 @@ ArrayReduction.prototype = {
       var splice = splices[i];
       var added = [];
       for (var j = 0; j < splice.addedCount; j++) {
-        added.push(new PathObserver(this.array[splice.index + j], this.path,
-                                    this.reduce, this));
+        var observer = new PathObserver(this.array[splice.index + j], this.path);
+        observer.open(this.reduce, this);
+        added.push(observer);
+
       }
 
       var spliceArgs = [splice.index, splice.removed.length].concat(added);

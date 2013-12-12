@@ -345,13 +345,23 @@
     return copy;
   }
 
-  function Observer(object, callback, target) {
-    this.closed_ = false;
-    this.object_ = object;
-    this.callback = callback; // TODO(rafaelw): Used in NodeBind
-    // TODO(rafaelw): Hold this.target weakly when WeakRef is available.
-    this.target = target; // TODO(rafaelw): Used in NodeBind
+  function isObservable(obj) {
+    return obj &&
+           typeof obj.open == 'function' &&
+           typeof obj.close == 'function';
+  }
+
+  var UNOPENED = 0;
+  var OPENED = 1;
+  var CLOSED = 2;
+  function Observer() {
+    this.state_ = UNOPENED;
+
+    this.value_ = undefined;
+    this.callback_ = undefined;
+    this.target_ = undefined; // TODO(rafaelw): Should be WeakRef
     this.reporting_ = true;
+    this.reportArgs_ = undefined;
     if (hasObserve) {
       var self = this;
       this.boundInternalCallback_ = function(records) {
@@ -363,8 +373,20 @@
   }
 
   Observer.prototype = {
+    open: function(callback, target) {
+      if (this.state_ != UNOPENED)
+        throw Error('Observer has already been opened.');
+
+      this.callback_ = callback;
+      this.target_ = target;
+      this.state_ = OPENED;
+      this.connect_();
+      this.sync_(true);
+      return this.value_;
+    },
+
     internalCallback_: function(records) {
-      if (this.closed_)
+      if (this.state_ != OPENED)
         return;
       if (this.reporting_ && this.check_(records)) {
         this.report_();
@@ -374,19 +396,20 @@
     },
 
     close: function() {
-      if (this.closed_)
+      if (this.state_ == CLOSED)
         return;
-      if (this.object_ && typeof this.object_.close === 'function')
-        this.object_.close();
 
+      this.state_ = CLOSED;
       this.disconnect_();
-      this.object_ = undefined;
-      this.closed_ = true;
+      this.value_ = undefined;
+      this.callback_ = undefined;
+      this.target_ = undefined;
     },
 
     deliver: function(testingResults) {
-      if (this.closed_)
+      if (this.state_ != OPENED)
         return;
+
       if (hasObserve) {
         this.testingResults = testingResults;
         Object.deliverChangeRecords(this.boundInternalCallback_);
@@ -401,15 +424,15 @@
         return;
 
       this.sync_(false);
-      if (this.callback) {
-        this.invokeCallback_(this.reportArgs);
+      if (this.callback_) {
+        this.invokeCallback_(this.reportArgs_);
       }
-      this.reportArgs = undefined;
+      this.reportArgs_ = undefined;
     },
 
     invokeCallback_: function(args) {
       try {
-        this.callback.apply(this.target, args);
+        this.callback_.apply(this.target_, args);
       } catch (ex) {
         Observer._errorThrownDuringCallback = true;
         console.error('Exception caught during observer callback: ' + (ex.stack || ex));
@@ -417,8 +440,8 @@
     },
 
     reset: function() {
-      if (this.closed_)
-        return;
+      if (this.state_ != OPENED)
+        throw Error('Observer is not open');
 
       if (hasObserve) {
         this.reporting_ = false;
@@ -427,6 +450,7 @@
       }
 
       this.sync_(true);
+      return this.value_;
     }
   }
 
@@ -477,7 +501,7 @@
 
       for (var i = 0; i < toCheck.length; i++) {
         var observer = toCheck[i];
-        if (observer.closed_)
+        if (observer.state_ != OPENED)
           continue;
 
         if (hasObserve) {
@@ -504,10 +528,10 @@
     };
   }
 
-  function ObjectObserver(object, callback, target) {
-    Observer.call(this, object, callback, target);
-    this.connect_();
-    this.sync_(true);
+  function ObjectObserver(object) {
+    Observer.call(this);
+    this.value_ = object;
+    this.oldObject_ = undefined;
   }
 
   ObjectObserver.prototype = createObject({
@@ -515,12 +539,12 @@
 
     connect_: function() {
       if (hasObserve)
-        Object.observe(this.object_, this.boundInternalCallback_);
+        Object.observe(this.value_, this.boundInternalCallback_);
     },
 
     sync_: function(hard) {
       if (!hasObserve)
-        this.oldObject = copyObject(this.object_);
+        this.oldObject_ = copyObject(this.value_);
     },
 
     check_: function(changeRecords) {
@@ -531,19 +555,19 @@
           return false;
 
         oldValues = {};
-        diff = diffObjectFromChangeRecords(this.object_, changeRecords,
+        diff = diffObjectFromChangeRecords(this.value_, changeRecords,
                                            oldValues);
       } else {
-        oldValues = this.oldObject;
-        diff = diffObjectFromOldObject(this.object_, this.oldObject);
+        oldValues = this.oldObject_;
+        diff = diffObjectFromOldObject(this.value_, this.oldObject_);
       }
 
       if (diffIsEmpty(diff))
         return false;
 
-      this.reportArgs =
+      this.reportArgs_ =
           [diff.added || {}, diff.removed || {}, diff.changed || {}];
-      this.reportArgs.push(function(property) {
+      this.reportArgs_.push(function(property) {
         return oldValues[property];
       });
 
@@ -552,16 +576,16 @@
 
     disconnect_: function() {
       if (!hasObserve)
-        this.oldObject = undefined;
-      else if (this.object_)
-        Object.unobserve(this.object_, this.boundInternalCallback_);
+        this.oldObject_ = undefined;
+      else if (this.value_)
+        Object.unobserve(this.value_, this.boundInternalCallback_);
     }
   });
 
-  function ArrayObserver(array, callback, target) {
+  function ArrayObserver(array) {
     if (!Array.isArray(array))
       throw Error('Provided object is not an Array');
-    ObjectObserver.call(this, array, callback, target);
+    ObjectObserver.call(this, array);
   }
 
   ArrayObserver.prototype = createObject({
@@ -569,12 +593,12 @@
 
     connect_: function() {
       if (hasObserve)
-        Array.observe(this.object_, this.boundInternalCallback_);
+        Array.observe(this.value_, this.boundInternalCallback_);
     },
 
     sync_: function() {
       if (!hasObserve)
-        this.oldObject = this.object_.slice();
+        this.oldObject_ = this.value_.slice();
     },
 
     check_: function(changeRecords) {
@@ -582,16 +606,16 @@
       if (hasObserve) {
         if (!changeRecords)
           return false;
-        splices = projectArraySplices(this.object_, changeRecords);
+        splices = projectArraySplices(this.value_, changeRecords);
       } else {
-        splices = calcSplices(this.object_, 0, this.object_.length,
-                              this.oldObject, 0, this.oldObject.length);
+        splices = calcSplices(this.value_, 0, this.value_.length,
+                              this.oldObject_, 0, this.oldObject_.length);
       }
 
       if (!splices || !splices.length)
         return false;
 
-      this.reportArgs = [splices];
+      this.reportArgs_ = [splices];
       return true;
     }
   });
@@ -611,7 +635,7 @@
 
   function ObservedSet(callback) {
     this.arr = [];
-    this.callback = callback;
+    this.callback_ = callback;
     this.isObserved = true;
   }
 
@@ -634,7 +658,7 @@
       if (i < 0) {
         i = this.arr.length;
         this.arr[i] = obj;
-        Object.observe(obj, this.callback);
+        Object.observe(obj, this.callback_);
       }
 
       this.arr[i+1] = this.isObserved;
@@ -653,7 +677,7 @@
           }
           i += 2;
         } else {
-          Object.unobserve(obj, this.callback);
+          Object.unobserve(obj, this.callback_);
         }
         j += 2;
       }
@@ -662,23 +686,11 @@
     }
   };
 
-  function PathObserver(object, path, callback, target, transformFn,
-                        setValueFn) {
-    var path = path instanceof Path ? path : getPath(path);
-    if (!path.valid || !path.length || !isObject(object)) {
-      this.value_ = path.getValueFrom(object);
-      this.value = transformFn ? transformFn(this.value_) : this.value_;
-      this.closed_ = true;
-      return;
-    }
-
-    Observer.call(this, object, callback, target);
-    this.transformFn_ = transformFn;
-    this.setValueFn_ = setValueFn;
-    this.path_ = path;
-
-    this.connect_();
-    this.sync_(true);
+  function PathObserver(object, path) {
+    Observer.call(this);
+    this.object_ = object;
+    this.path_ = path instanceof Path ? path : getPath(path);
+    this.observedSet_ = undefined;
   }
 
   PathObserver.prototype = createObject({
@@ -705,17 +717,16 @@
       if (this.observedSet_)
         this.observedSet_.reset();
 
-      this.value_ = this.path_.getValueFrom(this.object_, this.observedSet_);
+      var newValue = this.path_.getValueFrom(this.object_, this.observedSet_);
 
       if (this.observedSet_)
         this.observedSet_.cleanup();
 
-      if (areSameValue(this.value_, this.oldValue_))
+      if (areSameValue(this.value_, newValue))
         return false;
 
-      this.value = this.transformFn_ ? this.transformFn_(this.value_)
-                                     : this.value_;
-      this.reportArgs = [this.value, this.oldValue];
+      this.reportArgs_ = [newValue, this.value_];
+      this.value_ = newValue;
       return true;
     },
 
@@ -725,139 +736,172 @@
           this.observedSet_.reset();
 
         this.value_ = this.path_.getValueFrom(this.object_, this.observedSet_);
-        this.value = this.transformFn_ ? this.transformFn_(this.value_)
-                                       : this.value_;
 
         if (this.observedSet_)
           this.observedSet_.cleanup();
       }
-
-      this.oldValue_ = this.value_;
-      this.oldValue = this.value;
     },
 
     setValue: function(newValue) {
-      if (this.setValueFn_)
-        this.setValueFn_(newValue);
-      else if (this.path_)
+      if (this.path_)
         this.path_.setValueFrom(this.object_, newValue);
     }
   });
 
-  function CompoundPathObserver(callback, target, transformFn, setValueFn) {
-    Observer.call(this, undefined, callback, target);
-    this.transformFn_ = transformFn;
-    this.setValueFn_ = setValueFn;
+  function CompoundObserver() {
+    Observer.call(this);
 
     this.observed_ = [];
-    this.values_ = [];
-    this.value = undefined;
-    this.oldValue = undefined;
-    this.oldValues_ = undefined;
-    this.changeFlags_ = undefined;
-    this.started_ = false;
+    this.value_ = [];
   }
 
-  CompoundPathObserver.prototype = createObject({
+  var observerSentinel = {};
+
+  CompoundObserver.prototype = createObject({
     __proto__: PathObserver.prototype,
 
     // TODO(rafaelw): Consider special-casing when |object| is a PathObserver
     // and path 'value' to avoid explicit observation.
     addPath: function(object, path) {
-      if (this.started_)
-        throw Error('Cannot add more paths once started.');
+      if (this.state_ != UNOPENED)
+        throw Error('Cannot add paths once started.');
 
-      var path = path instanceof Path ? path : getPath(path);
-      var value = path.getValueFrom(object);
-
-      this.observed_.push(object, path);
-      this.values_.push(value);
+      this.observed_.push(object, path instanceof Path ? path : getPath(path));
     },
 
-    start: function() {
-      this.started_ = true;
-      this.connect_();
-      this.sync_(true);
+    addObserver: function(observer) {
+      if (this.state_ != UNOPENED)
+        throw Error('Cannot add observers once started.');
+
+      if (!isObservable(observer))
+        throw Error('Object must be observable');
+
+      observer.open(this.deliver, this);
+      var value = observer.value;
+
+      this.observed_.push(observerSentinel, observer);
+      this.value_.push(value);
     },
 
-    getValues_: function() {
+    getValues_: function(sync) {
       if (this.observedSet_)
         this.observedSet_.reset();
 
-      var anyChanged = false;
-      for (var i = 0; i < this.observed_.length; i = i+2) {
-        var path = this.observed_[i+1];
+      var oldValues;
+      for (var i = 0; i < this.observed_.length; i = i + 2) {
+        var pathOrObserver = this.observed_[i+1];
         var object = this.observed_[i];
-        var value = path.getValueFrom(object, this.observedSet_);
-        var oldValue = this.values_[i/2];
-        if (!areSameValue(value, oldValue)) {
-          if (!anyChanged && !this.transformFn_) {
-            this.oldValues_ = this.oldValues_ || [];
-            this.changeFlags_ = this.changeFlags_ || [];
-            for (var j = 0; j < this.values_.length; j++) {
-              this.oldValues_[j] = this.values_[j];
-              this.changeFlags_[j] = false;
-            }
-          }
+        var value = object === observerSentinel ? pathOrObserver.reset() :
+            pathOrObserver.getValueFrom(object, this.observedSet_)
 
-          if (!this.transformFn_)
-            this.changeFlags_[i/2] = true;
-
-          this.values_[i/2] = value;
-          anyChanged = true;
+        if (sync) {
+          this.value_[i / 2] = value;
+          continue;
         }
+
+        if (areSameValue(value, this.value_[i / 2]))
+          continue;
+
+        oldValues = oldValues || [];
+        oldValues[i / 2] = this.value_[i / 2];
+        this.value_[i / 2] = value;
       }
 
       if (this.observedSet_)
         this.observedSet_.cleanup();
 
-      return anyChanged;
+      return oldValues;
     },
 
     check_: function() {
-      if (!this.getValues_())
+      var oldValues = this.getValues_();
+      if (!oldValues)
         return;
 
-      if (this.transformFn_) {
-        this.value = this.transformFn_(this.values_);
-
-        if (areSameValue(this.value, this.oldValue))
-          return false;
-
-        this.reportArgs = [this.value, this.oldValue];
-      } else {
-        this.reportArgs = [this.values_, this.oldValues_, this.changeFlags_,
-                           this.observed_];
-      }
-
+      this.reportArgs_ = [this.value_, oldValues];
       return true;
     },
 
     sync_: function(hard) {
-      if (hard) {
-        this.getValues_();
-        if (this.transformFn_)
-          this.value = this.transformFn_(this.values_);
-      }
-
-      if (this.transformFn_)
-        this.oldValue = this.value;
+      if (hard)
+        this.getValues_(true);
     },
 
     close: function() {
       if (this.observed_) {
-        for (var i = 0; i < this.observed_.length; i = i + 2) {
-          var object = this.observed_[i];
-          if (object && typeof object.close === 'function')
-            object.close();
+        for (var i = 0; i < this.observed_.length; i += 2) {
+          if (this.observed_[i] === observerSentinel)
+            this.observed_[i + 1].close();
         }
         this.observed_ = undefined;
-        this.values_ = undefined;
+        this.value_ = undefined;
       }
 
       Observer.prototype.close.call(this);
     }
   });
+
+  function identFn(value) { return value; }
+
+  function ObserverTransform(observable, getValueFn, setValueFn,
+                             dontPassThroughSet) {
+    this.callback_ = undefined;
+    this.target_ = undefined;
+    this.value_ = undefined;
+    this.observable_ = observable;
+    this.getValueFn_ = getValueFn || identFn;
+    this.setValueFn_ = setValueFn || identFn;
+    // TODO(rafaelw): This is a temporary hack. PolymerExpressions needs this
+    // at the moment because of a bug in it's dependency tracking.
+    this.dontPassThroughSet_ = dontPassThroughSet;
+  }
+
+  ObserverTransform.prototype = {
+    open: function(callback, target) {
+      this.callback_ = callback;
+      this.target_ = target;
+      this.value_ =
+          this.getValueFn_(this.observable_.open(this.observedCallback_, this));
+      return this.value_;
+    },
+
+    observedCallback_: function(value) {
+      value = this.getValueFn_(value);
+      if (areSameValue(value, this.value_))
+        return;
+      var oldValue = this.value_;
+      this.value_ = value;
+      this.callback_.call(this.target_, this.value_, oldValue);
+    },
+
+    reset: function() {
+      this.value_ = this.getValueFn_(this.observable_.reset());
+      return this.value_;
+    },
+
+    deliver: function() {
+      return this.observable_.deliver();
+    },
+
+    setValue: function(value) {
+      this.value_ = this.setValueFn_(value);
+      if (this.dontPassThroughSet_ || !this.observable_.setValue)
+        return;
+
+      return this.observable_.setValue(this.value_);
+    },
+
+    close: function() {
+      if (this.observable_)
+        this.observable_.close();
+      this.callback_ = undefined;
+      this.target_ = undefined;
+      this.observable_ = undefined;
+      this.value_ = undefined;
+      this.getValueFn_ = undefined;
+      this.setValueFn_ = undefined;
+    }
+  }
 
   var expectedRecordTypes = {};
   expectedRecordTypes[PROP_ADD_TYPE] = true;
@@ -1379,6 +1423,7 @@
 
   global.Observer = Observer;
   global.Observer.hasObjectObserve = hasObserve;
+  global.Observer.isObservable = isObservable;
   global.ArrayObserver = ArrayObserver;
   global.ArrayObserver.calculateSplices = function(current, previous) {
     return arraySplice.calculateSplices(current, previous);
@@ -1387,8 +1432,9 @@
   global.ArraySplice = ArraySplice;
   global.ObjectObserver = ObjectObserver;
   global.PathObserver = PathObserver;
-  global.CompoundPathObserver = CompoundPathObserver;
+  global.CompoundObserver = CompoundObserver;
   global.Path = Path;
+  global.ObserverTransform = ObserverTransform;
 
   // TODO(rafaelw): Only needed for testing until new change record names
   // make it to release.

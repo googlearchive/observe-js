@@ -18,6 +18,8 @@ var callbackInvoked = false;
 
 window.testingExposeCycleCount = true;
 
+function noop() {}
+
 function callback() {
   callbackArgs = Array.prototype.slice.apply(arguments);
   callbackInvoked = true;
@@ -53,20 +55,15 @@ function assertPathChanges(expectNewValue, expectOldValue) {
   callbackInvoked = false;
 }
 
-function assertCompoundPathChanges(expectNewValues, expectOldValues,
-                                   expectChangeFlags, expectObserverArg) {
+function assertCompoundPathChanges(expectNewValues, expectOldValues) {
   observer.deliver();
 
   assert.isTrue(callbackInvoked);
 
   var newValues = callbackArgs[0];
   var oldValues = callbackArgs[1];
-  var changeFlags = callbackArgs[2];
-  var observerArg = callbackArgs[3];
   assert.deepEqual(expectNewValues, newValues);
   assert.deepEqual(expectOldValues, oldValues);
-  assert.deepEqual(expectChangeFlags, changeFlags);
-  assert.deepEqual(expectObserverArg, observerArg);
 
   assert.isTrue(window.dirtyCheckCycleCount === undefined ||
                 window.dirtyCheckCycleCount === 1);
@@ -204,16 +201,22 @@ suite('Basic Tests', function() {
     var model = [1];
     var count = 0;
 
-    var observer1 = new ObjectObserver(model, function() {
+    var observer1 = new ObjectObserver(model);
+    observer1.open(function() {
       count++;
+      throw 'ouch';
     });
 
-    var observer2 = new PathObserver(model, '0', function() {
+    var observer2 = new PathObserver(model, '0');
+    observer2.open(function() {
       count++;
+      throw 'ouch';
     });
 
-    var observer3 = new ArrayObserver(model, function() {
+    var observer3 = new ArrayObserver(model);
+    observer3.open(function() {
       count++;
+      throw 'ouch';
     });
 
     model[0] = 2;
@@ -230,6 +233,38 @@ suite('Basic Tests', function() {
     observer3.close();
   });
 
+  test('Can only open once', function() {
+    observer = new PathObserver({ id: 1 }, 'id');
+    observer.open(callback);
+    assert.throws(function() {
+      observer.open(callback);
+    });
+    observer.close();
+
+    observer = new CompoundObserver(new PathObserver({ id: 1 }, 'id'),
+                                    noop, noop);
+    observer.open(callback);
+    assert.throws(function() {
+      observer.open(callback);
+    });
+    observer.close();
+
+    observer = new ObjectObserver({}, 'id');
+    observer.open(callback);
+    assert.throws(function() {
+      observer.open(callback);
+    });
+    observer.close();
+
+    observer = new ArrayObserver([], 'id');
+    observer.open(callback);
+    assert.throws(function() {
+      observer.open(callback);
+    });
+    observer.close();
+
+  });
+
   test('No Object.observe performMicrotaskCheckpoint', function() {
     if (typeof Object.observe == 'function')
       return;
@@ -237,15 +272,18 @@ suite('Basic Tests', function() {
     var model = [1];
     var count = 0;
 
-    var observer1 = new ObjectObserver(model, function() {
+    var observer1 = new ObjectObserver(model);
+    observer1.open(function() {
       count++;
     });
 
-    var observer2 = new PathObserver(model, '0', function() {
+    var observer2 = new PathObserver(model, '0');
+    observer2.open(function() {
       count++;
     });
 
-    var observer3 = new ArrayObserver(model, function() {
+    var observer3 = new ArrayObserver(model);
+    observer3.open(function() {
       count++;
     });
 
@@ -261,6 +299,91 @@ suite('Basic Tests', function() {
   });
 });
 
+suite('ObserverTransform', function() {
+
+  test('Close Invokes Close', function() {
+    var count = 0;
+    var observer = {
+      open: function() {},
+      close: function() { count++; }
+    };
+
+    var observer = new ObserverTransform(observer);
+    observer.open();
+    observer.close();
+    assert.strictEqual(1, count);
+  });
+
+  test('valueFn/setValueFn', function() {
+    var obj = { foo: 1 };
+
+    function valueFn(value) { return value * 2; }
+
+    function setValueFn(value) { return value / 2; }
+
+    observer = new ObserverTransform(new PathObserver(obj, 'foo'),
+                                     valueFn,
+                                     setValueFn);
+    observer.open(callback);
+
+    obj.foo = 2;
+
+    assert.strictEqual(4, observer.reset());
+    assertNoChanges();
+
+    observer.setValue(2);
+    assert.strictEqual(obj.foo, 1);
+    assert.strictEqual(2, observer.reset());
+    assertNoChanges();
+
+    observer.close();
+  });
+
+  test('valueFn - object literal', function() {
+    var model = {};
+
+    function valueFn(value) {
+      return [ value ];
+    }
+
+    observer = new ObserverTransform(new PathObserver(model, 'foo'), valueFn);
+    observer.open(callback);
+
+    model.foo = 1;
+    assertPathChanges([1], [undefined]);
+
+    model.foo = 3;
+    assertPathChanges([3], [1]);
+
+    observer.close();
+  });
+
+  test('CompoundObserver - valueFn reduction', function() {
+    var model = { a: 1, b: 2, c: 3 };
+
+    function valueFn(values) {
+      return values.reduce(function(last, cur) {
+        return typeof cur === 'number' ? last + cur : undefined;
+      }, 0);
+    }
+
+    var compound = new CompoundObserver();
+    compound.addPath(model, 'a');
+    compound.addPath(model, 'b');
+    compound.addPath(model, Path.get('c'));
+
+    observer = new ObserverTransform(compound, valueFn);
+    assert.strictEqual(6, observer.open(callback));
+
+    model.a = -10;
+    model.b = 20;
+    model.c = 30;
+    assertPathChanges(40, 6);
+
+    observer.close();
+  });
+})
+
 suite('PathObserver Tests', function() {
 
   setup(doSetup);
@@ -268,18 +391,11 @@ suite('PathObserver Tests', function() {
   teardown(doTeardown);
 
   test('invalid', function() {
-    var observer = new PathObserver({ a: { b: 1 }} , 'a b', callback);
+    var observer = new PathObserver({ a: { b: 1 }} , 'a b');
+    observer.open(callback);
     assert.strictEqual(undefined, observer.value);
     observer.deliver();
     assert.isFalse(callbackInvoked);
-  });
-
-  test('Close Invokes Close', function() {
-    var called = false;
-    var obj = { foo: 1, close: function() { called = true }};
-    var observer = new PathObserver(obj, 'foo', function() {});
-    observer.close();
-    assert.isTrue(called);
   });
 
   test('Optional target for callback', function() {
@@ -289,7 +405,8 @@ suite('PathObserver Tests', function() {
       }
     };
     var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo', target.changed, target);
+    var observer = new PathObserver(obj, 'foo');
+    observer.open(target.changed, target);
     obj.foo = 2;
     observer.deliver();
     assert.isTrue(target.called);
@@ -300,7 +417,8 @@ suite('PathObserver Tests', function() {
   test('Delivery Until No Changes', function() {
     var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
-    var observer = new PathObserver(obj, 'foo . bar', function() {
+    var observer = new PathObserver(obj, 'foo . bar');
+    observer.open(function() {
       callbackCount++;
       if (!obj.foo.bar)
         return;
@@ -320,13 +438,15 @@ suite('PathObserver Tests', function() {
     var arr = {};
 
     arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo', callback);
+    observer = new PathObserver(arr, 'foo');
+    observer.open(callback);
     arr.foo = 'baz';
 
     assertPathChanges('baz', 'bar');
     arr.foo = 'bar';
 
     observer.close();
+
     arr.foo = 'boo';
     assertNoChanges();
   });
@@ -335,7 +455,8 @@ suite('PathObserver Tests', function() {
     var arr = {};
 
     arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo', callback);
+    observer = new PathObserver(arr, 'foo');
+    observer.open(callback);
     arr.foo = 'baz';
 
     assertPathChanges('baz', 'bar');
@@ -353,7 +474,8 @@ suite('PathObserver Tests', function() {
     var obj = {};
 
     obj.foo = 'bar';
-    observer = new PathObserver(obj, 'foo', callback);
+    observer = new PathObserver(obj, 'foo');
+    observer.open(callback);
     obj.foo = 'baz';
 
     observer.setValue('bat');
@@ -367,55 +489,36 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
-  test('Path setValueFn', function() {
-    var obj = { foo: 1 };
-    function setValueFn(value) {
-      obj.foo = 2 * value;
-    }
-
-    observer = new PathObserver(obj, 'foo', callback, undefined, undefined,
-                                setValueFn);
-    obj.foo = 2;
-
-    observer.setValue(2);
-    assert.strictEqual(obj.foo, 4);
-    assertPathChanges(4, 1);
-
-    observer.setValue(8);
-    observer.reset();
-    assertNoChanges();
-
-    observer.close();
-  });
-
   test('Degenerate Values', function() {
     var emptyPath = Path.get();
-    observer = new PathObserver(null, '', callback);
+    observer = new PathObserver(null, '');
+    observer.open(callback);
     assert.equal(null, observer.value);
     observer.close();
 
     var foo = {};
-    observer = new PathObserver(foo, '', callback);
-    assert.equal(foo, observer.value);
+    observer = new PathObserver(foo, '');
+    assert.equal(foo, observer.open(callback));
     observer.close();
 
-    observer = new PathObserver(3, '', callback);
-    assert.equal(3, observer.value);
+    observer = new PathObserver(3, '');
+    assert.equal(3, observer.open(callback));
     observer.close();
 
-    observer = new PathObserver(undefined, 'a', callback);
-    assert.equal(undefined, observer.value);
+    observer = new PathObserver(undefined, 'a');
+    assert.equal(undefined, observer.open(callback));
     observer.close();
 
     var bar = { id: 23 };
-    observer = new PathObserver(undefined, 'a/3!', callback);
-    assert.equal(undefined, observer.value);
+    observer = new PathObserver(undefined, 'a/3!');
+    assert.equal(undefined, observer.open(callback));
     observer.close();
   });
 
   test('Path NaN', function() {
     var foo = { val: 1 };
-    observer = new PathObserver(foo, 'val', callback);
+    observer = new PathObserver(foo, 'val');
+    observer.open(callback);
     foo.val = 0/0;
 
     // Can't use assertSummary because deepEqual() will fail with NaN
@@ -433,16 +536,14 @@ suite('PathObserver Tests', function() {
     path.setValueFrom(obj, 3);
     assert.equal(3, obj.foo);
 
-    observer = new PathObserver(obj, 'foo', callback);
-    assert.equal(3, observer.value);
+    observer = new PathObserver(obj, 'foo');
+    assert.equal(3, observer.open(callback));
 
     path.setValueFrom(obj, 2);
-    observer.reset();
-    assert.equal(2, observer.value);
+    assert.equal(2, observer.reset());
 
     path.setValueFrom(obj, 3);
-    observer.reset();
-    assert.equal(3, observer.value);
+    assert.equal(3, observer.reset());
 
     assertNoChanges();
 
@@ -452,7 +553,8 @@ suite('PathObserver Tests', function() {
   test('Path Triple Equals', function() {
     var model = { };
 
-    observer = new PathObserver(model, 'foo', callback);
+    observer = new PathObserver(model, 'foo');
+    observer.open(callback);
 
     model.foo = null;
     assertPathChanges(null, undefined);
@@ -466,7 +568,8 @@ suite('PathObserver Tests', function() {
   test('Path Simple', function() {
     var model = { };
 
-    observer = new PathObserver(model, 'foo', callback);
+    observer = new PathObserver(model, 'foo');
+    observer.open(callback);
 
     model.foo = 1;
     assertPathChanges(1, undefined);
@@ -484,7 +587,8 @@ suite('PathObserver Tests', function() {
     var model = { };
 
     var path = Path.get('foo');
-    observer = new PathObserver(model, path, callback);
+    observer = new PathObserver(model, path);
+    observer.open(callback);
 
     model.foo = 1;
     assertPathChanges(1, undefined);
@@ -498,49 +602,11 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
-  test('valueFn', function() {
-    var model = { };
-
-    function valueFn(value) {
-      return isNaN(value) ? value : value * 3;
-    }
-
-    observer = new PathObserver(model, 'foo', callback, undefined, valueFn);
-
-    model.foo = 1;
-    assertPathChanges(3, undefined);
-
-    model.foo = 2;
-    assertPathChanges(6, 3);
-
-    delete model.foo;
-    assertPathChanges(undefined, 6);
-
-    observer.close();
-  });
-
-  test('valueFn - return object literal', function() {
-    var model = { };
-
-    function valueFn(value) {
-      return isNaN(value) ? value : [ value ];
-    }
-
-    observer = new PathObserver(model, 'foo', callback, undefined, valueFn);
-
-    model.foo = 1;
-    assertPathChanges([1], undefined);
-
-    model.foo = 3;
-    assertPathChanges([3], [1]);
-
-    observer.close();
-  });
-
   test('Path With Indices', function() {
     var model = [];
 
-    observer = new PathObserver(model, '0', callback);
+    observer = new PathObserver(model, '0');
+    observer.open(callback);
 
     model.push(1);
     assertPathChanges(1, undefined);
@@ -557,7 +623,8 @@ suite('PathObserver Tests', function() {
       }
     };
 
-    observer = new PathObserver(model, 'a.b.c', callback);
+    observer = new PathObserver(model, 'a.b.c');
+    observer.open(callback);
 
     model.a.b.c = 'hello, mom';
     assertPathChanges('hello, mom', 'hello, world');
@@ -584,7 +651,8 @@ suite('PathObserver Tests', function() {
     assertNoChanges();
 
     // Resume observing
-    observer = new PathObserver(model, 'a.b.c', callback);
+    observer = new PathObserver(model, 'a.b.c');
+    observer.open(callback);
 
     model.a.b.c = 'hello. Back for reals';
     assertPathChanges('hello. Back for reals',
@@ -600,7 +668,8 @@ suite('PathObserver Tests', function() {
       }
     });
 
-    observer = new PathObserver(model, 'id', callback);
+    observer = new PathObserver(model, 'id');
+    observer.open(callback);
     model.id = 1;
 
     assertNoChanges();
@@ -614,7 +683,8 @@ suite('PathObserver Tests', function() {
       writable: false,
       value: 1
     });
-    observer = new PathObserver(model, 'x', callback);
+    observer = new PathObserver(model, 'x');
+    observer.open(callback);
 
     model.x = 2;
 
@@ -629,7 +699,8 @@ suite('PathObserver Tests', function() {
       }
     });
 
-    observer = new PathObserver(model, 'x', callback);
+    observer = new PathObserver(model, 'x');
+    observer.open(callback);
     model.x = 2;
     assertPathChanges(2, 1);
     observer.close();
@@ -643,7 +714,8 @@ suite('PathObserver Tests', function() {
       x: 1
     });
 
-    observer = new PathObserver(model, 'x', callback);
+    observer = new PathObserver(model, 'x');
+    observer.open(callback);
     delete model.x;
     assertNoChanges();
     observer.close();
@@ -657,7 +729,8 @@ suite('PathObserver Tests', function() {
       x: 2
     });
 
-    observer = new PathObserver(model, 'x', callback);
+    observer = new PathObserver(model, 'x');
+    observer.open(callback);
     delete model.x;
     assertPathChanges(1, 2);
     observer.close();
@@ -671,7 +744,8 @@ suite('PathObserver Tests', function() {
       __proto__: proto
     });
 
-    observer = new PathObserver(model, 'x', callback);
+    observer = new PathObserver(model, 'x');
+    observer.open(callback);
     model.x = 2;
     assertPathChanges(2, 1);
 
@@ -692,7 +766,8 @@ suite('PathObserver Tests', function() {
       value: 1
     });
 
-    observer = new PathObserver(model, 'x', callback);
+    observer = new PathObserver(model, 'x');
+    observer.open(callback);
 
     delete model.x;
     assertNoChanges();
@@ -722,7 +797,8 @@ suite('PathObserver Tests', function() {
       }
     });
 
-    observer = new PathObserver(model, 'a.b', callback);
+    observer = new PathObserver(model, 'a.b');
+    observer.open(callback);
     _b = 3; // won't be observed.
     assertNoChanges();
 
@@ -846,7 +922,7 @@ suite('PathObserver Tests', function() {
 });
 
 
-suite('CompoundPathObserver Tests', function() {
+suite('CompoundObserver Tests', function() {
 
   setup(doSetup);
 
@@ -855,11 +931,11 @@ suite('CompoundPathObserver Tests', function() {
   test('Simple', function() {
     var model = { a: 1, b: 2, c: 3 };
 
-    observer = new CompoundPathObserver(callback);
+    observer = new CompoundObserver();
     observer.addPath(model, 'a');
     observer.addPath(model, 'b');
     observer.addPath(model, Path.get('c'));
-    observer.start();
+    observer.open(callback);
 
     var observerCallbackArg = [model, Path.get('a'),
                                model, Path.get('b'),
@@ -868,90 +944,29 @@ suite('CompoundPathObserver Tests', function() {
     model.b = 20;
     model.c = 30;
     assertCompoundPathChanges([-10, 20, 30], [1, 2, 3],
-                              [true, true, true],
                               observerCallbackArg);
 
     model.a = 'a';
     model.c = 'c';
-    assertCompoundPathChanges(['a', 20, 'c'], [-10, 20, 30],
-                              [true, false, true],
+    assertCompoundPathChanges(['a', 20, 'c'], [-10,, 30],
                               observerCallbackArg);
 
     observer.close();
   });
 
-  test('Simple - valueFn', function() {
-    var model = { a: 1, b: 2, c: 3 };
-
-    function valueFn(values) {
-      return values.reduce(function(last, cur) {
-        return typeof cur === 'number' ? last + cur : undefined;
-      }, 0);
-    }
-
-    observer = new CompoundPathObserver(callback, undefined, valueFn);
-    observer.addPath(model, 'a');
-    observer.addPath(model, 'b');
-    observer.addPath(model, Path.get('c'));
-    observer.start();
-
-    assert.strictEqual(6, observer.value);
-
-    model.a = -10;
-    model.b = 20;
-    model.c = 30;
-    assertPathChanges(40, 6);
-
-    observer.close();
-  });
-
-  test('setValueFn', function() {
-    var obj = { foo: 1, bar: 2 };
-
-    function valueFn(values) {
-      return values[0] + values[1];
-    }
-
-    function setValueFn(value) {
-      obj.foo = value;
-    }
-
-    observer = new CompoundPathObserver(callback, undefined, valueFn,
-                                        setValueFn);
-    observer.addPath(obj, 'foo');
-    observer.addPath(obj, 'bar');
-    observer.start();
-
-    observer.setValue(2);
-    assert.strictEqual(obj.foo, 2);
-    assertPathChanges(4, 3);
-
-    observer.setValue(8);
-    observer.reset();
-    assertNoChanges();
-
-    observer.close();
-  });
-
-
   test('Degenerate Values', function() {
     var model = {};
-
-    function valueFn(values) {
-      assert.strictEqual(4, values.length);
-      assert.strictEqual(undefined, values[0]);
-      assert.strictEqual('obj-value', values[1]);
-      assert.strictEqual(undefined, values[2]);
-      assert.strictEqual(undefined, values[3]);
-    }
-
-    observer = new CompoundPathObserver(callback, undefined, undefined,
-                                        valueFn);
+    observer = new CompoundObserver();
     observer.addPath({}, '.'); // invalid path
     observer.addPath('obj-value', ''); // empty path
     observer.addPath({}, 'foo'); // unreachable
     observer.addPath(3, 'bar'); // non-object with non-empty path
-    observer.start();
+    var values = observer.open(callback);
+    assert.strictEqual(4, values.length);
+    assert.strictEqual(undefined, values[0]);
+    assert.strictEqual('obj-value', values[1]);
+    assert.strictEqual(undefined, values[2]);
+    assert.strictEqual(undefined, values[3]);
     observer.close();
   });
 
@@ -962,10 +977,10 @@ suite('CompoundPathObserver Tests', function() {
       return {};
     }
 
-    observer = new CompoundPathObserver(callback, undefined, valueFn);
+    observer = new CompoundObserver(valueFn);
 
     observer.addPath(model, 'a');
-    observer.start();
+    observer.open(callback);
     model.a = 2;
 
     observer.deliver();
@@ -973,6 +988,53 @@ suite('CompoundPathObserver Tests', function() {
                   window.dirtyCheckCycleCount === 1);
     observer.close();
   });
+
+  test('Heterogeneous', function() {
+    var model = { a: 1, b: 2 };
+    var otherModel = { c: 3 };
+
+    function valueFn(value) { return value * 2; }
+    function setValueFn(value) { return value / 2; }
+
+    var compound = new CompoundObserver;
+    assert.throws(function () {
+      compound.addObserver({ open: function() {} });
+    });
+
+    assert.throws(function () {
+      compound.addObserver({ close: function() {} });
+    });
+
+    assert.throws(function () {
+      compound.addObserver(1);
+    });
+
+    compound.addPath(model, 'a');
+    compound.addObserver(new ObserverTransform(new PathObserver(model, 'b'),
+                                               valueFn, setValueFn));
+    compound.addObserver(new PathObserver(otherModel, 'c'));
+
+    function combine(values) {
+      return values[0] + values[1] + values[2];
+    };
+    observer = new ObserverTransform(compound, combine);
+    assert.strictEqual(8, observer.open(callback));
+
+    model.a = 2;
+    model.b = 4;
+    assertPathChanges(13, 8);
+
+    model.b = 10;
+    otherModel.c = 5;
+    assertPathChanges(27, 13);
+
+    model.a = 20;
+    model.b = 1;
+    otherModel.c = 5;
+    assertNoChanges();
+
+    observer.close();
+  })
 });
 
 suite('ArrayObserver Tests', function() {
@@ -1040,7 +1102,8 @@ suite('ArrayObserver Tests', function() {
 
   function arrayMutationTest(arr, operations) {
     var copy = arr.slice();
-    observer = new ArrayObserver(arr, callback);
+    observer = new ArrayObserver(arr);
+    observer.open(callback);
     operations.forEach(function(op) {
       switch(op.name) {
         case 'delete':
@@ -1061,15 +1124,6 @@ suite('ArrayObserver Tests', function() {
     observer.close();
   }
 
-  test('Close Invokes Close', function() {
-    var called = false;
-    var obj = [];
-    obj.close = function() { called = true };
-    var observer = new ArrayObserver(obj, function() {});
-    observer.close();
-    assert.isTrue(called);
-  });
-
   test('Optional target for callback', function() {
     var target = {
       changed: function(splices) {
@@ -1077,7 +1131,8 @@ suite('ArrayObserver Tests', function() {
       }
     };
     var obj = [];
-    var observer = new ArrayObserver(obj, target.changed, target);
+    var observer = new ArrayObserver(obj);
+    observer.open(target.changed, target);
     obj.length = 1;
     observer.deliver();
     assert.isTrue(target.called);
@@ -1087,7 +1142,8 @@ suite('ArrayObserver Tests', function() {
   test('Delivery Until No Changes', function() {
     var arr = [0, 1, 2, 3, 4];
     var callbackCount = 0;
-    var observer = new ArrayObserver(arr, function() {
+    var observer = new ArrayObserver(arr);
+    observer.open(function() {
       callbackCount++;
       arr.shift();
     });
@@ -1103,7 +1159,8 @@ suite('ArrayObserver Tests', function() {
   test('Array disconnect', function() {
     var arr = [ 0 ];
 
-    observer = new ArrayObserver(arr, callback);
+    observer = new ArrayObserver(arr);
+    observer.open(callback);
 
     arr[0] = 1;
 
@@ -1122,7 +1179,8 @@ suite('ArrayObserver Tests', function() {
     var arr = [];
 
     arr.push(1);
-    observer = new ArrayObserver(arr, callback);
+    observer = new ArrayObserver(arr);
+    observer.open(callback);
     arr.push(2);
 
     assertArrayChanges([{
@@ -1147,7 +1205,8 @@ suite('ArrayObserver Tests', function() {
   test('Array', function() {
     var model = [0, 1];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model[0] = 2;
 
@@ -1169,24 +1228,27 @@ suite('ArrayObserver Tests', function() {
 
   test('Array observe non-array throws', function() {
     assert.throws(function () {
-      observer = new ArrayObserver({}, callback);
+      observer = new ArrayObserver({});
     });
   });
 
   test('Array Set Same', function() {
     var model = [1];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model[0] = 1;
-
+    observer.deliver();
+    assert.isFalse(callbackInvoked);
     observer.close();
   });
 
   test('Array Splice', function() {
     var model = [0, 1]
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.splice(1, 1, 2, 3); // [0, 2, 3]
     assertArrayChanges([{
@@ -1238,7 +1300,8 @@ suite('ArrayObserver Tests', function() {
   test('Array Splice Truncate And Expand With Length', function() {
     var model = ['a', 'b', 'c', 'd', 'e'];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.length = 2;
 
@@ -1262,7 +1325,8 @@ suite('ArrayObserver Tests', function() {
   test('Array Splice Delete Too Many', function() {
     var model = ['a', 'b', 'c'];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.splice(2, 3); // ['a', 'b']
     assertArrayChanges([{
@@ -1277,7 +1341,8 @@ suite('ArrayObserver Tests', function() {
   test('Array Length', function() {
     var model = [0, 1];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.length = 5; // [0, 1, , , ,];
     assertArrayChanges([{
@@ -1302,7 +1367,8 @@ suite('ArrayObserver Tests', function() {
   test('Array Push', function() {
     var model = [0, 1];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.push(2, 3); // [0, 1, 2, 3]
     assertArrayChanges([{
@@ -1320,7 +1386,8 @@ suite('ArrayObserver Tests', function() {
   test('Array Pop', function() {
     var model = [0, 1];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.pop(); // [0]
     assertArrayChanges([{
@@ -1345,7 +1412,8 @@ suite('ArrayObserver Tests', function() {
   test('Array Shift', function() {
     var model = [0, 1];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.shift(); // [1]
     assertArrayChanges([{
@@ -1370,7 +1438,8 @@ suite('ArrayObserver Tests', function() {
   test('Array Unshift', function() {
     var model = [0, 1];
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.unshift(-1); // [-1, 0, 1]
     assertArrayChanges([{
@@ -1527,7 +1596,8 @@ suite('ArrayObserver Tests', function() {
     var model = ['a','b'];
     var copy = model.slice();
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.splice(0, 1, 'c', 'd', 'e');
     model.splice(4,0,'f');
@@ -1540,7 +1610,8 @@ suite('ArrayObserver Tests', function() {
     var model = [3,4];
     var copy = model.slice();
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.splice(2,0,8);
     model.splice(0,1,0,5);
@@ -1553,7 +1624,8 @@ suite('ArrayObserver Tests', function() {
     var model = [1,3,6];
     var copy = model.slice();
 
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
 
     model.splice(1,1);
     model.splice(0,2,1,7);
@@ -1580,21 +1652,24 @@ suite('ArrayObserver Tests', function() {
 
   test('Array Tracker No Proxies Edits', function() {
     model = [];
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
     model.length = 0;
     model.push(1, 2, 3);
     assertEditDistance(model, 3);
     observer.close();
 
     model = ['x', 'x', 'x', 'x', '1', '2', '3'];
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
     model.length = 0;
     model.push('1', '2', '3', 'y', 'y', 'y', 'y');
     assertEditDistance(model, 8);
     observer.close();
 
     model = ['1', '2', '3', '4', '5'];
-    observer = new ArrayObserver(model, callback);
+    observer = new ArrayObserver(model);
+    observer.open(callback);
     model.length = 0;
     model.push('a', '2', 'y', 'y', '4', '5', 'z', 'z');
     assertEditDistance(model, 7);
@@ -1637,15 +1712,6 @@ suite('ObjectObserver Tests', function() {
     callbackInvoked = false;
   }
 
-  test('Close Invokes Close', function() {
-    var called = false;
-    var obj = {};
-    obj.close = function() { called = true };
-    var observer = new ObjectObserver(obj, function() {});
-    observer.close();
-    assert.isTrue(called);
-  });
-
   test('Optional target for callback', function() {
     var target = {
       changed: function(value, oldValue) {
@@ -1653,23 +1719,9 @@ suite('ObjectObserver Tests', function() {
       }
     };
     var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo', target.changed, target);
+    var observer = new PathObserver(obj, 'foo');
+    observer.open(target.changed, target);
     obj.foo = 2;
-    observer.deliver();
-    assert.isTrue(target.called);
-
-    observer.close();
-  });
-
-  test('Optional target for callback', function() {
-    var target = {
-      changed: function(added, removed, changed, oldValues) {
-        this.called = true;
-      }
-    };
-    var obj = {};
-    var observer = new ObjectObserver(obj, target.changed, target);
-    obj.foo = 1;
     observer.deliver();
     assert.isTrue(target.called);
 
@@ -1679,7 +1731,8 @@ suite('ObjectObserver Tests', function() {
   test('Delivery Until No Changes', function() {
     var obj = { foo: 5 };
     var callbackCount = 0;
-    var observer = new ObjectObserver(obj, function() {
+    var observer = new ObjectObserver(obj);
+    observer.open(function() {
       callbackCount++;
       if (!obj.foo)
         return;
@@ -1699,7 +1752,8 @@ suite('ObjectObserver Tests', function() {
     var obj = {};
 
     obj.foo = 'bar';
-    observer = new ObjectObserver(obj, callback);
+    observer = new ObjectObserver(obj);
+    observer.open(callback);
 
     obj.foo = 'baz';
     obj.bat = 'bag';
@@ -1734,7 +1788,8 @@ suite('ObjectObserver Tests', function() {
     var obj = {};
 
     obj.foo = 'bar';
-    observer = new ObjectObserver(obj, callback);
+    observer = new ObjectObserver(obj);
+    observer.open(callback);
     obj.foo = 'baz';
 
     assertObjectChanges({
@@ -1769,7 +1824,8 @@ suite('ObjectObserver Tests', function() {
   test('Object observe array', function() {
     var arr = [];
 
-    observer = new ObjectObserver(arr, callback);
+    observer = new ObjectObserver(arr);
+    observer.open(callback);
 
     arr.length = 5;
     arr.foo = 'bar';
@@ -1797,7 +1853,8 @@ suite('ObjectObserver Tests', function() {
   test('Object', function() {
     var model = {};
 
-    observer = new ObjectObserver(model, callback);
+    observer = new ObjectObserver(model);
+    observer.open(callback);
     model.id = 0;
     assertObjectChanges({
       added: {
@@ -1828,7 +1885,8 @@ suite('ObjectObserver Tests', function() {
     assertNoChanges();
 
     // Re-observe -- should see an new event again.
-    observer = new ObjectObserver(model, callback);
+    observer = new ObjectObserver(model);
+    observer.open(callback);
     model.id2 = 202;;
     assertObjectChanges({
       added: {
@@ -1847,7 +1905,8 @@ suite('ObjectObserver Tests', function() {
   test('Object Delete Add Delete', function() {
     var model = { id: 1 };
 
-    observer = new ObjectObserver(model, callback);
+    observer = new ObjectObserver(model);
+    observer.open(callback);
 
     // If mutation occurs in seperate "runs", two events fire.
     delete model.id;
@@ -1885,7 +1944,8 @@ suite('ObjectObserver Tests', function() {
   test('Object Set Undefined', function() {
     var model = {};
 
-    observer = new ObjectObserver(model, callback);
+    observer = new ObjectObserver(model);
+    observer.open(callback);
 
     model.x = undefined;
     assertObjectChanges({

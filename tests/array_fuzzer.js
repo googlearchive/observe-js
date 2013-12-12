@@ -124,7 +124,8 @@ ArrayFuzzer.prototype.go = function() {
   var copy = this.copy = this.arr.slice();
   this.origCopy = this.copy.slice();
 
-  var observer = new ArrayObserver(this.arr, function(splices) {
+  var observer = new ArrayObserver(this.arr);
+  observer.open(function(splices) {
     ArrayObserver.applySplices(copy, orig, splices);
   });
 
