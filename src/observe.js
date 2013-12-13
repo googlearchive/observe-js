@@ -857,7 +857,9 @@
       if (!oldValues)
         return;
 
-      this.reportArgs_ = [this.value_, oldValues];
+      // TODO(rafaelw): Having observed_ as the third callback arg here is
+      // pretty lame API. Fix.
+      this.reportArgs_ = [this.value_, oldValues, this.observed_];
       return true;
     },
 
