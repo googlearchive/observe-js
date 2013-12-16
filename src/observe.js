@@ -922,11 +922,12 @@
     },
 
     getValue: function() {
-      return this.observable_.getValue();
+      return this.getValueFn_(this.observable_.getValue());
     },
 
     discardChanges: function() {
-      return this.getValueFn_(this.observable_.discardChanges());
+      this.value_ = this.getValueFn_(this.observable_.discardChanges());
+      return this.value_;
     },
 
     deliver: function() {
@@ -934,11 +935,9 @@
     },
 
     setValue: function(value) {
-      this.value_ = this.setValueFn_(value);
-      if (this.dontPassThroughSet_ || !this.observable_.setValue)
-        return;
-
-      return this.observable_.setValue(this.value_);
+      value = this.setValueFn_(value);
+      if (!this.dontPassThroughSet_ && this.observable_.setValue)
+        return this.observable_.setValue(value);
     },
 
     close: function() {

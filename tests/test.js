@@ -333,8 +333,12 @@ suite('ObserverTransform', function() {
 
     observer.setValue(2);
     assert.strictEqual(obj.foo, 1);
-    assert.strictEqual(2, observer.discardChanges());
-    assertNoChanges();
+    assert.strictEqual(2, observer.getValue());
+    assertPathChanges(2, 4);
+
+    obj.foo = 10;
+    assert.strictEqual(20, observer.getValue());
+    assertPathChanges(20, 2);
 
     observer.close();
   });
