@@ -952,6 +952,26 @@ suite('CompoundObserver Tests', function() {
     assertCompoundPathChanges(['a', 20, 'c'], [-10,, 30],
                               observerCallbackArg);
 
+    model.a = 2;
+    model.b = 3;
+    model.c = 4;
+
+    assert.deepEqual([2, 3, 4], observer.getValue());
+    assertCompoundPathChanges([2, 3, 4], ['a', 20, 'c'],
+                              observerCallbackArg);
+
+    model.a = 'z';
+    model.b = 'y';
+    model.c = 'x';
+    assert.deepEqual(['z', 'y', 'x'], observer.discardChanges());
+    assertNoChanges();
+
+    observer.setValue('blarg!');
+    assert.strictEqual('z', model.a);
+    assert.strictEqual('y', model.b);
+    assert.strictEqual('x', model.c);
+    assertNoChanges();
+
     observer.close();
   });
 

@@ -774,6 +774,16 @@
   CompoundObserver.prototype = createObject({
     __proto__: PathObserver.prototype,
 
+    getValue: function() {
+      var values = [];
+      this.getValues_(values, true);
+      return values;
+    },
+
+    setValue: function() {
+      console.warn('Set to CompoundObserver ignored.');
+    },
+
     // TODO(rafaelw): Consider special-casing when |object| is a PathObserver
     // and path 'value' to avoid explicit observation.
     addPath: function(object, path) {
@@ -821,7 +831,7 @@
       this.depsChanged_.changed = !this.depsChanged_.changed;
     },
 
-    getValues_: function(sync) {
+    getValues_: function(values, sync) {
       if (this.observedSet_)
         this.observedSet_.reset();
 
@@ -834,16 +844,16 @@
             pathOrObserver.getValueFrom(object, this.observedSet_)
 
         if (sync) {
-          this.value_[i / 2] = value;
+          values[i / 2] = value;
           continue;
         }
 
-        if (areSameValue(value, this.value_[i / 2]))
+        if (areSameValue(value, values[i / 2]))
           continue;
 
         oldValues = oldValues || [];
-        oldValues[i / 2] = this.value_[i / 2];
-        this.value_[i / 2] = value;
+        oldValues[i / 2] = values[i / 2];
+        values[i / 2] = value;
       }
 
       if (this.observedSet_)
@@ -853,7 +863,7 @@
     },
 
     check_: function() {
-      var oldValues = this.getValues_();
+      var oldValues = this.getValues_(this.value_);
       if (!oldValues)
         return;
 
@@ -865,7 +875,7 @@
 
     sync_: function(hard) {
       if (hard)
-        this.getValues_(true);
+        this.getValues_(this.value_, true);
     },
 
     close: function() {
