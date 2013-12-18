@@ -1047,14 +1047,6 @@ suite('CompoundObserver Tests', function() {
 
     var compound = new CompoundObserver;
     assert.throws(function () {
-      compound.addObserver({ open: function() {} });
-    });
-
-    assert.throws(function () {
-      compound.addObserver({ close: function() {} });
-    });
-
-    assert.throws(function () {
       compound.addObserver(1);
     });
 

@@ -345,12 +345,6 @@
     return copy;
   }
 
-  function isObservable(obj) {
-    return obj &&
-           typeof obj.open == 'function' &&
-           typeof obj.close == 'function';
-  }
-
   var UNOPENED = 0;
   var OPENED = 1;
   var CLOSED = 2;
@@ -797,14 +791,8 @@
       if (this.state_ != UNOPENED)
         throw Error('Cannot add observers once started.');
 
-      if (!isObservable(observer))
-        throw Error('Object must be observable');
-
+      var value = observer.open(this.observerChanged_, this);
       this.hasObservers_ = true;
-
-      observer.open(this.observerChanged_, this);
-      var value = observer.value;
-
       this.observed_.push(observerSentinel, observer);
       this.value_.push(value);
     },
@@ -1472,7 +1460,6 @@
 
   global.Observer = Observer;
   global.Observer.hasObjectObserve = hasObserve;
-  global.Observer.isObservable = isObservable;
   global.ArrayObserver = ArrayObserver;
   global.ArrayObserver.calculateSplices = function(current, previous) {
     return arraySplice.calculateSplices(current, previous);
