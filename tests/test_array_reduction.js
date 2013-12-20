@@ -10,15 +10,13 @@ suite('ArrayReduction Tests',function(){
       {id:1}
     ];
 
-    reductionObserver = ArrayReduction.defineProperty(obj,'reducedValue',{
-      array: array,
-      path: 'id',
-      initial: [],
-      reduce: function(value,cur,i){
-        value.push([cur.id,i]);
-        return value;
-      }
-    });
+    var reduction = new ArrayReduction(array, 'id', function(value, cur, i) {
+      value.push([cur.id,i]);
+      return value;
+    }, []);
+
+    reductionObserver = Observer.defineComputedProperty(obj,'reducedValue',
+                                                        reduction);
   });
 
   teardown(function(){

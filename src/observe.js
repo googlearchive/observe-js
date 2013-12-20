@@ -283,6 +283,8 @@
     }
     if (global.testingExposeCycleCount)
       global.dirtyCheckCycleCount = cycles;
+
+    return cycles > 0;
   }
 
   function objectIsEmpty(object) {
@@ -379,10 +381,6 @@
       return this.value_;
     },
 
-    getValue: function() {
-      return this.value_;
-    },
-
     internalCallback_: function(records) {
       if (this.state_ != OPENED)
         return;
@@ -408,16 +406,23 @@
       if (this.state_ != OPENED)
         return;
 
-      if (hasObserve) {
-        if (this.deliverDeps_)
-          this.deliverDeps_();
-
-        this.testingResults = testingResults;
-        Object.deliverChangeRecords(this.boundInternalCallback_);
-        this.testingResults = undefined;
-      } else {
+      if (!hasObserve) {
         dirtyCheck(this);
+        return;
       }
+
+      this.testingResults = testingResults;
+      if (this.deliverDirtyChecks_) {
+        var anyChanged = dirtyCheck(this);
+        if (testingResults)
+          testingResults.anyChanged = testingResults.anyChanged || anyChanged;
+
+        this.reporting_ = false;
+      }
+
+      Object.deliverChangeRecords(this.boundInternalCallback_);
+      this.testingResults = undefined;
+      this.reporting_ = true;
     },
 
     report_: function() {
@@ -690,17 +695,15 @@
 
   function PathObserver(object, path) {
     Observer.call(this);
+
     this.object_ = object;
     this.path_ = path instanceof Path ? path : getPath(path);
     this.observedSet_ = undefined;
   }
 
   PathObserver.prototype = createObject({
+    deliverDirtyChecks_: true,
     __proto__: Observer.prototype,
-
-    getValue: function() {
-      return this.path_.getValueFrom(this.object_);
-    },
 
     connect_: function() {
       if (hasObserve)
@@ -737,15 +740,16 @@
     },
 
     sync_: function(hard) {
-      if (hard) {
-        if (this.observedSet_)
-          this.observedSet_.reset();
+      if (!hard)
+        return;
 
-        this.value_ = this.path_.getValueFrom(this.object_, this.observedSet_);
+      if (this.observedSet_)
+        this.observedSet_.reset();
 
-        if (this.observedSet_)
-          this.observedSet_.cleanup();
-      }
+      this.value_ = this.path_.getValueFrom(this.object_, this.observedSet_);
+
+      if (this.observedSet_)
+        this.observedSet_.cleanup();
     },
 
     setValue: function(newValue) {
@@ -757,29 +761,39 @@
   function CompoundObserver() {
     Observer.call(this);
 
-    this.observed_ = [];
     this.value_ = [];
-    this.hasObservers_ = false;
-    this.depsChanged_ = undefined;
+    this.observedSet_ = undefined;
+    this.observed_ = [];
   }
 
   var observerSentinel = {};
 
   CompoundObserver.prototype = createObject({
-    __proto__: PathObserver.prototype,
+    deliverDirtyChecks_: true,
+    __proto__: Observer.prototype,
 
-    getValue: function() {
-      var values = [];
-      this.getValues_(values, true);
-      return values;
+    connect_: function() {
+      if (hasObserve)
+        this.observedSet_ = new ObservedSet(this.boundInternalCallback_);
     },
 
-    setValue: function() {
-      console.warn('Set to CompoundObserver ignored.');
+    disconnect_: function() {
+      this.value = undefined;
+      this.value_ = undefined;
+
+      if (this.observedSet_) {
+        this.observedSet_.reset();
+        this.observedSet_.cleanup();
+        this.observedSet_ = undefined;
+      }
+
+      for (var i = 0; i < this.observed_.length; i += 2) {
+        if (this.observed_[i] === observerSentinel)
+          this.observed_[i + 1].close();
+      }
+      this.observed_ = undefined;
     },
 
-    // TODO(rafaelw): Consider special-casing when |object| is a PathObserver
-    // and path 'value' to avoid explicit observation.
     addPath: function(object, path) {
       if (this.state_ != UNOPENED)
         throw Error('Cannot add paths once started.');
@@ -791,35 +805,12 @@
       if (this.state_ != UNOPENED)
         throw Error('Cannot add observers once started.');
 
-      var value = observer.open(this.observerChanged_, this);
-      this.hasObservers_ = true;
+      var value = observer.open(this.deliver, this);
       this.observed_.push(observerSentinel, observer);
       this.value_.push(value);
     },
 
-    deliverDeps_: function() {
-      if (!this.hasObservers_)
-        return;
-
-      for (var i = 0; i < this.observed_.length; i += 2) {
-        if (this.observed_[i] === observerSentinel)
-          this.observed_[i + 1].deliver();
-      }
-    },
-
-    observerChanged_: function() {
-      if (!hasObserve)
-        return this.deliver();
-
-      if (!this.depsChanged_) {
-        this.depsChanged_ = {};
-        Object.observe(this.depsChanged_, this.boundInternalCallback_);
-      }
-
-      this.depsChanged_.changed = !this.depsChanged_.changed;
-    },
-
-    getValues_: function(values, sync) {
+    getValues_: function(sync) {
       if (this.observedSet_)
         this.observedSet_.reset();
 
@@ -832,16 +823,16 @@
             pathOrObserver.getValueFrom(object, this.observedSet_)
 
         if (sync) {
-          values[i / 2] = value;
+          this.value_[i / 2] = value;
           continue;
         }
 
-        if (areSameValue(value, values[i / 2]))
+        if (areSameValue(value, this.value_[i / 2]))
           continue;
 
         oldValues = oldValues || [];
-        oldValues[i / 2] = values[i / 2];
-        values[i / 2] = value;
+        oldValues[i / 2] = this.value_[i / 2];
+        this.value_[i / 2] = value;
       }
 
       if (this.observedSet_)
@@ -851,7 +842,7 @@
     },
 
     check_: function() {
-      var oldValues = this.getValues_(this.value_);
+      var oldValues = this.getValues_();
       if (!oldValues)
         return;
 
@@ -863,26 +854,7 @@
 
     sync_: function(hard) {
       if (hard)
-        this.getValues_(this.value_, true);
-    },
-
-    close: function() {
-      if (this.hasObservers_) {
-        for (var i = 0; i < this.observed_.length; i += 2) {
-          if (this.observed_[i] === observerSentinel)
-            this.observed_[i + 1].close();
-        }
-
-        this.observed_ = undefined;
-        this.value_ = undefined;
-      }
-
-      if (this.depsChanged_) {
-        Object.unobserve(this.depsChanged_, this.boundInternalCallback_);
-        this.depsChanged_ = undefined;
-      }
-
-      Observer.prototype.close.call(this);
+        this.getValues_(true);
     }
   });
 
@@ -917,10 +889,6 @@
       var oldValue = this.value_;
       this.value_ = value;
       this.callback_.call(this.target_, this.value_, oldValue);
-    },
-
-    getValue: function() {
-      return this.getValueFn_(this.observable_.getValue());
     },
 
     discardChanges: function() {
@@ -972,16 +940,18 @@
     }
   }
 
-  Observer.defineProperty = function(target, name, observable) {
+  Observer.defineComputedProperty = function(target, name, observable) {
     var notify = notifyFunction(target, name);
-    observable.open(function(newValue, oldValue) {
+    var value = observable.open(function(newValue, oldValue) {
+      value = newValue;
       if (notify)
         notify(PROP_UPDATE_TYPE, oldValue);
     });
 
     Object.defineProperty(target, name, {
       get: function() {
-        return observable.getValue();
+        observable.deliver();
+        return value;
       },
       set: function(newValue) {
         observable.setValue(newValue);
@@ -992,10 +962,9 @@
 
     return {
       close: function() {
-        var lastValue = observable.getValue();
         observable.close();
         Object.defineProperty(target, name, {
-          value: lastValue,
+          value: value,
           writable: true,
           configurable: true
         });

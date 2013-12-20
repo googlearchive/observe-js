@@ -13,28 +13,45 @@
 // limitations under the License.
 
 function ArrayReduction(array, path, reduceFn, initial) {
-  this.array = array;
-  this.path = path ? path.trim() : undefined;
+  this.callback_ = undefined;
+  this.target_ = undefined;
+  this.value_ = undefined;
+  this.array_ = array;
+  this.path_ = Path.get(path);
   this.reduceFn = reduceFn;
   this.initial = initial;
-  this.arrayObserver = new ArrayObserver(array);
-  this.arrayObserver.open(this.handleSplices, this);
-  this.observers = this.path ? [] : undefined;
-
-  this.handleSplices([{
-    index: 0,
-    removed: [],
-    addedCount: array.length
-  }]);
 }
 
 ArrayReduction.prototype = {
-  updateObservers: function(splices) {
+  open: function(callback, target) {
+    this.callback_ = callback;
+    this.target_ = target;
+
+    this.arrayObserver = new ArrayObserver(this.array_);
+    this.arrayObserver.open(this.handleSplices, this);
+    this.observers = this.path_.valid ? [] : undefined;
+
+    this.handleSplices([{
+      index: 0,
+      removed: [],
+      addedCount: this.array_.length
+    }]);
+
+    return this.value_;
+  },
+
+  handleSplices: function(splices) {
+    this.reduce();
+
+    if (!this.observers)
+      return;
+
     for (var i = 0; i < splices.length; i++) {
       var splice = splices[i];
       var added = [];
       for (var j = 0; j < splice.addedCount; j++) {
-        var observer = new PathObserver(this.array[splice.index + j], this.path);
+        var observer = new PathObserver(this.array_[splice.index + j],
+                                        this.path_);
         observer.open(this.reduce, this);
         added.push(observer);
 
@@ -49,22 +66,34 @@ ArrayReduction.prototype = {
     }
   },
 
-  handleSplices: function(splices) {
-    if (this.observers)
-      this.updateObservers(splices);
+  reduce: function(sync) {
+    var value = this.array_.reduce(this.reduceFn, this.initial);
+    if (value == this.value_)
+      return;
 
-    this.reduce();
-  },
+    var oldValue = this.value_;
+    this.value_ = value;
 
-  reduce: function() {
-    this.value = this.array.reduce(this.reduceFn, this.initial);
+    if (!sync)
+      this.callback_.call(this.target_, this.value_, oldValue);
   },
 
   close: function() {
     this.observers.forEach(function(observer) {
       observer.close();
     });
+
     this.arrayObserver.close();
+  },
+
+  discardChanges: function() {
+    this.arrayObserver.discardChanges();
+    this.observers.forEach(function(observer) {
+      observer.discardChanges();
+    });
+
+    this.reduce(true);
+    return this.value_;
   },
 
   deliver: function() {
@@ -73,40 +102,4 @@ ArrayReduction.prototype = {
       observer.deliver();
     });
   }
-}
-
-ArrayReduction.defineProperty = function(object, name, descriptor) {
-  var observer = new ArrayReduction(descriptor.array, descriptor.path,
-                                    descriptor.reduce,
-                                    descriptor.initial);
-
-  Object.defineProperty(object, name, {
-    get: function() {
-      observer.deliver();
-      return observer.value;
-    }
-  });
-
-  if (Observer.hasObjectObserve)
-    return observer;
-
-  var value = observer.value;
-  Object.defineProperty(observer, 'value', {
-    get: function() {
-      return value;
-    },
-    set: function(newValue) {
-      if (Observer.hasObjectObserve) {
-        Object.getNotifier(object).notify({
-          object: object,
-          type: 'updated',
-          name: name,
-          oldValue: value
-        });
-      }
-      value = newValue;
-    }
-  })
-
-  return observer;
 }

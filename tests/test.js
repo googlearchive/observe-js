@@ -333,11 +333,9 @@ suite('ObserverTransform', function() {
 
     observer.setValue(2);
     assert.strictEqual(obj.foo, 1);
-    assert.strictEqual(2, observer.getValue());
     assertPathChanges(2, 4);
 
     obj.foo = 10;
-    assert.strictEqual(20, observer.getValue());
     assertPathChanges(20, 2);
 
     observer.close();
@@ -804,10 +802,10 @@ suite('PathObserver Tests', function() {
     observer = new PathObserver(model, 'a.b');
     observer.open(callback);
     _b = 3; // won't be observed.
-    assertNoChanges();
+    assertPathChanges(3, 2);
 
     model.a.b = 4; // will be observed.
-    assertPathChanges(4, 2);
+    assertPathChanges(4, 3);
 
     observer.close();
   });
@@ -825,13 +823,13 @@ suite('PathObserver Tests', function() {
     var b = {};
     var c = {};
 
-    root.a.observer = Observer.defineProperty(root.a, 'value',
+    root.a.observer = Observer.defineComputedProperty(root.a, 'value',
         new PathObserver(root, 'value'));
 
-    root.a.b.observer = Observer.defineProperty(root.a.b, 'value',
+    root.a.b.observer = Observer.defineComputedProperty(root.a.b, 'value',
         new PathObserver(root.a, 'value'));
 
-    root.c.observer = Observer.defineProperty(root.c, 'value',
+    root.c.observer = Observer.defineComputedProperty(root.c, 'value',
         new PathObserver(root, 'value'));
 
     root.c.value = 2;
@@ -856,7 +854,7 @@ suite('PathObserver Tests', function() {
       Object.observe(target, callback);
     }
 
-    var observer = Observer.defineProperty(target, 'computed',
+    var observer = Observer.defineComputedProperty(target, 'computed',
         new PathObserver(source, 'foo.bar'));
 
     assert.isTrue(target.hasOwnProperty('computed'));
@@ -900,6 +898,36 @@ suite('PathObserver Tests', function() {
       {
         object: target,
         name: 'computed',
+        type: Observer.changeRecordTypes.update,
+        oldValue: 1
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: Observer.changeRecordTypes.update,
+        oldValue: 3
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: Observer.changeRecordTypes.update,
+        oldValue: 5
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: Observer.changeRecordTypes.update,
+        oldValue: 7
+      },
+      {
+        object: target,
+        name: 'computed',
+        type: Observer.changeRecordTypes.update,
+        oldValue: undefined
+      },
+      {
+        object: target,
+        name: 'computed',
         type: Observer.changeRecordTypes.reconfigure
       }
     ]);
@@ -909,14 +937,14 @@ suite('PathObserver Tests', function() {
 
   test('DefineProperty - empty path', function() {
     var target = {}
-    var observer = Observer.defineProperty(target, 'foo',
-                                               new PathObserver(1));
+    var observer = Observer.defineComputedProperty(target, 'foo',
+                                                   new PathObserver(1));
     assert.isTrue(target.hasOwnProperty('foo'));
     assert.strictEqual(1, target.foo);
 
     var obj = {};
-    var observer2 = Observer.defineProperty(target, 'bar',
-                                                new PathObserver(obj));
+    var observer2 = Observer.defineComputedProperty(target, 'bar',
+                                                    new PathObserver(obj));
     assert.isTrue(target.hasOwnProperty('bar'));
     assert.strictEqual(obj, target.bar);
   });
@@ -956,7 +984,6 @@ suite('CompoundObserver Tests', function() {
     model.b = 3;
     model.c = 4;
 
-    assert.deepEqual([2, 3, 4], observer.getValue());
     assertCompoundPathChanges([2, 3, 4], ['a', 20, 'c'],
                               observerCallbackArg);
 
@@ -966,7 +993,6 @@ suite('CompoundObserver Tests', function() {
     assert.deepEqual(['z', 'y', 'x'], observer.discardChanges());
     assertNoChanges();
 
-    observer.setValue('blarg!');
     assert.strictEqual('z', model.a);
     assert.strictEqual('y', model.b);
     assert.strictEqual('x', model.c);
