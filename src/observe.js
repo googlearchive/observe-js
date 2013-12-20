@@ -447,9 +447,6 @@
     },
 
     discardChanges: function() {
-      if (this.state_ != OPENED)
-        throw Error('Observer is not open');
-
       if (hasObserve) {
         this.reporting_ = false;
         Object.deliverChangeRecords(this.boundInternalCallback_);
