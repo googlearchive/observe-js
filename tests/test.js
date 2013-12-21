@@ -801,7 +801,7 @@ suite('PathObserver Tests', function() {
 
     observer = new PathObserver(model, 'a.b');
     observer.open(callback);
-    _b = 3; // won't be observed.
+    _b = 3;
     assertPathChanges(3, 2);
 
     model.a.b = 4; // will be observed.

@@ -699,8 +699,9 @@
   }
 
   PathObserver.prototype = createObject({
-    deliverDirtyChecks_: true,
     __proto__: Observer.prototype,
+
+    deliverDirtyChecks_: true,
 
     connect_: function() {
       if (hasObserve)
