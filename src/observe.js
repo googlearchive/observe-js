@@ -364,8 +364,6 @@
         self.internalCallback_(records);
       };
     }
-
-    addToAll(this);
   }
 
   Observer.prototype = {
@@ -373,6 +371,7 @@
       if (this.state_ != UNOPENED)
         throw Error('Observer has already been opened.');
 
+      addToAll(this);
       this.callback_ = callback;
       this.target_ = target;
       this.state_ = OPENED;
