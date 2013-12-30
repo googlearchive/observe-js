@@ -71,8 +71,8 @@
   BenchmarkRunner.INIT = 0;
   BenchmarkRunner.ESTIMATE = 1;
   BenchmarkRunner.TESTING = 2;
-  BenchmarkRunner.maxTime = 400;
-  BenchmarkRunner.maxRuns = 50;
+  BenchmarkRunner.maxTime = 1000;
+  BenchmarkRunner.maxRuns = 100;
 
   var hasPerformance = typeof global.performance === 'object' &&
                        typeof global.performance.now === 'function'
@@ -108,7 +108,7 @@
       this.benchmark.setupVariant(this.variants[this.variant]);
 
       // Run the test once before timing.
-      this.runSeries(BenchmarkRunner.INIT, 1);
+      this.runSeries(BenchmarkRunner.INIT, 3);
     },
 
     variantComplete: function(duration) {
@@ -166,7 +166,7 @@
       switch (this.state) {
         case BenchmarkRunner.INIT:
           // Run the test twice to estimate its time.
-          this.runSeries(BenchmarkRunner.ESTIMATE, 2);
+          this.runSeries(BenchmarkRunner.ESTIMATE, 5);
           break;
 
         case BenchmarkRunner.ESTIMATE:
