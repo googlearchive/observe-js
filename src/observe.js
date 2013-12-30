@@ -708,7 +708,6 @@
     },
 
     disconnect_: function() {
-      this.value = undefined;
       this.value_ = undefined;
       if (this.observedSet_) {
         this.observedSet_.reset();
@@ -775,7 +774,6 @@
     },
 
     disconnect_: function() {
-      this.value = undefined;
       this.value_ = undefined;
 
       if (this.observedSet_) {
