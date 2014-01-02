@@ -383,11 +383,8 @@
     internalCallback_: function(records) {
       if (this.state_ != OPENED)
         return;
-      if (this.reporting_ && this.check_(records)) {
+      if (this.reporting_ && this.check_(records))
         this.report_();
-        if (this.testingResults)
-          this.testingResults.anyChanged = true;
-      }
     },
 
     close: function() {
@@ -402,7 +399,7 @@
       this.target_ = undefined;
     },
 
-    deliver: function(testingResults) {
+    deliver: function() {
       if (this.state_ != OPENED)
         return;
 
@@ -411,17 +408,12 @@
         return;
       }
 
-      this.testingResults = testingResults;
       if (this.deliverDirtyChecks_) {
         var anyChanged = dirtyCheck(this);
-        if (testingResults)
-          testingResults.anyChanged = testingResults.anyChanged || anyChanged;
-
         this.reporting_ = false;
       }
 
       Object.deliverChangeRecords(this.boundInternalCallback_);
-      this.testingResults = undefined;
       this.reporting_ = true;
     },
 
@@ -499,29 +491,27 @@
     runningMicrotaskCheckpoint = true;
 
     var cycles = 0;
-    var results = {};
+    var anyChanged, toCheck;
 
     do {
       cycles++;
-      var toCheck = allObservers;
+      toCheck = allObservers;
       allObservers = [];
-      results.anyChanged = false;
+      anyChanged = false;
 
       for (var i = 0; i < toCheck.length; i++) {
         var observer = toCheck[i];
         if (observer.state_ != OPENED)
           continue;
 
-        if (hasObserve) {
-          observer.deliver(results);
-        } else if (observer.check_()) {
-          results.anyChanged = true;
+        if (observer.check_()) {
+          anyChanged = true;
           observer.report_();
         }
 
         allObservers.push(observer);
       }
-    } while (cycles < MAX_DIRTY_CHECK_CYCLES && results.anyChanged);
+    } while (cycles < MAX_DIRTY_CHECK_CYCLES && anyChanged);
 
     if (global.testingExposeCycleCount)
       global.dirtyCheckCycleCount = cycles;
