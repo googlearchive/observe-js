@@ -391,9 +391,10 @@
     },
 
     close: function() {
-      if (this.state_ == CLOSED)
+      if (this.state_ != OPENED)
         return;
 
+      removeFromAll(this);
       this.state_ = CLOSED;
       this.disconnect_();
       this.value_ = undefined;
@@ -457,7 +458,7 @@
     }
   }
 
-  var collectObservers = !hasObserve || global.forceCollectObservers;
+  var collectObservers = !hasObserve;
   var allObservers;
   Observer._allObserversCount = 0;
 
@@ -466,11 +467,15 @@
   }
 
   function addToAll(observer) {
+    Observer._allObserversCount++;
     if (!collectObservers)
       return;
 
     allObservers.push(observer);
-    Observer._allObserversCount++;
+  }
+
+  function removeFromAll(observer) {
+    Observer._allObserversCount--;
   }
 
   var runningMicrotaskCheckpoint = false;
@@ -521,7 +526,6 @@
     if (global.testingExposeCycleCount)
       global.dirtyCheckCycleCount = cycles;
 
-    Observer._allObserversCount = allObservers.length;
     runningMicrotaskCheckpoint = false;
   };
 
