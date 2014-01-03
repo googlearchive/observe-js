@@ -180,7 +180,7 @@
       this.push(part);
     }, this);
 
-    if (hasEval && !hasObserve && this.length) {
+    if (hasEval && this.length) {
       this.getValueFrom = this.compiledGetValueFromFn();
     }
   }
@@ -222,11 +222,18 @@
       for (var i = 0; i < this.length; i++) {
         if (obj == null)
           return;
-        if (directObserver)
-          directObserver.observe(obj);
         obj = obj[this[i]];
       }
       return obj;
+    },
+
+    iterateObjects: function(obj, observe) {
+      for (var i = 0; i < this.length; i++) {
+        if (obj == null)
+          return;
+        observe(obj);
+        obj = obj[this[i]];
+      }
     },
 
     compiledGetValueFromFn: function() {
@@ -400,51 +407,52 @@
     var toRemove = emptyArray;
     var discardRecords = false;
 
+    function observe(obj) {
+      if (!isObject(obj) || obj === objProto || obj === arrayProto)
+        return;
+
+      var index = toRemove.indexOf(obj);
+      if (index >= 0) {
+        toRemove[index] = undefined;
+        objects.push(obj);
+      } else if (objects.indexOf(obj) < 0) {
+        objects.push(obj);
+        Object.observe(obj, callback);
+      }
+
+      observe(Object.getPrototypeOf(obj));
+    }
+
+    function reset() {
+      var objs = toRemove === emptyArray ? [] : toRemove;
+      toRemove = objects;
+      objects = objs;
+    }
+
+    function cleanup() {
+      for (var i = 0; i < toRemove.length; i++) {
+        var obj = toRemove[i];
+        if (obj)
+          Object.unobserve(obj, callback);
+      }
+
+      toRemove.length = 0;
+    }
+
     function callback(records) {
-      if (observer && observer.state_ == OPENED && !discardRecords)
-        observer.check_(records);
+      if (!observer || observer.state_ != OPENED || discardRecords)
+        return;
+
+      observer.check_(records);
+      reset();
+      observer.iterateObjects_(observe);
+      cleanup();
     }
 
     return {
       open: function(obs) {
         observer = obs;
-      },
-      observe: function(obj) {
-        if (!isObject(obj) || obj === objProto || obj === arrayProto)
-          return;
-
-        var index = toRemove.indexOf(obj);
-        if (index >= 0) {
-          toRemove[index] = undefined;
-          objects.push(obj);
-        } else if (objects.indexOf(obj) < 0) {
-          objects.push(obj);
-          Object.observe(obj, callback);
-        }
-
-        this.observe(Object.getPrototypeOf(obj));
-      },
-      deliver: function(discard) {
-        discardRecords = discard;
-        Object.deliverChangeRecords(callback);
-        discardRecords = false;
-      },
-      reset: function() {
-        if (!objects.length)
-          return;
-
-        var objs = toRemove === emptyArray ? [] : toRemove;
-        toRemove = objects;
-        objects = objs;
-      },
-      cleanup: function() {
-        for (var i = 0; i < toRemove.length; i++) {
-          var obj = toRemove[i];
-          if (obj)
-            Object.unobserve(obj, callback);
-        }
-
-        toRemove.length = 0;
+        observer.iterateObjects_(observe);
       },
       close: function() {
         for (var i = 0; i < objects.length; i++) {
@@ -766,18 +774,13 @@
       }
     },
 
+    iterateObjects_: function(observe) {
+      this.path_.iterateObjects(this.object_, observe);
+    },
+
     check_: function(changeRecords, skipChanges) {
-      // Note: Extracting this to a member function for use here and below
-      // regresses dirty-checking path perf by about 25% =-(.
-      if (this.directObserver_)
-        this.directObserver_.reset();
-
       var oldValue = this.value_;
-      this.value_ = this.path_.getValueFrom(this.object_, this.directObserver_);
-
-      if (this.directObserver_)
-        this.directObserver_.cleanup();
-
+      this.value_ = this.path_.getValueFrom(this.object_);
       if (skipChanges || areSameValue(this.value_, oldValue))
         return false;
 
@@ -842,10 +845,16 @@
       this.value_.push(value);
     },
 
-    check_: function(changeRecords, skipChanges) {
-      if (this.directObserver_)
-        this.directObserver_.reset();
+    iterateObjects_: function(observe) {
+      var object;
+      for (var i = 0; i < this.observed_.length; i += 2) {
+        object = this.observed_[i]
+        if (object !== observerSentinel)
+          this.observed_[i + 1].iterateObjects(object, observe)
+      }
+    },
 
+    check_: function(changeRecords, skipChanges) {
       var oldValues;
       for (var i = 0; i < this.observed_.length; i += 2) {
         var pathOrObserver = this.observed_[i+1];
@@ -866,9 +875,6 @@
         oldValues[i / 2] = this.value_[i / 2];
         this.value_[i / 2] = value;
       }
-
-      if (this.directObserver_)
-        this.directObserver_.cleanup();
 
       if (!oldValues)
         return false;
