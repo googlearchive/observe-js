@@ -381,8 +381,7 @@
   }
 
   function getObservedObject(observer, object, arrayObserve) {
-    var dir = observedObjectCache.length ? observedObjectCache.pop() :
-        newObservedObject();
+    var dir = observedObjectCache.pop() || newObservedObject();
     dir.open(observer);
     dir.observe(object, arrayObserve);
     return dir;
@@ -445,11 +444,12 @@
             Object.unobserve(obj, callback);
         }
 
-        toRemove.length = 0;;
+        toRemove.length = 0;
       },
       close: function() {
-        for (var i = 0; i < objects.length; i++)
+        for (var i = 0; i < objects.length; i++) {
           Object.unobserve(objects[i], callback);
+        }
         objects.length = 0;
         observedSetCache.push(this);
       }
@@ -457,8 +457,7 @@
   }
 
   function getObservedSet(observer) {
-    var set = observedSetCache.length ? observedSetCache.pop() :
-        newObservedSet();
+    var set = observedSetCache.pop() || newObservedSet();
     set.open(observer);
     return set;
   }
