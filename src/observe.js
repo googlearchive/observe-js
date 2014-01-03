@@ -278,7 +278,6 @@
   function dirtyCheck(observer) {
     var cycles = 0;
     while (cycles < MAX_DIRTY_CHECK_CYCLES && observer.check_()) {
-      observer.report_();
       cycles++;
     }
     if (global.testingExposeCycleCount)
@@ -337,16 +336,6 @@
     };
   }
 
-  function copyObject(object, opt_copy) {
-    var copy = opt_copy || (Array.isArray(object) ? [] : {});
-    for (var prop in object) {
-      copy[prop] = object[prop];
-    };
-    if (Array.isArray(object))
-      copy.length = object.length;
-    return copy;
-  }
-
   var observedObjectCache = [];
 
   function newObservedObject() {
@@ -355,9 +344,9 @@
     var discardRecords = false;
     var first = true;
 
-    function callback(changeRecords) {
-      if (observer && !discardRecords)
-        observer.internalCallback_(changeRecords);
+    function callback(records) {
+      if (observer && observer.state_ === OPENED && !discardRecords)
+        observer.check_(records);
     }
 
     return {
@@ -412,9 +401,9 @@
     var toRemove = emptyArray;
     var discardRecords = false;
 
-    function callback() {
-      if (observer && !discardRecords)
-        observer.internalCallback_();
+    function callback(records) {
+      if (observer && observer.state_ == OPENED && !discardRecords)
+        observer.check_(records);
     }
 
     return {
@@ -477,14 +466,13 @@
   var UNOPENED = 0;
   var OPENED = 1;
   var CLOSED = 2;
+
   function Observer() {
     this.state_ = UNOPENED;
-
-    this.value_ = undefined;
     this.callback_ = undefined;
     this.target_ = undefined; // TODO(rafaelw): Should be WeakRef
-    this.reportArgs_ = undefined;
     this.directObserver_ = undefined;
+    this.value_ = undefined;
   }
 
   Observer.prototype = {
@@ -497,15 +485,7 @@
       this.target_ = target;
       this.state_ = OPENED;
       this.connect_();
-      this.sync_(true);
       return this.value_;
-    },
-
-    internalCallback_: function(records) {
-      if (this.state_ != OPENED)
-        return;
-      if (this.check_(records))
-        this.report_();
     },
 
     close: function() {
@@ -524,28 +504,12 @@
       if (this.state_ != OPENED)
         return;
 
-      if (!hasObserve) {
-        dirtyCheck(this);
-        return;
-      }
-
-      if (this.deliverDirtyChecks_)
-        dirtyCheck(this);
-
-      this.directObserver_.deliver(this.deliverDirtyChecks_);
+      dirtyCheck(this);
     },
 
-    report_: function() {
-      this.sync_(false);
-      if (this.callback_) {
-        this.invokeCallback_(this.reportArgs_);
-      }
-      this.reportArgs_ = undefined;
-    },
-
-    invokeCallback_: function(args) {
+    report_: function(changes) {
       try {
-        this.callback_.apply(this.target_, args);
+        this.callback_.apply(this.target_, changes);
       } catch (ex) {
         Observer._errorThrownDuringCallback = true;
         console.error('Exception caught during observer callback: ' +
@@ -554,10 +518,7 @@
     },
 
     discardChanges: function() {
-      if (this.directObserver_)
-        this.directObserver_.deliver(true);
-
-      this.sync_(true);
+      this.check_(undefined, true);
       return this.value_;
     }
   }
@@ -616,10 +577,8 @@
         if (observer.state_ != OPENED)
           continue;
 
-        if (observer.check_()) {
+        if (observer.check_())
           anyChanged = true;
-          observer.report_();
-        }
 
         allObservers.push(observer);
       }
@@ -646,17 +605,29 @@
   ObjectObserver.prototype = createObject({
     __proto__: Observer.prototype,
 
-    connect_: function() {
-      if (hasObserve)
-        this.directObserver_ = getObservedObject(this, this.value_, false);
+    arrayObserve: false,
+
+    connect_: function(callback, target) {
+      if (hasObserve) {
+        this.directObserver_ = getObservedObject(this, this.value_,
+                                                 this.arrayObserve);
+      } else {
+        this.oldObject_ = this.copyObject(this.value_);
+      }
+
     },
 
-    sync_: function(hard) {
-      if (!hasObserve)
-        this.oldObject_ = copyObject(this.value_);
+    copyObject: function(object) {
+      var copy = Array.isArray(object) ? [] : {};
+      for (var prop in object) {
+        copy[prop] = object[prop];
+      };
+      if (Array.isArray(object))
+        copy.length = object.length;
+      return copy;
     },
 
-    check_: function(changeRecords) {
+    check_: function(changeRecords, skipChanges) {
       var diff;
       var oldValues;
       if (hasObserve) {
@@ -674,11 +645,17 @@
       if (diffIsEmpty(diff))
         return false;
 
-      this.reportArgs_ =
-          [diff.added || {}, diff.removed || {}, diff.changed || {}];
-      this.reportArgs_.push(function(property) {
-        return oldValues[property];
-      });
+      if (!hasObserve)
+        this.oldObject_ = this.copyObject(this.value_);
+
+      this.report_([
+        diff.added || {},
+        diff.removed || {},
+        diff.changed || {},
+        function(property) {
+          return oldValues[property];
+        }
+      ]);
 
       return true;
     },
@@ -690,6 +667,25 @@
       } else {
         this.oldObject_ = undefined;
       }
+    },
+
+    deliver: function() {
+      if (this.state_ != OPENED)
+        return;
+
+      if (hasObserve)
+        this.directObserver_.deliver(false);
+      else
+        dirtyCheck(this);
+    },
+
+    discardChanges: function() {
+      if (this.directObserver_)
+        this.directObserver_.deliver(true);
+      else
+        this.oldObject_ = this.copyObject(this.value_);
+
+      return this.value_;
     }
   });
 
@@ -700,16 +696,13 @@
   }
 
   ArrayObserver.prototype = createObject({
+
     __proto__: ObjectObserver.prototype,
 
-    connect_: function() {
-      if (hasObserve)
-        this.directObserver_ = getObservedObject(this, this.value_, true);
-    },
+    arrayObserve: true,
 
-    sync_: function() {
-      if (!hasObserve)
-        this.oldObject_ = this.value_.slice();
+    copyObject: function(arr) {
+      return arr.slice();
     },
 
     check_: function(changeRecords) {
@@ -726,7 +719,10 @@
       if (!splices || !splices.length)
         return false;
 
-      this.reportArgs_ = [splices];
+      if (!hasObserve)
+        this.oldObject_ = this.copyObject(this.value_);
+
+      this.report_([splices]);
       return true;
     }
   });
@@ -755,51 +751,39 @@
   PathObserver.prototype = createObject({
     __proto__: Observer.prototype,
 
-    deliverDirtyChecks_: true,
-
     connect_: function() {
       if (hasObserve)
         this.directObserver_ = getObservedSet(this);
+
+      this.check_(undefined, true);
     },
 
     disconnect_: function() {
       this.value_ = undefined;
+
       if (this.directObserver_) {
         this.directObserver_.close();
         this.directObserver_ = undefined;
       }
     },
 
-    check_: function() {
+    check_: function(changeRecords, skipChanges) {
       // Note: Extracting this to a member function for use here and below
       // regresses dirty-checking path perf by about 25% =-(.
       if (this.directObserver_)
         this.directObserver_.reset();
 
-      var newValue = this.path_.getValueFrom(this.object_, this.directObserver_);
-
-      if (this.directObserver_)
-        this.directObserver_.cleanup();
-
-      if (areSameValue(this.value_, newValue))
-        return false;
-
-      this.reportArgs_ = [newValue, this.value_];
-      this.value_ = newValue;
-      return true;
-    },
-
-    sync_: function(hard) {
-      if (!hard)
-        return;
-
-      if (this.directObserver_)
-        this.directObserver_.reset();
-
+      var oldValue = this.value_;
       this.value_ = this.path_.getValueFrom(this.object_, this.directObserver_);
 
       if (this.directObserver_)
         this.directObserver_.cleanup();
+
+      if (skipChanges || areSameValue(this.value_, oldValue))
+        return false;
+
+      this.report_([this.value_, oldValue]);
+      return true;
     },
 
     setValue: function(newValue) {
@@ -819,12 +803,13 @@
   var observerSentinel = {};
 
   CompoundObserver.prototype = createObject({
-    deliverDirtyChecks_: true,
     __proto__: Observer.prototype,
 
     connect_: function() {
       if (hasObserve)
         this.directObserver_ = getObservedSet(this);
+
+      this.check_(undefined, true);
     },
 
     disconnect_: function() {
@@ -858,7 +843,7 @@
       this.value_.push(value);
     },
 
-    getValues_: function(sync) {
+    check_: function(changeRecords, skipChanges) {
       if (this.directObserver_)
         this.directObserver_.reset();
 
@@ -870,7 +855,7 @@
             pathOrObserver.discardChanges() :
             pathOrObserver.getValueFrom(object, this.directObserver_)
 
-        if (sync) {
+        if (skipChanges) {
           this.value_[i / 2] = value;
           continue;
         }
@@ -886,23 +871,13 @@
       if (this.directObserver_)
         this.directObserver_.cleanup();
 
-      return oldValues;
-    },
-
-    check_: function() {
-      var oldValues = this.getValues_();
       if (!oldValues)
-        return;
+        return false;
 
       // TODO(rafaelw): Having observed_ as the third callback arg here is
       // pretty lame API. Fix.
-      this.reportArgs_ = [this.value_, oldValues, this.observed_];
+      this.report_([this.value_, oldValues, this.observed_]);
       return true;
-    },
-
-    sync_: function(hard) {
-      if (hard)
-        this.getValues_(true);
     }
   });
 
