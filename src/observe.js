@@ -343,6 +343,41 @@
     };
   }
 
+  var eomTasks = [];
+  function runEOMTasks() {
+    if (!eomTasks.length)
+      return false;
+
+    for (var i = 0; i < eomTasks.length; i++) {
+      eomTasks[i]();
+    }
+    eomTasks.length = 0;
+    return true;
+  }
+
+  var runEOM = hasObserve ? (function(){
+    var eomObj = { pingPong: true };
+    var eomRunScheduled = false;
+
+    Object.observe(eomObj, function() {
+      runEOMTasks();
+      eomRunScheduled = false;
+    });
+
+    return function(fn) {
+      eomTasks.push(fn);
+      if (!eomRunScheduled) {
+        eomRunScheduled = true;
+        eomObj.pingPong = !eomObj.pingPong;
+      }
+    };
+  })() :
+  (function() {
+    return function(fn) {
+      eomTasks.push(fn);
+    };
+  })();
+
   var observedObjectCache = [];
 
   function newObservedObject() {
@@ -589,6 +624,8 @@
 
         allObservers.push(observer);
       }
+      if (runEOMTasks())
+        anyChanged = true;
     } while (cycles < MAX_DIRTY_CHECK_CYCLES && anyChanged);
 
     if (global.testingExposeCycleCount)
@@ -1456,6 +1493,7 @@
   }
 
   global.Observer = Observer;
+  global.Observer.runEOM_ = runEOM;
   global.Observer.hasObjectObserve = hasObserve;
   global.ArrayObserver = ArrayObserver;
   global.ArrayObserver.calculateSplices = function(current, previous) {
