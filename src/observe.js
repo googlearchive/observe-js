@@ -228,8 +228,9 @@
     },
 
     iterateObjects: function(obj, observe) {
+      observe(obj);
       for (var i = 0; i < this.length; i++) {
-        if (obj == null)
+        if (!obj)
           return;
         observe(obj);
         obj = obj[this[i]];
@@ -429,21 +430,19 @@
     return dir;
   }
 
-  // TODO(rafaelw): Consider surfacing a way to avoid observing prototype
-  // ancestors which are expected not to change (e.g. Element, Node...).
-  var objProto = Object.getPrototypeOf({});
-  var arrayProto = Object.getPrototypeOf([]);
   var emptyArray = [];
   var observedSetCache = [];
 
   function newObservedSet() {
-    var observer;
+    var observers = [];
+    var observerCount = 0;
     var objects = [];
     var toRemove = emptyArray;
-    var discardRecords = false;
+    var resetNeeded = false;
+    var resetScheduled = false;
 
     function observe(obj) {
-      if (!isObject(obj) || obj === objProto || obj === arrayProto)
+      if (!isObject(obj))
         return;
 
       var index = toRemove.indexOf(obj);
@@ -459,12 +458,23 @@
     }
 
     function reset() {
+      resetScheduled = false;
+      if (!resetNeeded)
+        return;
+
       var objs = toRemove === emptyArray ? [] : toRemove;
       toRemove = objects;
       objects = objs;
-    }
 
-    function cleanup() {
+      var observer;
+      for (var id in observers) {
+        observer = observers[id];
+        if (!observer || observer.state_ != OPENED)
+          continue;
+
+        observer.iterateObjects_(observe);
+      }
+
       for (var i = 0; i < toRemove.length; i++) {
         var obj = toRemove[i];
         if (obj)
@@ -474,40 +484,74 @@
       toRemove.length = 0;
     }
 
-    function callback(records) {
-      if (!observer || observer.state_ != OPENED || discardRecords)
-        return;
+    function callback() {
+      var observer;
 
-      observer.check_(records);
-      reset();
-      observer.iterateObjects_(observe);
-      cleanup();
+      for (var id in observers) {
+        observer = observers[id];
+        if (!observer || observer.state_ != OPENED)
+          continue;
+
+        observer.check_();
+      }
+
+      resetNeeded = true;
+      resetScheduled = true;
+      runEOM(reset);
     }
 
-    return {
+    var record = {
+      object: undefined,
+      objects: objects,
       open: function(obs) {
-        observer = obs;
-        observer.iterateObjects_(observe);
+        observers[obs.id_] = obs;
+        observerCount++;
+        obs.iterateObjects_(observe);
       },
-      close: function() {
+      close: function(obs) {
+        var anyLeft = false;
+
+        observers[obs.id_] = undefined;
+        observerCount--;
+
+        if (observerCount) {
+          resetNeeded = true;
+          resetScheduled = true;
+          runEOM(reset);
+          return;
+        }
+        resetNeeded = false;
+
         for (var i = 0; i < objects.length; i++) {
           Object.unobserve(objects[i], callback);
+          Observer.unobservedCount++;
         }
+
+        observers.length = 0;
         objects.length = 0;
         observedSetCache.push(this);
       }
     };
+
+    return record;
   }
 
-  function getObservedSet(observer) {
-    var set = observedSetCache.pop() || newObservedSet();
-    set.open(observer);
-    return set;
+  var lastObservedSet;
+
+  function getObservedSet(observer, obj) {
+    if (!lastObservedSet || lastObservedSet.object !== obj) {
+      lastObservedSet = observedSetCache.pop() || newObservedSet();
+      lastObservedSet.object = obj;
+    }
+    lastObservedSet.open(observer);
+    return lastObservedSet;
   }
 
   var UNOPENED = 0;
   var OPENED = 1;
   var CLOSED = 2;
+
+  var nextObserverId = 1;
 
   function Observer() {
     this.state_ = UNOPENED;
@@ -515,6 +559,7 @@
     this.target_ = undefined; // TODO(rafaelw): Should be WeakRef
     this.directObserver_ = undefined;
     this.value_ = undefined;
+    this.id_ = nextObserverId++;
   }
 
   Observer.prototype = {
@@ -797,7 +842,7 @@
 
     connect_: function() {
       if (hasObserve)
-        this.directObserver_ = getObservedSet(this);
+        this.directObserver_ = getObservedSet(this, this.object_);
 
       this.check_(undefined, true);
     },
@@ -806,7 +851,7 @@
       this.value_ = undefined;
 
       if (this.directObserver_) {
-        this.directObserver_.close();
+        this.directObserver_.close(this);
         this.directObserver_ = undefined;
       }
     },
@@ -845,17 +890,25 @@
     __proto__: Observer.prototype,
 
     connect_: function() {
-      if (hasObserve)
-        this.directObserver_ = getObservedSet(this);
-
       this.check_(undefined, true);
+
+      if (hasObserve) {
+        var object;
+        for (var i = 0; i < this.observed_.length; i += 2) {
+          object = this.observed_[i]
+          if (object !== observerSentinel) {
+            this.directObserver_ = getObservedSet(this, object);
+            break;
+          }
+        }
+      }
     },
 
     disconnect_: function() {
       this.value_ = undefined;
 
       if (this.directObserver_) {
-        this.directObserver_.close();
+        this.directObserver_.close(this);
         this.directObserver_ = undefined;
       }
 
@@ -898,7 +951,7 @@
         var object = this.observed_[i];
         var value = object === observerSentinel ?
             pathOrObserver.discardChanges() :
-            pathOrObserver.getValueFrom(object, this.directObserver_)
+            pathOrObserver.getValueFrom(object)
 
         if (skipChanges) {
           this.value_[i / 2] = value;
