@@ -8,8 +8,6 @@ observe-js is a library for observing changes in JavaScript data. It exposes a h
 
 ### Basic Usage
 
-Path observation:
-
 ```JavaScript
 var observer = new PathObserver(obj, 'foo.bar.baz');
 observer.open(function(newValue, oldValue) {
