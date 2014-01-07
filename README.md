@@ -90,8 +90,9 @@ observer.open(function(added, removed, changed, getOldValueFn) {
 });
 ```
 
+### CompoundObserver
 
-Multiple path and compound-value observation:
+CompoundObserver allows simultaneous observation of multiple paths and/or Observables. It reports any and all changes in to the provided `changeFn` callback.
 
 ```JavaScript
 var obj = {
@@ -100,18 +101,18 @@ var obj = {
   c: 3
 };
 
-function callback(newValues, // array of current path-values, in addPath order
-                  oldValues, // array of old path-values, in addPath order.
-                  observedObjects) { // array of root objects for observed values
-  // respond to one or more path values having changed
-}
-
 var observer = new CompoundObserver();
-observer.open(callback);
 observer.addPath(obj, 'a');
 observer.addPath(obj, 'b');
-observer.addPath(obj, 'c');
-observer.start();
+observer.addObserver(new PathObserver(obj, 'c'));
+observer.open(function(newValues, oldValues) {
+  // Use for-in to iterte which values have changed.
+  for (var i in oldValues) {
+    console.log('The ' + i + 'th value changed from: ' + newValues[i] + ' to: ' + oldValues[i]);
+  }
+});
+```
+
 
 function sum(values) {
   var value = 0;
