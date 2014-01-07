@@ -6,18 +6,6 @@
 
 observe-js is a library for observing changes in JavaScript data. It exposes a high-level API and uses Object.observe if available, and otherwise performs dirty-checking. observe-js requires ECMAScript 5.
 
-### Basic Usage
-
-```JavaScript
-var observer = new PathObserver(obj, 'foo.bar.baz');
-observer.open(function(newValue, oldValue) {
-  // respond to obj.foo.bar.baz having changed value.
-});
-
-// later
-observer.close(); // ends observation, frees resources and drops references to observed objects.
-```
-
 ### Observable
 
 observe-js implements a set of observers (PathObserver, ArrayObserver, ObjectObserver, CompoundObserver, ObserverTransform) which all implement the Observable interface:
@@ -47,7 +35,11 @@ PathObserver observes a "value-at-a-path" from a given object:
 ```JavaScript
 var obj = { foo: { bar: 'baz' } };
 var observer = new PathObserver(obj, 'foo.bar');
+observer.open(function(newValue, oldValue) {
+  // respond to obj.foo.bar having changed value.
+});
 ```
+
 PathObserver will report a change whenever the value obtained by the corresponding path expression (e.g. `obj.foo.bar`) would return a different value. Note that if the path is ever unreachable, the value is considered to be `undefined`.
 
 
