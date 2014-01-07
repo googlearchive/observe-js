@@ -16,14 +16,13 @@ observe-js implements a set of observers (PathObserver, ArrayObserver, ObjectObs
   // the target, if provided. Returns the initial value of the observation.
   open: function(changeFn, opt_receiver) {},
   
-  // If there are changes to report, forces delivery synchronously.
+  // Report any changes now (does nothing if there are no changes to report).
   deliver: function() {}
   
-  // If there are changes to report, ignore them. Returns the current value of the observation
+  // If there are changes to report, ignore them. Returns the current value of the observation.
   discardChanges: function() {},
   
-  // Ends observation. No reports will take place beyond close(). Frees resources and drops references
-  // to observed objects.
+  // Ends observation. Frees resources and drops references to observed objects.
   close: function() {},
 }
 ```
