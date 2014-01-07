@@ -40,14 +40,57 @@ observe-js exposes observers (PathObserver, CompoundObserver, ArrayObserver, Obj
 }
 ```
 
-Constructor:
+### PathObserver
+
+PathObserver observes a "value-at-a-path" from a given object:
 
 ```JavaScript
-function PathObserver(
-  object,     // root object from which path-value is observed
-  path       // Path object or path string
-)
+var obj = { foo: { bar: 'baz' } };
+var observer = new PathObserver(obj, 'foo.bar');
 ```
+PathObserver will report a change whenever the value obtained by the corresponding path expression (e.g. `obj.foo.bar`) would return a different value. Note that if the path is ever unreachable, the value is considered to be `undefined`.
+
+
+### ArrayObserver
+
+ArrayObserver observes the index-positions of an Array and reports changes as the minimal set of "splices" which would have had the same effect.
+
+```JavaScript
+var arr = [0, 1, 2, 4];
+var observer = new ArrayObserver(arr);
+observer.open(function(splices) {
+  // respond to changes to the elements of arr.
+  splices.forEach(function(splice) {
+    splice.index; // index position that the change occurred.
+    splice.removed; // an array of values representing the sequence of elements which were removed
+    splice.addedCount; // the number of elements which were inserted.
+  });
+});
+```
+
+### ObjectObserver:
+
+```JavaScript
+var myObj = { id: 1, foo: 'bar' };
+var observer = new ObjectObserver(myObj);
+observer.open(function(added, removed, changed, getOldValueFn) {
+  // respond to changes to the obj.
+  Object.keys(added).forEach(function(property) {
+    property; // a property which has been been added to obj
+    added[property]; // its value
+  });
+  Object.keys(removed).forEach(function(property) {
+    property; // a property which has been been removed from obj
+    getOldValueFn(property); // its old value
+  });
+  Object.keys(changed).forEach(function(property) {
+    property; // a property on obj which has changed value.
+    changed[property]; // its value
+    getOldValueFn(property); // its old value
+  });
+});
+```
+
 
 Multiple path and compound-value observation:
 
@@ -137,60 +180,6 @@ alias.val = 3;
 assert(obj.a.b === alias.val);
 ```
 
-Array observation:
-
-```JavaScript
-var observer = new ArrayObserver(arr, function(splices) {
-  // respond to changes to the elements of arr.
-  splices.forEach(function(splice) {
-    splice.index; // index position that the change occurred.
-    splice.removed; // an array of values representing the sequence of elements which were removed
-    splice.addedCount; // the number of elements which were inserted.
-  });
-});
-```
-
-Constructor:
-
-```JavaScript
-function ArrayObserver(
-  object,     // array to be observed
-  callback,   // function to be invoked when the changes occur to the array's index storage
-  target     // optional - context object (this) for provided callback
-)
-```
-
-
-Object observation:
-
-```JavaScript
-var observer = new ObjectObserver(obj, function(added, removed, changed, getOldValueFn) {
-  // respond to changes to the obj.
-  Object.keys(added).forEach(function(property) {
-    property; // a property which has been been added to obj
-    added[property]; // its value
-  });
-  Object.keys(removed).forEach(function(property) {
-    property; // a property which has been been removed from obj
-    getOldValueFn(property); // its old value
-  });
-  Object.keys(changed).forEach(function(property) {
-    property; // a property on obj which has changed value.
-    changed[property]; // its value
-    getOldValueFn(property); // its old value
-  });
-});
-```
-
-Constructor:
-
-```JavaScript
-function ObjectObserver(
-  object,     // object to be observed
-  callback,   // function to be invoked when the changes occur to one or more properties of the object
-  target      // optional - context object (this) for provided callback
-)
-```
 
 Force delivery of any changes:
 ```JavaScript
