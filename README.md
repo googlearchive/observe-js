@@ -20,7 +20,7 @@ observer.close(); // ends observation, frees resources and drops references to o
 
 ### Observable
 
-observe-js exposes observers (PathObserver, CompoundObserver, ArrayObserver, ObjectObserver, ObserverTransform) which implement the Observable interface:
+observe-js implements a set of observers (PathObserver, ArrayObserver, ObjectObserver, CompoundObserver, ObserverTransform) which all implement the Observable interface:
 
 ```JavaScript
 {
