@@ -20,6 +20,28 @@ observer.open(function(newValue, oldValue) {
 observer.close(); // ends observation, frees resources and drops references to observed objects.
 ```
 
+### Observable
+
+observe-js exposes 5 observers (PathObserver, CompoundObserver, ArrayObserver, ObjectObserver, ObserverTransform) which implement the Observable interface:
+
+```JavaScript
+{
+  // Begins observation. Value changes will be reported by invoking |fn| with |opt_receiver| as the target, 
+  // if provided. Returns the initial value of the observation.
+  open: function(changeFn, opt_receiver) {},
+  
+  // If there are changes to report, forces delivery synchronously.
+  deliver: function() {}
+  
+  // If there are changes to report, ignore them. Returns the current value of the observation
+  discardChanges: function() {},
+  
+  // Ends observation. No reports will take place beyond close(). Frees resources and drops references
+  // to observed objects.
+  close: function() {},
+}
+```
+
 Constructor:
 
 ```JavaScript
