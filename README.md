@@ -39,8 +39,12 @@ observer.open(function(newValue, oldValue) {
 });
 ```
 
-PathObserver will report a change whenever the value obtained by the corresponding path expression (e.g. `obj.foo.bar`) would return a different value. Note that if the path is ever unreachable, the value is considered to be `undefined`.
+PathObserver will report a change whenever the value obtained by the corresponding path expression (e.g. `obj.foo.bar`) would return a different value.
 
+Of note, WRT Path Observation
+ * If the path is ever unreachable, the value is considered to be `undefined`.
+ * If the path is empty (e.g. `''`), it is said to be the empty path and its value is its root object.
+ * PathObservation respects values on the prototype chain
 
 ### ArrayObserver
 
@@ -200,17 +204,6 @@ assert(obj.a.b === target.myProp);
 target.myProp = 3;
 assert(obj.a.b === target.myProp);
 ```
-
-### About path-values
-
-* If a path is unreachable from the provided object, its value is `undefined`
-* If a path is empty (`''`), its value is the object provided
-
-### About observing paths
-
-`PathObserver` allows code to react to changes to a `path value`. Details:
-
-* Path observation respects prototype values.
 
 ### About observing Arrays
 
