@@ -26,8 +26,8 @@ observe-js exposes observers (PathObserver, CompoundObserver, ArrayObserver, Obj
 
 ```JavaScript
 {
-  // Begins observation. Value changes will be reported by invoking |changeFn| with |opt_receiver| as the 
-  // target, if provided. Returns the initial value of the observation.
+  // Begins observation. Value changes will be reported by invoking |changeFn| with |opt_receiver| as 
+  // the target, if provided. Returns the initial value of the observation.
   open: function(changeFn, opt_receiver) {},
   
   // If there are changes to report, forces delivery synchronously.
