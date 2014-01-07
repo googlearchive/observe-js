@@ -205,27 +205,9 @@ target.myProp = 3;
 assert(obj.a.b === target.myProp);
 ```
 
-### About observing Arrays
-
-`ArrayObserver` allows code to react to changes in the the indexed valued properties of an Array. Details:
-
-* Changes to non-indexed valued properties are not reported (e.g. arr.foo)
-* Regardless of what caused the change (e.g. splice(), arr[4] = 4, arr.length = 4), the effects are reported as splices.
-* The changes reported are the minimal set of splices required to transform the previous state of arr to the present state.
-  * `ArrayObserver.applySplices(splices, copyOfOldArray);` will do actually do this.
-* `ArrayObserver` does not respect prototype values.
-
-### About observing Objects
-
-`ObjectObserver` allows code to react to all property changes of a given object. Details:
-
-* Changes are reported as `added`, `removed`, and `changed` properties. Each is an object whose keys are property names and whose values the present value of that property on the object.
-* The forth argument (`getOldValueFn`) provided to callback, will retrieve the previous value of a given property if a change to it was reported.
-* `ObjectObserver` does not respect prototype values.
-
 ## About delivery of changes
 
-ChangeSummary is intended for use in environments which implement Object.observe, but it supports use in environments which do not.
+observe-js is intended for use in environments which implement Object.observe, but it supports use in environments which do not.
 
 If `Object.observe` is present, and observers have changes to report, their callbacks will be invoked at the end of the current turn (microtask). In a browser environment, this is generally at the end of an event.
 
