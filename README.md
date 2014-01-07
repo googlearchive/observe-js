@@ -59,7 +59,15 @@ observer.open(function(splices) {
 });
 ```
 
+ArrayObserver also exposes a utility function: `applySplices`. The purpose of `applySplices` is to transform a copy of an old state of an array into a copy of its current state, given the current state and the splices reported from the ArrayObserver.
+
+```JavaScript
+AraryObserver.applySplices = function(previous, current, splices) { }
+```
+
 ### ObjectObserver:
+
+ObjectObserver observes the set of own-properties of an object and their values.
 
 ```JavaScript
 var myObj = { id: 1, foo: 'bar' };
