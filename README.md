@@ -22,12 +22,12 @@ observer.close(); // ends observation, frees resources and drops references to o
 
 ### Observable
 
-observe-js exposes 5 observers (PathObserver, CompoundObserver, ArrayObserver, ObjectObserver, ObserverTransform) which implement the Observable interface:
+observe-js exposes observers (PathObserver, CompoundObserver, ArrayObserver, ObjectObserver, ObserverTransform) which implement the Observable interface:
 
 ```JavaScript
 {
-  // Begins observation. Value changes will be reported by invoking |fn| with |opt_receiver| as the target, 
-  // if provided. Returns the initial value of the observation.
+  // Begins observation. Value changes will be reported by invoking |changeFn| with |opt_receiver| as the 
+  // target, if provided. Returns the initial value of the observation.
   open: function(changeFn, opt_receiver) {},
   
   // If there are changes to report, forces delivery synchronously.
