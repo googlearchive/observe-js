@@ -149,7 +149,7 @@ var observer = new CompoundObserver();
 observer.addPath(obj, 'a');
 observer.addPath(obj, 'b');
 observer.addPath(obj, 'c');
-var transform = new ObserverTrasnform(observer, fuction(values) {
+var transform = new ObserverTransform(observer, fuction(values) {
   var value = 0;
   for (var i = 0; i < values.length; i++)
     value += values[i]
