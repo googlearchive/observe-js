@@ -65,7 +65,7 @@ ArrayObserver also exposes a utility function: `applySplices`. The purpose of `a
 AraryObserver.applySplices = function(previous, current, splices) { }
 ```
 
-### ObjectObserver:
+### ObjectObserver
 
 ObjectObserver observes the set of own-properties of an object and their values.
 
@@ -98,13 +98,14 @@ CompoundObserver allows simultaneous observation of multiple paths and/or Observ
 var obj = {
   a: 1,
   b: 2,
-  c: 3
 };
+
+var otherObj = { c: 3 };
 
 var observer = new CompoundObserver();
 observer.addPath(obj, 'a');
-observer.addPath(obj, 'b');
-observer.addObserver(new PathObserver(obj, 'c'));
+observer.addObserver(new PathObserver(obj, 'b'));
+observer.addPath(otherObj, 'c');
 observer.open(function(newValues, oldValues) {
   // Use for-in to iterte which values have changed.
   for (var i in oldValues) {
@@ -112,7 +113,6 @@ observer.open(function(newValues, oldValues) {
   }
 });
 ```
-
 
 function sum(values) {
   var value = 0;
