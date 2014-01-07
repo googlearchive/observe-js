@@ -114,105 +114,93 @@ observer.open(function(newValues, oldValues) {
 });
 ```
 
-function sum(values) {
+
+### ObserverTransform
+
+ObserverTransform is used to dynamically transform observed value(s).
+
+```JavaScript
+var obj = { value: 10 };
+var observer = new PathObserver(obj, 'value');
+function getValue(value) { return value * 2 };
+function setValue(value) { return value / 2 };
+
+var transform = new ObserverTransform(observer, getValue, setValue);
+
+// returns 20.
+transform.open(function(newValue, oldValue) {
+  console.log('new: ' + newValue + ', old: ' + oldValue);
+});
+
+obj.value = 20;
+transform.deliver(); // 'new: 40, old: 20'
+transform.setValue(4); // obj.value === 2;
+```
+
+ObserverTransform can also be used to reduce a set of observed values to a single value:
+
+```JavaScript
+var obj = { a: 1, b: 2, c: 3 };
+var observer = new CompoundObserver();
+observer.addPath(obj, 'a');
+observer.addPath(obj, 'b');
+observer.addPath(obj, 'c');
+var transform = new ObserverTrasnform(observer, fuction(values) {
   var value = 0;
   for (var i = 0; i < values.length; i++)
     value += values[i]
   return value;
-}
+});
 
-function compoundObserverCallback(newValue, // new compound value (sum(newValues))
-                                  oldValue, // old comoound value (sum(oldValues)) 
-                                            // index properties will only exist for values which are changed
-                                  observedObjects) { // array of root objects for observed values
-                                  
-  // respond to compound value having changed
-}
+// returns 6.
+transform.open(function(newValue, oldValue) {
+  console.log('new: ' + newValue + ', old: ' + oldValue);
+});
 
-var observer = new CompoundObserver();
-observer.open(callback);
-observer.addPath(obj, 'a');
-observer.addPath(obj, 'b');
-observer.addPath(obj, 'c');
-observer.start();
+obj.a = 2;
+obj.c = 10;
+transform.deliver(); // 'new: 14, old: 6'
 ```
 
-Constructor:
+### Path objects
+
+`Path.get('foo.bar.baz')` returns a Path object which represents the path. Path objects have the following API:
 
 ```JavaScript
-function CompoundObserver(
-)
+{
+  // Returns the current of the path from the provided object. If eval() is available, a compiled getter will be
+  // used for better performance.
+  getValueFrom: function(obj) { }
+  
+  
+  // Attempts to set the value of the path from the provided object. Returns true IFF the path was reachable and
+  // set.
+  setValueFrom: function(obj, newValue) { }
+}
 ```
 
-Path objects:
+Path objects are unique (e.g. `assert(Path.get('foo.bar.baz') === Path.get('foo.bar.baz'));`) and are used internally to avoid excessive parsing of path strings. Observers which take path strings as arguments will also accept Path objects.
 
-```JavaScript
-// Path.get() takes a string which is a sequence of dot-separated ECMAScript identifiers or integer index values.
-var path = Path.get('foo.bar.baz');
+### Computed Properties
+`Observer.defineComputedProperty` creates an ES5 accessor which acts as a computed property, given an observable:
 
-// There is a 1:1 correspondence between logical path strings and path objects.
-assert(Path.get('foo.bar.baz') === Path.get('foo.bar.baz'));
-assert(Path.get('foo.bar.baz') !== Path.get('foo.bar.bat'));
-
-// The value from an object can be retrieved via getValueFrom()
-assert(2 == Path.get('foo.bar').getValueFrom({ foo: { bar: 2 }});
-
-// The value from an object can be set via setValueFrom()
-var obj = { foo: { bar: 2 }};
-Path.get('foo.bar').setValueFrom(obj, 3);
-assert(3 == obj.foo.bar);
-```
-
-Defining an accessor which creates a synchronous "alias" for a path-value from an object. The created accessor property notifies (if Object.observe is available) when the dependent value changes.
 
 ```JavaScript
 var obj = { a: { b: 1 } };
-var alias = { };
+var target = { };
 
-var closer = PathObserver.defineProperty(alias, 'val', obj, 'a.b' );
+var observer = new PathObserver(obj, 'a.b');
+var closer = Observer.defineComputedProperty(target, 'myProp', observer);
 
-assert(obj.a.b === alias.val);
+assert(obj.a.b === target.myProp);
 
 obj.a.b = 2;
-assert(obj.a.b === alias.val);
+assert(obj.a.b === target.myProp);
 
-alias.val = 3;
-assert(obj.a.b === alias.val);
+target.myProp = 3;
+assert(obj.a.b === target.myProp);
 ```
 
-
-Force delivery of any changes:
-```JavaScript
-var obj = { id: 1 }
-var observer = new ObjectObserve(obj, function(added, removed, changed, getOldValueFn) {
-  // react.
-});
-
-obj.id = 2;
-observer.deliver(); // causes the callback to be invoked reporting the change in value to obj.id.
-```
-
-Reset an observer to discard any previous changes:
-```JavaScript
-var arr = [1, 2, 3];
-var observer = new ArrayObserver(arr, function(splices) {
-  // react.
-});
-
-arr.push(4);
-observer.reset(); // observer forgets about prior changes
-observer.deliver(); // because of the reset, there is nothing to report so callback is not invoked.
-```
-
-Close an observer
-```JavaScript
-var obj = { foo: { bar: 2 } };
-var observer = new PathObserver(arr, function(newValue, oldValue) {
-  // react.
-});
-obj.foo.bar = 3;
-observer.close(); // the observer is now invalid and will never fire its callback
-```
 ### About path-values
 
 * If a path is unreachable from the provided object, its value is `undefined`
