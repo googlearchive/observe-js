@@ -41,7 +41,7 @@ observer.open(function(newValue, oldValue) {
 
 PathObserver will report a change whenever the value obtained by the corresponding path expression (e.g. `obj.foo.bar`) would return a different value.
 
-PathObserver also exposes a `setValue` method which attempts to update the underlying value. Setting the value does not affect notification state (in other words, a caller sets the value but doesn't not `discardChanges`, the `changeFn` will be notified of the change).
+PathObserver also exposes a `setValue` method which attempts to update the underlying value. Setting the value does not affect notification state (in other words, a caller sets the value but does not `discardChanges`, the `changeFn` will be notified of the change).
 
 ```JavaScript
 observer.setValue('boo');
