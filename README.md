@@ -41,7 +41,14 @@ observer.open(function(newValue, oldValue) {
 
 PathObserver will report a change whenever the value obtained by the corresponding path expression (e.g. `obj.foo.bar`) would return a different value.
 
-Of note, WRT Path Observation
+PathObserver also exposes a `setValue` method which attempts to update the underlying value. Setting the value does not affect notification state (in other words, a caller sets the value but doesn't not `discardChanges`, the `changeFn` will be notified of the change).
+
+```JavaScript
+observer.setValue('boo');
+assert(obj.foo.bar == 'boo');
+```
+
+Notes:
  * If the path is ever unreachable, the value is considered to be `undefined`.
  * If the path is empty (e.g. `''`), it is said to be the empty path and its value is its root object.
  * PathObservation respects values on the prototype chain
