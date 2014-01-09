@@ -484,6 +484,15 @@
       toRemove.length = 0;
     }
 
+    function scheduleReset() {
+      if (resetScheduled)
+        return;
+
+      resetNeeded = true;
+      resetScheduled = true;
+      runEOM(reset);
+    }
+
     function callback() {
       var observer;
 
@@ -494,10 +503,6 @@
 
         observer.check_();
       }
-
-      resetNeeded = true;
-      resetScheduled = true;
-      runEOM(reset);
     }
 
     var record = {
@@ -515,9 +520,7 @@
         observerCount--;
 
         if (observerCount) {
-          resetNeeded = true;
-          resetScheduled = true;
-          runEOM(reset);
+          scheduleReset();
           return;
         }
         resetNeeded = false;
@@ -530,7 +533,8 @@
         observers.length = 0;
         objects.length = 0;
         observedSetCache.push(this);
-      }
+      },
+      reset: scheduleReset
     };
 
     return record;
@@ -538,8 +542,9 @@
 
   var lastObservedSet;
 
-  function getObservedSet(observer, obj) {
-    if (!lastObservedSet || lastObservedSet.object !== obj) {
+  function getObservedSet(observer, obj, isolateObservers) {
+    if (isolateObservers || !lastObservedSet ||
+        lastObservedSet.object !== obj) {
       lastObservedSet = observedSetCache.pop() || newObservedSet();
       lastObservedSet.object = obj;
     }
@@ -550,6 +555,7 @@
   var UNOPENED = 0;
   var OPENED = 1;
   var CLOSED = 2;
+  var RESETTING = 3;
 
   var nextObserverId = 1;
 
@@ -876,9 +882,10 @@
     }
   });
 
-  function CompoundObserver() {
+  function CompoundObserver(isolateObservers) {
     Observer.call(this);
 
+    this.isolateObservers_ = isolateObservers;
     this.value_ = [];
     this.directObserver_ = undefined;
     this.observed_ = [];
@@ -892,16 +899,40 @@
     connect_: function() {
       this.check_(undefined, true);
 
-      if (hasObserve) {
-        var object;
-        for (var i = 0; i < this.observed_.length; i += 2) {
-          object = this.observed_[i]
-          if (object !== observerSentinel) {
-            this.directObserver_ = getObservedSet(this, object);
-            break;
-          }
+      if (!hasObserve)
+        return;
+
+      var object;
+      var needsDirectObserver = false;
+      for (var i = 0; i < this.observed_.length; i += 2) {
+        object = this.observed_[i]
+        if (object !== observerSentinel) {
+          needsDirectObserver = true;
+          break;
         }
       }
+
+      if (this.directObserver_) {
+        if (needsDirectObserver) {
+          this.directObserver_.reset();
+          return;
+        }
+        this.directObserver_.close();
+        this.directObserver_ = undefined;
+        return;
+      }
+
+      if (needsDirectObserver)
+        this.directObserver_ = getObservedSet(this, object,
+                                              this.isolateObservers_);
+    },
+
+    closeObservers_: function() {
+      for (var i = 0; i < this.observed_.length; i += 2) {
+        if (this.observed_[i] === observerSentinel)
+          this.observed_[i + 1].close();
+      }
+      this.observed_.length = 0;
     },
 
     disconnect_: function() {
@@ -912,27 +943,40 @@
         this.directObserver_ = undefined;
       }
 
-      for (var i = 0; i < this.observed_.length; i += 2) {
-        if (this.observed_[i] === observerSentinel)
-          this.observed_[i + 1].close();
-      }
-      this.observed_ = undefined;
+      this.closeObservers_();
     },
 
     addPath: function(object, path) {
-      if (this.state_ != UNOPENED)
+      if (this.state_ != UNOPENED && this.state_ != RESETTING)
         throw Error('Cannot add paths once started.');
 
       this.observed_.push(object, path instanceof Path ? path : getPath(path));
     },
 
     addObserver: function(observer) {
-      if (this.state_ != UNOPENED)
+      if (this.state_ != UNOPENED && this.state_ != RESETTING)
         throw Error('Cannot add observers once started.');
 
       var value = observer.open(this.deliver, this);
       this.observed_.push(observerSentinel, observer);
       this.value_.push(value);
+    },
+
+    startReset: function() {
+      if (this.state_ != OPENED)
+        throw Error('Can only reset while open');
+
+      this.state_ = RESETTING;
+      this.closeObservers_();
+    },
+
+    finishReset: function() {
+      if (this.state_ != RESETTING)
+        throw Error('Can only finishReset after startReset');
+      this.state_ = OPENED;
+      this.connect_();
+
+      return this.value_;
     },
 
     iterateObjects_: function(observe) {

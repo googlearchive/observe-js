@@ -1064,6 +1064,51 @@ suite('CompoundObserver Tests', function() {
     observer.close();
   });
 
+  test('reset', function() {
+    var model = { a: 1, b: 2, c: 3 };
+    var callCount = 0;
+    function callback() {
+      callCount++;
+    }
+
+    observer = new CompoundObserver();
+
+    observer.addPath(model, 'a');
+    observer.addPath(model, 'b');
+    assert.deepEqual([1, 2], observer.open(callback));
+
+    model.a = 2;
+    observer.deliver();
+    assert.strictEqual(1, callCount);
+
+    model.b = 3;
+    observer.deliver();
+    assert.strictEqual(2, callCount);
+
+    model.c = 4;
+    observer.deliver();
+    assert.strictEqual(2, callCount);
+
+    observer.startReset();
+    observer.addPath(model, 'b');
+    observer.addPath(model, 'c');
+    assert.deepEqual([3, 4], observer.finishReset())
+
+    model.a = 3;
+    observer.deliver();
+    assert.strictEqual(2, callCount);
+
+    model.b = 4;
+    observer.deliver();
+    assert.strictEqual(3, callCount);
+
+    model.c = 5;
+    observer.deliver();
+    assert.strictEqual(4, callCount);
+
+    observer.close();
+  });
+
   test('Heterogeneous', function() {
     var model = { a: 1, b: 2 };
     var otherModel = { c: 3 };
