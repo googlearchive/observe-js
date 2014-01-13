@@ -1613,4 +1613,4 @@
     'delete': PROP_DELETE_TYPE,
     splice: ARRAY_SPLICE_TYPE
   };
-})(typeof global !== 'undefined' && global ? global : this || window);
+})(typeof global !== 'undefined' && global && typeof module !== 'undefined' && module ? global : this || window);
