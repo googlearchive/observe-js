@@ -228,12 +228,12 @@
     },
 
     iterateObjects: function(obj, observe) {
-      observe(obj);
       for (var i = 0; i < this.length; i++) {
+        if (i)
+          obj = obj[this[i - 1]];
         if (!obj)
           return;
         observe(obj);
-        obj = obj[this[i]];
       }
     },
 
