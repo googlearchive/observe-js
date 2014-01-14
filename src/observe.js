@@ -542,9 +542,8 @@
 
   var lastObservedSet;
 
-  function getObservedSet(observer, obj, isolateObservers) {
-    if (isolateObservers || !lastObservedSet ||
-        lastObservedSet.object !== obj) {
+  function getObservedSet(observer, obj) {
+    if (!lastObservedSet || lastObservedSet.object !== obj) {
       lastObservedSet = observedSetCache.pop() || newObservedSet();
       lastObservedSet.object = obj;
     }
@@ -882,10 +881,9 @@
     }
   });
 
-  function CompoundObserver(isolateObservers) {
+  function CompoundObserver() {
     Observer.call(this);
 
-    this.isolateObservers_ = isolateObservers;
     this.value_ = [];
     this.directObserver_ = undefined;
     this.observed_ = [];
@@ -923,8 +921,7 @@
       }
 
       if (needsDirectObserver)
-        this.directObserver_ = getObservedSet(this, object,
-                                              this.isolateObservers_);
+        this.directObserver_ = getObservedSet(this, object);
     },
 
     closeObservers_: function() {
