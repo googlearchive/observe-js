@@ -957,9 +957,8 @@
       if (this.state_ != UNOPENED && this.state_ != RESETTING)
         throw Error('Cannot add observers once started.');
 
-      var value = observer.open(this.deliver, this);
+      observer.open(this.deliver, this);
       this.observed_.push(observerSentinel, observer);
-      this.value_.push(value);
     },
 
     startReset: function() {
