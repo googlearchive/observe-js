@@ -35,7 +35,6 @@
     this.observers = []
     this.index = 0;
     this.mutationCount = 0;
-    this.boundObserverCallback = this.observerCallback.bind(this);
   }
 
   ObservationBenchmark.prototype = createObject({
@@ -45,7 +44,9 @@
       while (this.objects.length < objectCount) {
         var obj = this.newObject();
         this.objects.push(obj);
-        this.observers.push(this.newObserver(obj));
+        var observer = this.newObserver(obj);
+        observer.open(this.observerCallback, this);
+        this.observers.push(observer);
       }
     },
 
@@ -100,7 +101,7 @@
     },
 
     newObserver: function(obj) {
-      return new ObjectObserver(obj, this.boundObserverCallback);
+      return new ObjectObserver(obj);
     },
 
     mutateObject: function(obj) {
@@ -134,7 +135,7 @@
     },
 
     newObserver: function(array) {
-      return new ArrayObserver(array, this.boundObserverCallback);
+      return new ArrayObserver(array);
     },
 
     mutateObject: function(array) {
@@ -195,7 +196,7 @@
     },
 
     newObserver: function(obj) {
-      return new PathObserver(obj, this.path, this.boundObserverCallback);
+      return new PathObserver(obj, this.path);
     },
 
     mutateObject: function(obj) {
