@@ -18,6 +18,19 @@ var callbackInvoked = false;
 
 window.testingExposeCycleCount = true;
 
+function then(fn) {
+  setTimeout(function() {
+    Platform.performMicrotaskCheckpoint();
+    fn();
+  }, 0);
+
+  return {
+    then: function(next) {
+      return then(next);
+    }
+  };
+}
+
 function noop() {}
 
 function callback() {
@@ -38,8 +51,9 @@ function assertNoChanges() {
   assert.isUndefined(callbackArgs);
 }
 
-function assertPathChanges(expectNewValue, expectOldValue) {
-  observer.deliver();
+function assertPathChanges(expectNewValue, expectOldValue, dontDeliver) {
+  if (!dontDeliver)
+    observer.deliver();
 
   assert.isTrue(callbackInvoked);
 
@@ -48,8 +62,10 @@ function assertPathChanges(expectNewValue, expectOldValue) {
   assert.deepEqual(expectNewValue, newValue);
   assert.deepEqual(expectOldValue, oldValue);
 
-  assert.isTrue(window.dirtyCheckCycleCount === undefined ||
-                window.dirtyCheckCycleCount === 1);
+  if (!dontDeliver) {
+    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
+                  window.dirtyCheckCycleCount === 1);
+  }
 
   callbackArgs = undefined;
   callbackInvoked = false;
@@ -602,6 +618,25 @@ suite('PathObserver Tests', function() {
     assertPathChanges(undefined, 2);
 
     observer.close();
+  });
+
+  test('Path - root is initially null', function(done) {
+    var model = { };
+
+    var path = Path.get('foo');
+    observer = new PathObserver(model, 'foo.bar');
+    observer.open(callback);
+
+    model.foo = { };
+    then(function() {
+      model.foo.bar = 1;
+
+    }).then(function() {
+      assertPathChanges(1, undefined, true);
+
+      observer.close();
+      done();
+    });
   });
 
   test('Path With Indices', function() {

@@ -503,6 +503,8 @@
 
         observer.check_();
       }
+
+      scheduleReset();
     }
 
     var record = {
