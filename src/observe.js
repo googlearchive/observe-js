@@ -310,7 +310,6 @@
     var added = {};
     var removed = {};
     var changed = {};
-    var oldObjectHas = {};
 
     for (var prop in oldObject) {
       var newValue = object[prop];
