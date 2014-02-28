@@ -983,6 +983,28 @@ suite('PathObserver Tests', function() {
     assert.isTrue(target.hasOwnProperty('bar'));
     assert.strictEqual(obj, target.bar);
   });
+
+  test('issue-161', function(done) {
+    var model = { model: 'model' };
+    var ob1 = new PathObserver(model, 'obj.bar');
+    var called = false
+    ob1.open(function() {
+      called = true;
+    });
+
+    var obj2 = new PathObserver(model, 'obj');
+    obj2.open(function() {
+      model.obj.bar = true;
+    });
+
+    model.obj = { 'obj': 'obj' };
+    model.obj.foo = true;
+
+    then(function() {
+      assert.strictEqual(called, true);
+      done();
+    });
+  });
 });
 
 

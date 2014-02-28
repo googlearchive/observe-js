@@ -457,10 +457,6 @@
     }
 
     function reset() {
-      resetScheduled = false;
-      if (!resetNeeded)
-        return;
-
       var objs = toRemove === emptyArray ? [] : toRemove;
       toRemove = objects;
       objects = objs;
@@ -483,16 +479,26 @@
       toRemove.length = 0;
     }
 
+    function scheduledReset() {
+      resetScheduled = false;
+      if (!resetNeeded)
+        return;
+
+      reset();
+    }
+
     function scheduleReset() {
       if (resetScheduled)
         return;
 
       resetNeeded = true;
       resetScheduled = true;
-      runEOM(reset);
+      runEOM(scheduledReset);
     }
 
     function callback() {
+      reset();
+
       var observer;
 
       for (var id in observers) {
@@ -502,8 +508,6 @@
 
         observer.check_();
       }
-
-      scheduleReset();
     }
 
     var record = {
