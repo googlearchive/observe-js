@@ -825,7 +825,7 @@ suite('PathObserver Tests', function() {
       get: function() { return _b; },
       set: function(b) {
         Object.getNotifier(this).notify({
-          type: Observer.changeRecordTypes.update,
+          type: 'update',
           name: 'b',
           oldValue: _b
         });
@@ -928,42 +928,42 @@ suite('PathObserver Tests', function() {
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.add
+        type: 'add'
       },
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.update,
+        type: 'update',
         oldValue: 1
       },
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.update,
+        type: 'update',
         oldValue: 3
       },
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.update,
+        type: 'update',
         oldValue: 5
       },
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.update,
+        type: 'update',
         oldValue: 7
       },
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.update,
+        type: 'update',
         oldValue: undefined
       },
       {
         object: target,
         name: 'computed',
-        type: Observer.changeRecordTypes.reconfigure
+        type: 'reconfigure'
       }
     ]);
 

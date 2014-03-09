@@ -15,12 +15,6 @@
 (function(global) {
   'use strict';
 
-  var PROP_ADD_TYPE = 'add';
-  var PROP_UPDATE_TYPE = 'update';
-  var PROP_RECONFIGURE_TYPE = 'reconfigure';
-  var PROP_DELETE_TYPE = 'delete';
-  var ARRAY_SPLICE_TYPE = 'splice';
-
   // Detect and do basic sanity checking on Object/Array.observe.
   function detectObjectObserve() {
     if (typeof Object.observe !== 'function' ||
@@ -35,44 +29,29 @@
     }
 
     var test = {};
+    var arr = [];
     Object.observe(test, callback);
+    Array.observe(arr, callback);
     test.id = 1;
     test.id = 2;
     delete test.id;
+    arr.push(1, 2);
+    arr.length = 0;
+
     Object.deliverChangeRecords(callback);
-    if (records.length !== 3)
+    if (records.length !== 5)
       return false;
 
-    // TODO(rafaelw): Remove this when new change record type names make it to
-    // chrome release.
-    if (records[0].type == 'new' &&
-        records[1].type == 'updated' &&
-        records[2].type == 'deleted') {
-      PROP_ADD_TYPE = 'new';
-      PROP_UPDATE_TYPE = 'updated';
-      PROP_RECONFIGURE_TYPE = 'reconfigured';
-      PROP_DELETE_TYPE = 'deleted';
-    } else if (records[0].type != 'add' ||
-               records[1].type != 'update' ||
-               records[2].type != 'delete') {
-      console.error('Unexpected change record names for Object.observe. ' +
-                    'Using dirty-checking instead');
+    if (records[0].type != 'add' ||
+        records[1].type != 'update' ||
+        records[2].type != 'delete' ||
+        records[3].type != 'splice' ||
+        records[4].type != 'splice') {
       return false;
     }
+
     Object.unobserve(test, callback);
-
-    test = [0];
-    Array.observe(test, callback);
-    test[1] = 1;
-    test.length = 0;
-    Object.deliverChangeRecords(callback);
-    if (records.length != 2)
-      return false;
-    if (records[0].type != ARRAY_SPLICE_TYPE ||
-        records[1].type != ARRAY_SPLICE_TYPE) {
-      return false;
-    }
-    Array.unobserve(test, callback);
+    Array.unobserve(arr, callback);
 
     return true;
   }
@@ -1081,10 +1060,11 @@
     }
   }
 
-  var expectedRecordTypes = {};
-  expectedRecordTypes[PROP_ADD_TYPE] = true;
-  expectedRecordTypes[PROP_UPDATE_TYPE] = true;
-  expectedRecordTypes[PROP_DELETE_TYPE] = true;
+  var expectedRecordTypes = {
+    add: true,
+    update: true,
+    delete: true
+  };
 
   function notifyFunction(object, name) {
     if (typeof Object.observe !== 'function')
@@ -1108,7 +1088,7 @@
     var value = observable.open(function(newValue, oldValue) {
       value = newValue;
       if (notify)
-        notify(PROP_UPDATE_TYPE, oldValue);
+        notify('update', oldValue);
     });
 
     Object.defineProperty(target, name, {
@@ -1150,10 +1130,10 @@
       if (!(record.name in oldValues))
         oldValues[record.name] = record.oldValue;
 
-      if (record.type == PROP_UPDATE_TYPE)
+      if (record.type == 'update')
         continue;
 
-      if (record.type == PROP_ADD_TYPE) {
+      if (record.type == 'add') {
         if (record.name in removed)
           delete removed[record.name];
         else
@@ -1550,12 +1530,12 @@
     for (var i = 0; i < changeRecords.length; i++) {
       var record = changeRecords[i];
       switch(record.type) {
-        case ARRAY_SPLICE_TYPE:
+        case 'splice':
           mergeSplice(splices, record.index, record.removed.slice(), record.addedCount);
           break;
-        case PROP_ADD_TYPE:
-        case PROP_UPDATE_TYPE:
-        case PROP_DELETE_TYPE:
+        case 'add':
+        case 'update':
+        case 'delete':
           if (!isIndex(record.name))
             continue;
           var index = toNumber(record.name);
@@ -1604,14 +1584,4 @@
   global.CompoundObserver = CompoundObserver;
   global.Path = Path;
   global.ObserverTransform = ObserverTransform;
-
-  // TODO(rafaelw): Only needed for testing until new change record names
-  // make it to release.
-  global.Observer.changeRecordTypes = {
-    add: PROP_ADD_TYPE,
-    update: PROP_UPDATE_TYPE,
-    reconfigure: PROP_RECONFIGURE_TYPE,
-    'delete': PROP_DELETE_TYPE,
-    splice: ARRAY_SPLICE_TYPE
-  };
 })(typeof global !== 'undefined' && global && typeof module !== 'undefined' && module ? global : this || window);
