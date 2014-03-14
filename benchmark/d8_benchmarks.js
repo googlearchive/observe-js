@@ -12,13 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
-  This is a harness so that the ChangeSummary benchmarks can be run and profiled
-  using V8's d8 shell. Doing requires modifying V8's src/object-observe.js to
-  expose full delivery of all pending changes to observers via
-  Object.deliverAllChangesRecords(). This is *not* a part of the spec and is
-  just a hack to allow profiling the benchmarks from d8.
-*/
+// Flags: --allow-natives-syntax
 
 var console = {
   log: print

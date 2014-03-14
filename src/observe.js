@@ -621,7 +621,14 @@
 
   var runningMicrotaskCheckpoint = false;
 
-  var hasDebugForceFullDelivery = typeof Object.deliverAllChangeRecords == 'function';
+  var hasDebugForceFullDelivery = hasObserve && (function() {
+    try {
+      eval('%RunMicrotasks()');
+      return true;
+    } catch (ex) {
+      return false;
+    }
+  })();
 
   global.Platform = global.Platform || {};
 
@@ -630,7 +637,7 @@
       return;
 
     if (hasDebugForceFullDelivery) {
-      Object.deliverAllChangeRecords();
+      eval('%RunMicrotasks()');
       return;
     }
 
