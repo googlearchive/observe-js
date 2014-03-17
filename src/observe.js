@@ -210,7 +210,7 @@
       for (var i = 0; i < this.length; i++) {
         if (i)
           obj = obj[this[i - 1]];
-        if (!obj)
+        if (!isObject(obj))
           return;
         observe(obj);
       }
@@ -420,7 +420,7 @@
     var resetScheduled = false;
 
     function observe(obj) {
-      if (!isObject(obj))
+      if (!obj)
         return;
 
       var index = toRemove.indexOf(obj);
