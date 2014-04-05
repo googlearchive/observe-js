@@ -401,6 +401,28 @@
     };
   }
 
+  /*
+   * The observedSet abstraction is a perf optimization which reduces the total
+   * number of Object.observe observations of a set of objects. The idea is that
+   * groups of Observers will have some object dependencies in common and this
+   * observed set ensures that each object in the transitive closure of
+   * dependencies is only observed once. The observedSet acts as a write barrier
+   * such that whenever any change comes through, all Observers are checked for
+   * changed values.
+   *
+   * Note that this optimization is explicitly moving work from setup-time to
+   * change-time.
+   *
+   * TODO(rafaelw): Implement "garbage collection". In order to move work off
+   * the critical path, when Observers are closed, their observed objects are
+   * not Object.unobserve(d). As a result, it's possible that if the observedSet
+   * is kept open, but some Observers have been closed, it could case "leaks"
+   * (reprevent otherwise collectable objects from being collected). At some
+   * point, we should implement incremental "gc" which keeps a list of
+   * observedSets which may need clean-up and does small amounts of cleanup on a
+   * timeout until all is clean.
+   */
+
   function getObservedObject(observer, object, arrayObserve) {
     var dir = observedObjectCache.pop() || newObservedObject();
     dir.open(observer);
@@ -408,26 +430,18 @@
     return dir;
   }
 
-  var emptyArray = [];
   var observedSetCache = [];
 
   function newObservedSet() {
-    var observers = [];
     var observerCount = 0;
+    var observers = [];
     var objects = [];
-    var toRemove = emptyArray;
-    var resetNeeded = false;
-    var resetScheduled = false;
 
     function observe(obj) {
       if (!obj)
         return;
 
-      var index = toRemove.indexOf(obj);
-      if (index >= 0) {
-        toRemove[index] = undefined;
-        objects.push(obj);
-      } else if (objects.indexOf(obj) < 0) {
+      if (objects.indexOf(obj) < 0) {
         objects.push(obj);
         Object.observe(obj, callback);
       }
@@ -435,57 +449,20 @@
       observe(Object.getPrototypeOf(obj));
     }
 
-    function reset() {
-      var objs = toRemove === emptyArray ? [] : toRemove;
-      toRemove = objects;
-      objects = objs;
-
-      var observer;
-      for (var id in observers) {
-        observer = observers[id];
-        if (!observer || observer.state_ != OPENED)
-          continue;
-
-        observer.iterateObjects_(observe);
-      }
-
-      for (var i = 0; i < toRemove.length; i++) {
-        var obj = toRemove[i];
-        if (obj)
-          Object.unobserve(obj, callback);
-      }
-
-      toRemove.length = 0;
-    }
-
-    function scheduledReset() {
-      resetScheduled = false;
-      if (!resetNeeded)
-        return;
-
-      reset();
-    }
-
-    function scheduleReset() {
-      if (resetScheduled)
-        return;
-
-      resetNeeded = true;
-      resetScheduled = true;
-      runEOM(scheduledReset);
-    }
-
     function callback() {
-      reset();
-
       var observer;
+      for (var i = 0; i < observers.length; i++) {
+        observer = observers[i];
+        if (observer.state_ == OPENED) {
+          observer.iterateObjects_(observe);
+        }
+      }
 
-      for (var id in observers) {
-        observer = observers[id];
-        if (!observer || observer.state_ != OPENED)
-          continue;
-
-        observer.check_();
+      for (var i = 0; i < observers.length; i++) {
+        observer = observers[i];
+        if (observer.state_ == OPENED) {
+          observer.check_();
+        }
       }
     }
 
@@ -493,21 +470,15 @@
       object: undefined,
       objects: objects,
       open: function(obs) {
-        observers[obs.id_] = obs;
+        observers.push(obs);
         observerCount++;
         obs.iterateObjects_(observe);
       },
       close: function(obs) {
-        var anyLeft = false;
-
-        observers[obs.id_] = undefined;
         observerCount--;
-
-        if (observerCount) {
-          scheduleReset();
+        if (observerCount > 0) {
           return;
         }
-        resetNeeded = false;
 
         for (var i = 0; i < objects.length; i++) {
           Object.unobserve(objects[i], callback);
@@ -517,8 +488,7 @@
         observers.length = 0;
         objects.length = 0;
         observedSetCache.push(this);
-      },
-      reset: scheduleReset
+      }
     };
 
     return record;
@@ -901,37 +871,22 @@
         }
       }
 
-      if (this.directObserver_) {
-        if (needsDirectObserver) {
-          this.directObserver_.reset();
-          return;
-        }
-        this.directObserver_.close();
-        this.directObserver_ = undefined;
-        return;
-      }
-
       if (needsDirectObserver)
         this.directObserver_ = getObservedSet(this, object);
     },
 
-    closeObservers_: function() {
+    disconnect_: function() {
       for (var i = 0; i < this.observed_.length; i += 2) {
         if (this.observed_[i] === observerSentinel)
           this.observed_[i + 1].close();
       }
       this.observed_.length = 0;
-    },
-
-    disconnect_: function() {
-      this.value_ = undefined;
+      this.value_.length = 0;
 
       if (this.directObserver_) {
         this.directObserver_.close(this);
         this.directObserver_ = undefined;
       }
-
-      this.closeObservers_();
     },
 
     addPath: function(object, path) {
@@ -954,7 +909,7 @@
         throw Error('Can only reset while open');
 
       this.state_ = RESETTING;
-      this.closeObservers_();
+      this.disconnect_();
     },
 
     finishReset: function() {
