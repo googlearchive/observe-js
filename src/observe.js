@@ -829,7 +829,7 @@
     Observer.call(this);
 
     this.object_ = object;
-    this.path_ = path instanceof Path ? path : getPath(path);
+    this.path_ = getPath(path);
     this.directObserver_ = undefined;
   }
 
@@ -938,7 +938,7 @@
       if (this.state_ != UNOPENED && this.state_ != RESETTING)
         throw Error('Cannot add paths once started.');
 
-      this.observed_.push(object, path instanceof Path ? path : getPath(path));
+      this.observed_.push(object, getPath(path));
     },
 
     addObserver: function(observer) {
