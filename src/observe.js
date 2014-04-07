@@ -68,6 +68,12 @@
       return false;
     }
 
+    // Don't test for eval if we're running in a Chrome App environment.
+    // We check for APIs set that only exist in a Chrome App context.
+    if (typeof chrome !== 'undefined' && chrome.app && chrome.app.runtime) {
+      return false;
+    }
+
     try {
       var f = new Function('', 'return true;');
       return f();
