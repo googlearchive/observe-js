@@ -422,8 +422,8 @@
    * TODO(rafaelw): Implement "garbage collection". In order to move work off
    * the critical path, when Observers are closed, their observed objects are
    * not Object.unobserve(d). As a result, it's possible that if the observedSet
-   * is kept open, but some Observers have been closed, it could case "leaks"
-   * (reprevent otherwise collectable objects from being collected). At some
+   * is kept open, but some Observers have been closed, it could cause "leaks"
+   * (prevent otherwise collectable objects from being collected). At some
    * point, we should implement incremental "gc" which keeps a list of
    * observedSets which may need clean-up and does small amounts of cleanup on a
    * timeout until all is clean.
