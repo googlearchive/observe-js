@@ -535,8 +535,8 @@
       addToAll(this);
       this.callback_ = callback;
       this.target_ = target;
-      this.state_ = OPENED;
       this.connect_();
+      this.state_ = OPENED;
       return this.value_;
     },
 
@@ -545,11 +545,11 @@
         return;
 
       removeFromAll(this);
-      this.state_ = CLOSED;
       this.disconnect_();
       this.value_ = undefined;
       this.callback_ = undefined;
       this.target_ = undefined;
+      this.state_ = CLOSED;
     },
 
     deliver: function() {
@@ -906,7 +906,6 @@
       if (this.state_ != UNOPENED && this.state_ != RESETTING)
         throw Error('Cannot add observers once started.');
 
-      observer.open(this.deliver, this);
       this.observed_.push(observerSentinel, observer);
     },
 
@@ -939,11 +938,17 @@
     check_: function(changeRecords, skipChanges) {
       var oldValues;
       for (var i = 0; i < this.observed_.length; i += 2) {
-        var pathOrObserver = this.observed_[i+1];
         var object = this.observed_[i];
-        var value = object === observerSentinel ?
-            pathOrObserver.discardChanges() :
-            pathOrObserver.getValueFrom(object)
+        var path = this.observed_[i+1];
+        var value;
+        if (object === observerSentinel) {
+          var observable = path;
+          value = this.state_ === UNOPENED ?
+              observable.open(this.deliver, this) :
+              observable.discardChanges();
+        } else {
+          value = path.getValueFrom(object);
+        }
 
         if (skipChanges) {
           this.value_[i / 2] = value;

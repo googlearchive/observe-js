@@ -1174,10 +1174,6 @@ suite('CompoundObserver Tests', function() {
     function setValueFn(value) { return value / 2; }
 
     var compound = new CompoundObserver;
-    assert.throws(function () {
-      compound.addObserver(1);
-    });
-
     compound.addPath(model, 'a');
     compound.addObserver(new ObserverTransform(new PathObserver(model, 'b'),
                                                valueFn, setValueFn));
