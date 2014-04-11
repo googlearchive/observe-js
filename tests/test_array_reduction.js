@@ -4,7 +4,12 @@ suite('ArrayReduction Tests',function(){
   var reductionObserver;
 
   setup(function(){
-    obj = {};
+    function TestClass() {}
+
+    Observer.createBindablePrototypeAccessor(TestClass.prototype,
+                                             'reducedValue');
+
+    obj = new TestClass;
     array = [
       {id:0},
       {id:1}
@@ -15,8 +20,7 @@ suite('ArrayReduction Tests',function(){
       return value;
     }, []);
 
-    reductionObserver = Observer.defineComputedProperty(obj,'reducedValue',
-                                                        reduction);
+    reductionObserver = Observer.bindToInstance(obj,'reducedValue', reduction);
   });
 
   teardown(function(){

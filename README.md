@@ -12,16 +12,16 @@ observe-js implements a set of observers (PathObserver, ArrayObserver, ObjectObs
 
 ```JavaScript
 {
-  // Begins observation. Value changes will be reported by invoking |changeFn| with |opt_receiver| as 
+  // Begins observation. Value changes will be reported by invoking |changeFn| with |opt_receiver| as
   // the target, if provided. Returns the initial value of the observation.
   open: function(changeFn, opt_receiver) {},
-  
+
   // Report any changes now (does nothing if there are no changes to report).
   deliver: function() {}
-  
+
   // If there are changes to report, ignore them. Returns the current value of the observation.
   discardChanges: function() {},
-  
+
   // Ends observation. Frees resources and drops references to observed objects.
   close: function() {},
 }
@@ -182,8 +182,8 @@ transform.deliver(); // 'new: 14, old: 6'
   // Returns the current of the path from the provided object. If eval() is available, a compiled getter will be
   // used for better performance.
   getValueFrom: function(obj) { }
-  
-  
+
+
   // Attempts to set the value of the path from the provided object. Returns true IFF the path was reachable and
   // set.
   setValueFrom: function(obj, newValue) { }
@@ -191,26 +191,6 @@ transform.deliver(); // 'new: 14, old: 6'
 ```
 
 Path objects are unique (e.g. `assert(Path.get('foo.bar.baz') === Path.get('foo.bar.baz'));`) and are used internally to avoid excessive parsing of path strings. Observers which take path strings as arguments will also accept Path objects.
-
-### Computed Properties
-`Observer.defineComputedProperty` creates an ES5 accessor which acts as a computed property, given an observable:
-
-
-```JavaScript
-var obj = { a: { b: 1 } };
-var target = { };
-
-var observer = new PathObserver(obj, 'a.b');
-var closer = Observer.defineComputedProperty(target, 'myProp', observer);
-
-assert(obj.a.b === target.myProp);
-
-obj.a.b = 2;
-assert(obj.a.b === target.myProp);
-
-target.myProp = 3;
-assert(obj.a.b === target.myProp);
-```
 
 ## About delivery of changes
 

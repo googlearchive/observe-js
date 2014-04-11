@@ -1039,51 +1039,78 @@
     delete: true
   };
 
-  function notifyFunction(object, name) {
-    if (typeof Object.observe !== 'function')
+ var updateRecord = {
+    object: undefined,
+    type: 'update',
+    name: undefined,
+    oldValue: undefined
+  };
+
+  function notify(object, name, value, oldValue) {
+    if (!hasObserve || areSameValue(value, oldValue))
       return;
 
-    var notifier = Object.getNotifier(object);
-    return function(type, oldValue) {
-      var changeRecord = {
-        object: object,
-        type: type,
-        name: name
-      };
-      if (arguments.length === 2)
-        changeRecord.oldValue = oldValue;
-      notifier.notify(changeRecord);
-    }
+    var notifier = object.notifier_;
+    if (!notifier)
+      notifier = object.notifier_ = Object.getNotifier(object);
+
+    updateRecord.object = object;
+    updateRecord.name = name;
+    updateRecord.oldValue = oldValue;
+
+    notifier.notify(updateRecord);
   }
 
-  Observer.defineComputedProperty = function(target, name, observable) {
-    var notify = notifyFunction(target, name);
-    var value = observable.open(function(newValue, oldValue) {
-      value = newValue;
-      if (notify)
-        notify('update', oldValue);
-    });
+  Observer.createBindablePrototypeAccessor = function(proto, name) {
+    var privateName = name + '_';
+    var privateObservable  = name + 'Observable_';
 
-    Object.defineProperty(target, name, {
+    if (proto.hasOwnProperty(name))
+      proto[privateName] = proto[name];
+
+    Object.defineProperty(proto, name, {
       get: function() {
-        observable.deliver();
-        return value;
+        var observable = this[privateObservable];
+        if (observable)
+          observable.deliver();
+
+        return this[privateName];
       },
-      set: function(newValue) {
-        observable.setValue(newValue);
-        return newValue;
+      set: function(value) {
+        var observable = this[privateObservable];
+        if (observable) {
+          observable.setValue(value);
+          return;
+        }
+
+        var oldValue = this[privateName];
+        this[privateName] = value;
+        notify(this, name, value, oldValue);
+
+        return value;
       },
       configurable: true
     });
+  }
+
+  Observer.bindToInstance = function(instance, name, observable) {
+    var privateName = name + '_';
+    var privateObservable  = name + 'Observable_';
+
+    instance[privateObservable] = observable;
+    var oldValue = instance[privateName];
+    var value = observable.open(function(value, oldValue) {
+      instance[privateName] = value;
+      notify(instance, name, value, oldValue);
+    });
+
+    instance[privateName] = value;
+    notify(instance, name, value, oldValue);
 
     return {
       close: function() {
         observable.close();
-        Object.defineProperty(target, name, {
-          value: value,
-          writable: true,
-          configurable: true
-        });
+        instance[privateObservable] = undefined;
       }
     };
   }

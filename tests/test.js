@@ -845,26 +845,32 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
-  test('DefineProperty Cascade', function() {
+  test('Bound property cascade', function() {
+    function MyClass() {}
+
+    Observer.createBindablePrototypeAccessor(MyClass.prototype, 'value');
+
+    var a = new MyClass;
+    var b = new MyClass;
+    var c = new MyClass;
+
     var root = {
       value: 1,
-      a: {
-        b: {}
-      },
-      c: {}
+      a: new MyClass,
+      c: new MyClass
     };
 
-    var a = {};
-    var b = {};
-    var c = {};
+    root.a.b = new MyClass;
 
-    root.a.observer = Observer.defineComputedProperty(root.a, 'value',
+    root.a.observer = Observer.bindToInstance(root.a, 'value',
         new PathObserver(root, 'value'));
 
-    root.a.b.observer = Observer.defineComputedProperty(root.a.b, 'value',
+    root.a.value;
+
+    root.a.b.observer = Observer.bindToInstance(root.a.b, 'value',
         new PathObserver(root.a, 'value'));
 
-    root.c.observer = Observer.defineComputedProperty(root.c, 'value',
+    root.c.observer = Observer.bindToInstance(root.c, 'value',
         new PathObserver(root, 'value'));
 
     root.c.value = 2;
@@ -875,9 +881,13 @@ suite('PathObserver Tests', function() {
     root.c.observer.close();
   });
 
-  test('DefineProperty', function() {
+  test('Bound Property', function() {
+    function MyClass() {}
+
+    Observer.createBindablePrototypeAccessor(MyClass.prototype, 'computed');
+
     var source = { foo: { bar: 1 }};
-    var target = {};
+    var target = new MyClass;
     var changeRecords;
     var callback;
     if (typeof Object.observe === 'function') {
@@ -889,10 +899,9 @@ suite('PathObserver Tests', function() {
       Object.observe(target, callback);
     }
 
-    var observer = Observer.defineComputedProperty(target, 'computed',
+    var observer = Observer.bindToInstance(target, 'computed',
         new PathObserver(source, 'foo.bar'));
 
-    assert.isTrue(target.hasOwnProperty('computed'));
     assert.strictEqual(1, target.computed);
 
     target.computed = 2;
@@ -917,18 +926,22 @@ suite('PathObserver Tests', function() {
     assert.strictEqual(9, target.computed);
 
     observer.close();
-    assert.isTrue(target.hasOwnProperty('computed'));
     assert.strictEqual(9, target.computed);
 
     if (!changeRecords)
       return;
 
     Object.deliverChangeRecords(callback);
+    changeRecords = changeRecords.filter(function(rec) {
+      return rec.name == 'computed';
+    });
+
     assert.deepEqual(changeRecords, [
       {
         object: target,
         name: 'computed',
-        type: 'add'
+        type: 'update',
+        oldValue: undefined
       },
       {
         object: target,
@@ -959,28 +972,25 @@ suite('PathObserver Tests', function() {
         name: 'computed',
         type: 'update',
         oldValue: undefined
-      },
-      {
-        object: target,
-        name: 'computed',
-        type: 'reconfigure'
       }
     ]);
 
     Object.unobserve(target, callback);
   });
 
-  test('DefineProperty - empty path', function() {
-    var target = {}
-    var observer = Observer.defineComputedProperty(target, 'foo',
-                                                   new PathObserver(1));
-    assert.isTrue(target.hasOwnProperty('foo'));
+  test('Bound Property - empty path', function() {
+    function MyClass() {}
+
+    Observer.createBindablePrototypeAccessor(MyClass.prototype, 'foo');
+    Observer.createBindablePrototypeAccessor(MyClass.prototype, 'bar');
+
+    var target = new MyClass;
+    var observer = Observer.bindToInstance(target, 'foo', new PathObserver(1));
     assert.strictEqual(1, target.foo);
 
     var obj = {};
-    var observer2 = Observer.defineComputedProperty(target, 'bar',
-                                                    new PathObserver(obj));
-    assert.isTrue(target.hasOwnProperty('bar'));
+    var observer2 = Observer.bindToInstance(target, 'bar',
+                                            new PathObserver(obj));
     assert.strictEqual(obj, target.bar);
   });
 
