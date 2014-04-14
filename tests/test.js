@@ -881,6 +881,38 @@ suite('PathObserver Tests', function() {
     root.c.observer.close();
   });
 
+  test('BindToInstance - resolveFn', function() {
+    function MyClass() {}
+
+    Observer.createBindablePrototypeAccessor(MyClass.prototype, 'value');
+
+    var a = new MyClass;
+    var obj1 = { value: 2 };
+    a.value = 1;
+
+    var b = new MyClass;
+    b.value = 4;
+    var obj2 = { value: 3 };
+
+    function preferEven(val1, val2) {
+      if (val1 % 2)
+        return val2;
+      return val1;
+    }
+
+    var bound1 = Observer.bindToInstance(a, 'value',
+        new PathObserver(obj1, 'value'), preferEven);
+
+    var bound2 = Observer.bindToInstance(b, 'value',
+        new PathObserver(obj2, 'value'), preferEven);
+
+    assert.strictEqual(a.value, 2);
+    assert.strictEqual(b.value, 4);
+
+    bound1.close();
+    bound2.close();
+  });
+
   test('Bound Property', function() {
     function MyClass() {}
 

@@ -1092,7 +1092,7 @@
     });
   }
 
-  Observer.bindToInstance = function(instance, name, observable) {
+  Observer.bindToInstance = function(instance, name, observable, resolveFn) {
     var privateName = name + '_';
     var privateObservable  = name + 'Observable_';
 
@@ -1102,6 +1102,15 @@
       instance[privateName] = value;
       notify(instance, name, value, oldValue);
     });
+
+    if (resolveFn && !areSameValue(oldValue, value)) {
+      var resolvedValue = resolveFn(oldValue, value);
+      if (!areSameValue(value, resolvedValue)) {
+        value = resolvedValue;
+        if (observable.setValue)
+          observable.setValue(value);
+      }
+    }
 
     instance[privateName] = value;
     notify(instance, name, value, oldValue);
