@@ -71,15 +71,18 @@ function assertPathChanges(expectNewValue, expectOldValue, dontDeliver) {
   callbackInvoked = false;
 }
 
-function assertCompoundPathChanges(expectNewValues, expectOldValues) {
+function assertCompoundPathChanges(expectNewValues, expectOldValues,
+                                   expectObserved) {
   observer.deliver();
 
   assert.isTrue(callbackInvoked);
 
   var newValues = callbackArgs[0];
   var oldValues = callbackArgs[1];
+  var observed = callbackArgs[2];
   assert.deepEqual(expectNewValues, newValues);
   assert.deepEqual(expectOldValues, oldValues);
+  assert.deepEqual(expectObserved, observed);
 
   assert.isTrue(window.dirtyCheckCycleCount === undefined ||
                 window.dirtyCheckCycleCount === 1);
@@ -257,8 +260,7 @@ suite('Basic Tests', function() {
     });
     observer.close();
 
-    observer = new CompoundObserver(new PathObserver({ id: 1 }, 'id'),
-                                    noop, noop);
+    observer = new CompoundObserver();
     observer.open(callback);
     assert.throws(function() {
       observer.open(callback);
@@ -1106,14 +1108,18 @@ suite('CompoundObserver Tests', function() {
     var model = { a: 1, b: 2, c: 3 };
 
     observer = new CompoundObserver();
-    observer.addObserver(new PathObserver(model, 'a'));
-    observer.addObserver(new PathObserver(model, 'b'));
-    observer.addObserver(new PathObserver(model, Path.get('c')));
+    var pathObserver1 = new PathObserver(model, 'a');
+    var pathObserver2 = new PathObserver(model, 'b');
+    var pathObserver3 = new PathObserver(model, Path.get('c'));
+
+    observer.addObserver(pathObserver1);
+    observer.addObserver(pathObserver2);
+    observer.addObserver(pathObserver3);
     observer.open(callback);
 
-    var observerCallbackArg = [model, Path.get('a'),
-                               model, Path.get('b'),
-                               model, Path.get('c')];
+    var observerCallbackArg = [Observer.observerSentinel_, pathObserver1,
+                               Observer.observerSentinel_, pathObserver2,
+                               Observer.observerSentinel_, pathObserver3];
     model.a = -10;
     model.b = 20;
     model.c = 30;

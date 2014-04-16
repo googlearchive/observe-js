@@ -1607,6 +1607,7 @@
 
   global.Observer = Observer;
   global.Observer.runEOM_ = runEOM;
+  global.Observer.observerSentinel_ = observerSentinel; // for testing.
   global.Observer.hasObjectObserve = hasObserve;
   global.ArrayObserver = ArrayObserver;
   global.ArrayObserver.calculateSplices = function(current, previous) {
