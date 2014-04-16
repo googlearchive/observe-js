@@ -218,7 +218,7 @@
           obj = obj[this[i - 1]];
         if (!isObject(obj))
           return;
-        observe(obj);
+        observe(obj, this[0]);
       }
     },
 
@@ -442,20 +442,40 @@
     var observerCount = 0;
     var observers = [];
     var objects = [];
+    var rootObj;
+    var rootObjProps;
 
-    function observe(obj) {
+    function observe(obj, prop) {
       if (!obj)
         return;
+
+      if (obj === rootObj)
+        rootObjProps[prop] = true;
 
       if (objects.indexOf(obj) < 0) {
         objects.push(obj);
         Object.observe(obj, callback);
       }
 
-      observe(Object.getPrototypeOf(obj));
+      observe(Object.getPrototypeOf(obj), prop);
     }
 
-    function callback() {
+    function allRootObjNonObservedProps(recs) {
+      for (var i = 0; i < recs.length; i++) {
+        var rec = recs[i];
+        if (rec.object !== rootObj ||
+            rootObjProps[rec.name] ||
+            rec.type === 'setPrototype') {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function callback(recs) {
+      if (allRootObjNonObservedProps(recs))
+        return;
+
       var observer;
       for (var i = 0; i < observers.length; i++) {
         observer = observers[i];
@@ -475,7 +495,12 @@
     var record = {
       object: undefined,
       objects: objects,
-      open: function(obs) {
+      open: function(obs, object) {
+        if (!rootObj) {
+          rootObj = object;
+          rootObjProps = {};
+        }
+
         observers.push(obs);
         observerCount++;
         obs.iterateObjects_(observe);
@@ -493,6 +518,8 @@
 
         observers.length = 0;
         objects.length = 0;
+        rootObj = undefined;
+        rootObjProps = undefined;
         observedSetCache.push(this);
       }
     };
@@ -507,7 +534,7 @@
       lastObservedSet = observedSetCache.pop() || newObservedSet();
       lastObservedSet.object = obj;
     }
-    lastObservedSet.open(observer);
+    lastObservedSet.open(observer, obj);
     return lastObservedSet;
   }
 
