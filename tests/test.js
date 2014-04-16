@@ -72,8 +72,9 @@ function assertPathChanges(expectNewValue, expectOldValue, dontDeliver) {
 }
 
 function assertCompoundPathChanges(expectNewValues, expectOldValues,
-                                   expectObserved) {
-  observer.deliver();
+                                   expectObserved, dontDeliver) {
+  if (!dontDeliver)
+    observer.deliver();
 
   assert.isTrue(callbackInvoked);
 
@@ -84,8 +85,10 @@ function assertCompoundPathChanges(expectNewValues, expectOldValues,
   assert.deepEqual(expectOldValues, oldValues);
   assert.deepEqual(expectObserved, observed);
 
-  assert.isTrue(window.dirtyCheckCycleCount === undefined ||
-                window.dirtyCheckCycleCount === 1);
+  if (!dontDeliver) {
+    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
+                  window.dirtyCheckCycleCount === 1);
+  }
 
   callbackArgs = undefined;
   callbackInvoked = false;
@@ -1066,6 +1069,7 @@ suite('CompoundObserver Tests', function() {
     observer.addPath(model, 'b');
     observer.addPath(model, Path.get('c'));
     observer.open(callback);
+    assertNoChanges();
 
     var observerCallbackArg = [model, Path.get('a'),
                                model, Path.get('b'),
@@ -1099,6 +1103,25 @@ suite('CompoundObserver Tests', function() {
     assert.strictEqual('x', model.c);
     assertNoChanges();
 
+    observer.close();
+  });
+
+  test('reportChangesOnOpen', function() {
+    var model = { a: 1, b: 2, c: 3 };
+
+    observer = new CompoundObserver(true);
+    observer.addPath(model, 'a');
+    observer.addPath(model, 'b');
+    observer.addPath(model, Path.get('c'));
+
+    model.a = -10;
+    model.b = 20;
+    observer.open(callback);
+    var observerCallbackArg = [model, Path.get('a'),
+                               model, Path.get('b'),
+                               model, Path.get('c')];
+    assertCompoundPathChanges([-10, 20, 3], [1, 2, ],
+                              observerCallbackArg, true);
     observer.close();
   });
 

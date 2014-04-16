@@ -875,9 +875,10 @@
     }
   });
 
-  function CompoundObserver() {
+  function CompoundObserver(reportChangesOnOpen) {
     Observer.call(this);
 
+    this.reportChangesOnOpen_ = reportChangesOnOpen;
     this.value_ = [];
     this.directObserver_ = undefined;
     this.observed_ = [];
@@ -889,23 +890,22 @@
     __proto__: Observer.prototype,
 
     connect_: function() {
-      this.check_(undefined, true);
-
-      if (!hasObserve)
-        return;
-
-      var object;
-      var needsDirectObserver = false;
-      for (var i = 0; i < this.observed_.length; i += 2) {
-        object = this.observed_[i]
-        if (object !== observerSentinel) {
-          needsDirectObserver = true;
-          break;
+      if (hasObserve) {
+        var object;
+        var needsDirectObserver = false;
+        for (var i = 0; i < this.observed_.length; i += 2) {
+          object = this.observed_[i]
+          if (object !== observerSentinel) {
+            needsDirectObserver = true;
+            break;
+          }
         }
+
+        if (needsDirectObserver)
+          this.directObserver_ = getObservedSet(this, object);
       }
 
-      if (needsDirectObserver)
-        this.directObserver_ = getObservedSet(this, object);
+      this.check_(undefined, !this.reportChangesOnOpen_);
     },
 
     disconnect_: function() {
@@ -926,7 +926,12 @@
       if (this.state_ != UNOPENED && this.state_ != RESETTING)
         throw Error('Cannot add paths once started.');
 
-      this.observed_.push(object, getPath(path));
+      var path = getPath(path);
+      this.observed_.push(object, path);
+      if (!this.reportChangesOnOpen_)
+        return;
+      var index = this.observed_.length / 2 - 1;
+      this.value_[index] = path.getValueFrom(object);
     },
 
     addObserver: function(observer) {
@@ -934,6 +939,10 @@
         throw Error('Cannot add observers once started.');
 
       this.observed_.push(observerSentinel, observer);
+      if (!this.reportChangesOnOpen_)
+        return;
+      var index = this.observed_.length / 2 - 1;
+      this.value_[index] = observer.open(this.deliver, this);
     },
 
     startReset: function() {
