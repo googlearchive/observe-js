@@ -1083,7 +1083,15 @@
   };
 
   function notify(object, name, value, oldValue) {
-    if (!hasObserve || areSameValue(value, oldValue))
+    if (areSameValue(value, oldValue))
+      return;
+
+    // TODO(rafaelw): Hack hack hack. This entire code really needs to move
+    // out of observe-js into polymer.
+    if (typeof object.propertyChanged_ == 'function')
+      object.propertyChanged_(name, value, oldValue);
+
+    if (!hasObserve)
       return;
 
     var notifier = object.notifier_;
