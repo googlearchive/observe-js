@@ -59,15 +59,6 @@
   var hasObserve = detectObjectObserve();
 
   function detectEval() {
-    // don't test for eval if document has CSP securityPolicy object and we can see that
-    // eval is not supported. This avoids an error message in console even when the exception
-    // is caught
-    if (global.document &&
-        'securityPolicy' in global.document &&
-        !global.document.securityPolicy.allowsEval) {
-      return false;
-    }
-
     // Don't test for eval if we're running in a Chrome App environment.
     // We check for APIs set that only exist in a Chrome App context.
     if (typeof chrome !== 'undefined' && chrome.app && chrome.app.runtime) {
