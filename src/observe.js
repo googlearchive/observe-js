@@ -119,7 +119,7 @@
   var ident = identStart + '+' + identPart + '*';
   var elementIndex = '(?:[0-9]|[1-9]+[0-9]+)';
   var identOrElementIndex = '(?:' + ident + '|' + elementIndex + ')';
-  var path = '(?:' + identOrElementIndex + ')(?:\\s*\\.\\s*' + identOrElementIndex + ')*';
+  var path = '(?:' + identOrElementIndex + ')(?:\\.' + identOrElementIndex + ')*';
   var pathRegExp = new RegExp('^' + path + '$');
 
   function isPathValid(s) {
@@ -150,7 +150,7 @@
       return this;
     }
 
-    s.split(/\s*\.\s*/).filter(function(part) {
+    s.split(/\./).filter(function(part) {
       return part;
     }).forEach(function(part) {
       this.push(part);

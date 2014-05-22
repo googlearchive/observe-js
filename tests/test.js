@@ -118,9 +118,9 @@ suite('Path', function() {
   test('valid paths', function() {
     assert.isTrue(Path.get('a').valid);
     assert.isTrue(Path.get('a.b').valid);
-    assert.isTrue(Path.get('a. b').valid);
-    assert.isTrue(Path.get('a .b').valid);
-    assert.isTrue(Path.get('a . b').valid);
+    assert.isFalse(Path.get('a. b').valid);
+    assert.isFalse(Path.get('a .b').valid);
+    assert.isFalse(Path.get('a . b').valid);
     assert.isTrue(Path.get('').valid);
     assert.isTrue(Path.get(' ').valid);
     assert.isTrue(Path.get(null).valid);
@@ -440,7 +440,7 @@ suite('PathObserver Tests', function() {
   test('Delivery Until No Changes', function() {
     var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
-    var observer = new PathObserver(obj, 'foo . bar');
+    var observer = new PathObserver(obj, 'foo.bar');
     observer.open(function() {
       callbackCount++;
       if (!obj.foo.bar)
