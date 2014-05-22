@@ -2,7 +2,7 @@
   "name": "observe-js",
   "version": "0.0.0",
   "description": "ObserveJS =============",
-  "main": "observe.js",
+  "main": "src/observe.js",
   "directories": {
     "example": "examples",
     "test": "tests"
