@@ -175,6 +175,8 @@ transform.deliver(); // 'new: 14, old: 6'
 
 ### Path objects
 
+A path is an ECMAScript expression consisting only of identifiers (`myVal`), member accesses (`foo.bar`) and key lookup with literal values (`arr[0]` `obj['str-value'].bar.baz`).
+
 `Path.get('foo.bar.baz')` returns a Path object which represents the path. Path objects have the following API:
 
 ```JavaScript
@@ -190,7 +192,7 @@ transform.deliver(); // 'new: 14, old: 6'
 }
 ```
 
-Path objects are unique (e.g. `assert(Path.get('foo.bar.baz') === Path.get('foo.bar.baz'));`) and are used internally to avoid excessive parsing of path strings. Observers which take path strings as arguments will also accept Path objects.
+Path objects are interned (e.g. `assert(Path.get('foo.bar.baz') === Path.get('foo.bar.baz'));`) and are used internally to avoid excessive parsing of path strings. Observers which take path strings as arguments will also accept Path objects.
 
 ## About delivery of changes
 
