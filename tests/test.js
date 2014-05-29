@@ -469,7 +469,8 @@ suite('PathObserver Tests', function() {
     assert.strictEqual(args.length, 3);
     assert.strictEqual(args[0], 'baz');
     assert.strictEqual(args[1], 'bar');
-    assert.strictEqual(args[2], path);
+    assert.strictEqual(args[2], observer);
+    assert.strictEqual(args[2].path, path);
     observer.close();
   });
 

@@ -1004,6 +1004,10 @@
   PathObserver.prototype = createObject({
     __proto__: Observer.prototype,
 
+    get path() {
+      return this.path_;
+    },
+
     connect_: function() {
       if (hasObserve)
         this.directObserver_ = getObservedSet(this, this.object_);
@@ -1030,7 +1034,7 @@
       if (skipChanges || areSameValue(this.value_, oldValue))
         return false;
 
-      this.report_([this.value_, oldValue, this.path_]);
+      this.report_([this.value_, oldValue, this]);
       return true;
     },
 
