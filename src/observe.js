@@ -1030,7 +1030,7 @@
       if (skipChanges || areSameValue(this.value_, oldValue))
         return false;
 
-      this.report_([this.value_, oldValue]);
+      this.report_([this.value_, oldValue, this.path_]);
       return true;
     },
 

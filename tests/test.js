@@ -451,6 +451,28 @@ suite('PathObserver Tests', function() {
 
   teardown(doTeardown);
 
+  test('Callback args', function() {
+    var obj = {
+      foo: 'bar'
+    };
+
+    var path = Path.get('foo');
+    var observer = new PathObserver(obj, path);
+
+    var args;
+    observer.open(function() {
+      args = Array.prototype.slice.apply(arguments);
+    });
+
+    obj.foo = 'baz';
+    observer.deliver();
+    assert.strictEqual(args.length, 3);
+    assert.strictEqual(args[0], 'baz');
+    assert.strictEqual(args[1], 'bar');
+    assert.strictEqual(args[2], path);
+    observer.close();
+  });
+
   test('invalid', function() {
     var observer = new PathObserver({ a: { b: 1 }} , 'a b');
     observer.open(callback);
