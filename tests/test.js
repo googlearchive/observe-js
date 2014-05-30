@@ -474,6 +474,17 @@ suite('PathObserver Tests', function() {
     observer.close();
   });
 
+  test('PathObserver.path', function() {
+    var obj = {
+      foo: 'bar'
+    };
+
+    var path = Path.get('foo');
+    var observer = new PathObserver(obj, 'foo');
+    assert.strictEqual(observer.path, Path.get('foo'));
+  });
+
+
   test('invalid', function() {
     var observer = new PathObserver({ a: { b: 1 }} , 'a b');
     observer.open(callback);
