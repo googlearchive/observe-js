@@ -87,7 +87,7 @@
     return obj === Object(obj);
   }
 
-  var numberIsNaN = global.Number.isNaN || function isNaN(value) {
+  var numberIsNaN = global.Number.isNaN || function(value) {
     return typeof value === 'number' && global.isNaN(value);
   }
 
@@ -1243,98 +1243,6 @@
     update: true,
     delete: true
   };
-
- var updateRecord = {
-    object: undefined,
-    type: 'update',
-    name: undefined,
-    oldValue: undefined
-  };
-
-  function notify(object, name, value, oldValue) {
-    if (areSameValue(value, oldValue))
-      return;
-
-    // TODO(rafaelw): Hack hack hack. This entire code really needs to move
-    // out of observe-js into polymer.
-    if (typeof object.propertyChanged_ == 'function')
-      object.propertyChanged_(name, value, oldValue);
-
-    if (!hasObserve)
-      return;
-
-    var notifier = object.notifier_;
-    if (!notifier)
-      notifier = object.notifier_ = Object.getNotifier(object);
-
-    updateRecord.object = object;
-    updateRecord.name = name;
-    updateRecord.oldValue = oldValue;
-
-    notifier.notify(updateRecord);
-  }
-
-  Observer.createBindablePrototypeAccessor = function(proto, name) {
-    var privateName = name + '_';
-    var privateObservable  = name + 'Observable_';
-
-    proto[privateName] = proto[name];
-
-    Object.defineProperty(proto, name, {
-      get: function() {
-        var observable = this[privateObservable];
-        if (observable)
-          observable.deliver();
-
-        return this[privateName];
-      },
-      set: function(value) {
-        var observable = this[privateObservable];
-        if (observable) {
-          observable.setValue(value);
-          return;
-        }
-
-        var oldValue = this[privateName];
-        this[privateName] = value;
-        notify(this, name, value, oldValue);
-
-        return value;
-      },
-      configurable: true
-    });
-  }
-
-  Observer.bindToInstance = function(instance, name, observable, resolveFn) {
-    var privateName = name + '_';
-    var privateObservable  = name + 'Observable_';
-
-    instance[privateObservable] = observable;
-    var oldValue = instance[privateName];
-    var value = observable.open(function(value, oldValue) {
-      instance[privateName] = value;
-      notify(instance, name, value, oldValue);
-    });
-
-    if (resolveFn && !areSameValue(oldValue, value)) {
-      var resolvedValue = resolveFn(oldValue, value);
-      if (!areSameValue(value, resolvedValue)) {
-        value = resolvedValue;
-        if (observable.setValue)
-          observable.setValue(value);
-      }
-    }
-
-    instance[privateName] = value;
-    notify(instance, name, value, oldValue);
-
-    return {
-      close: function() {
-        observable.close();
-        instance[privateObservable] = undefined;
-      }
-    };
-  }
 
   function diffObjectFromChangeRecords(object, changeRecords, oldValues) {
     var added = {};
