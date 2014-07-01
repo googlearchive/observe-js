@@ -789,7 +789,7 @@
 
   var runningMicrotaskCheckpoint = false;
 
-  var hasDebugForceFullDelivery = hasObserve && (function() {
+  var hasDebugForceFullDelivery = hasObserve && hasEval && (function() {
     try {
       eval('%RunMicrotasks()');
       return true;
