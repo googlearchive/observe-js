@@ -302,8 +302,9 @@
     if (privateToken !== constructorIsPrivate)
       throw Error('Use Path.get to retrieve path objects');
 
-    if (parts.length)
-      Array.prototype.push.apply(this, parts.slice());
+    for (var i = 0; i < parts.length; i++) {
+      this.push(String(parts[i]));
+    }
 
     if (hasEval && this.length) {
       this.getValueFrom = this.compiledGetValueFromFn();

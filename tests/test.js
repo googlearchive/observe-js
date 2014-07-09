@@ -157,6 +157,11 @@ suite('Path', function() {
     assertPath('foo["baz"]', ['foo', 'baz'], 'foo.baz');
     assertPath('foo["b\\"az"]', ['foo', 'b"az'], 'foo["b\\"az"]');
     assertPath("foo['b\\'az']", ['foo', "b'az"], 'foo["b\'az"]');
+    assertPath(['a', 'b'], ['a', 'b'], 'a.b');
+
+    function Foo(val) { this.val = val; }
+    Foo.prototype.toString = function() { return 'Foo' + this.val; };
+    assertPath([new Foo('a'), new Foo('b')], ['Fooa', 'Foob'], 'Fooa.Foob');
 
     assertInvalidPath('.');
     assertInvalidPath(' . ');
