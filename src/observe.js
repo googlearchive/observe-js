@@ -65,6 +65,13 @@
       return false;
     }
 
+    // Firefox OS Apps do not allow eval. This feature detection is very hacky
+    // but even if some other platform adds support for this function this code
+    // will continue to work.
+    if (navigator.getDeviceStorage) {
+      return false;
+    }
+
     try {
       var f = new Function('', 'return true;');
       return f();
