@@ -16,8 +16,6 @@ var observer;
 var callbackArgs = undefined;
 var callbackInvoked = false;
 
-window.testingExposeCycleCount = true;
-
 function then(fn) {
   setTimeout(function() {
     Platform.performMicrotaskCheckpoint();

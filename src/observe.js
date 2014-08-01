@@ -15,6 +15,8 @@
 (function(global) {
   'use strict';
 
+  var testingExposeCycleCount = global.testingExposeCycleCount;
+
   // Detect and do basic sanity checking on Object/Array.observe.
   function detectObjectObserve() {
     if (typeof Object.observe !== 'function' ||
@@ -446,7 +448,7 @@
     while (cycles < MAX_DIRTY_CHECK_CYCLES && observer.check_()) {
       cycles++;
     }
-    if (global.testingExposeCycleCount)
+    if (testingExposeCycleCount)
       global.dirtyCheckCycleCount = cycles;
 
     return cycles > 0;
@@ -845,7 +847,7 @@
         anyChanged = true;
     } while (cycles < MAX_DIRTY_CHECK_CYCLES && anyChanged);
 
-    if (global.testingExposeCycleCount)
+    if (testingExposeCycleCount)
       global.dirtyCheckCycleCount = cycles;
 
     runningMicrotaskCheckpoint = false;
