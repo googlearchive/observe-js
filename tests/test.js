@@ -156,6 +156,7 @@ suite('Path', function() {
     assertPath('foo["b\\"az"]', ['foo', 'b"az'], 'foo["b\\"az"]');
     assertPath("foo['b\\'az']", ['foo', "b'az"], 'foo["b\'az"]');
     assertPath(['a', 'b'], ['a', 'b'], 'a.b');
+    assertPath([''], [''], '[""]');
 
     function Foo(val) { this.val = val; }
     Foo.prototype.toString = function() { return 'Foo' + this.val; };

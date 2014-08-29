@@ -85,7 +85,7 @@
   var hasEval = detectEval();
 
   function isIndex(s) {
-    return +s === s >>> 0;
+    return +s === s >>> 0 && s !== '';
   }
 
   function toNumber(s) {
