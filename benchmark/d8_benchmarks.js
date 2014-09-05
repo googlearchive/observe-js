@@ -22,6 +22,21 @@ var setTimeout = function(callback) {
   callback();
 }
 
+var hasDebugForceFullDelivery = (function() {
+  try {
+    eval('%RunMicrotasks()');
+    return true;
+  } catch (ex) {
+    return false;
+  }
+})();
+
+if (hasDebugForceFullDelivery) {
+  Platform.performMicrotaskCheckpoint = function() {
+    eval('%RunMicrotasks()');
+  };
+}
+
 recordCount = 0;
 
 var alert = print;

@@ -70,7 +70,7 @@
     // Firefox OS Apps do not allow eval. This feature detection is very hacky
     // but even if some other platform adds support for this function this code
     // will continue to work.
-    if (navigator.getDeviceStorage) {
+    if (typeof navigator != 'undefined' && navigator.getDeviceStorage) {
       return false;
     }
 
@@ -799,25 +799,11 @@
 
   var runningMicrotaskCheckpoint = false;
 
-  var hasDebugForceFullDelivery = hasObserve && hasEval && (function() {
-    try {
-      eval('%RunMicrotasks()');
-      return true;
-    } catch (ex) {
-      return false;
-    }
-  })();
-
   global.Platform = global.Platform || {};
 
   global.Platform.performMicrotaskCheckpoint = function() {
     if (runningMicrotaskCheckpoint)
       return;
-
-    if (hasDebugForceFullDelivery) {
-      eval('%RunMicrotasks()');
-      return;
-    }
 
     if (!collectObservers)
       return;
