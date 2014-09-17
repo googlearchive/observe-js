@@ -8,12 +8,23 @@
  */
 
 var observer;
-var callbackArgs = undefined;
-var callbackInvoked = false;
+var path;
+var obj;
+var records;
+
+function callback(recs) {
+  records = recs;
+};
+
+function init(objValue, pathString) {
+  obj = objValue,
+  path = Path.get(pathString);
+  observer.observe(callback, obj, path);
+}
 
 function then(fn) {
   setTimeout(function() {
-    Platform.performMicrotaskCheckpoint();
+    observer.deliverAll();
     fn();
   }, 0);
 
@@ -24,67 +35,49 @@ function then(fn) {
   };
 }
 
-function noop() {}
-
-function callback() {
-  callbackArgs = Array.prototype.slice.apply(arguments);
-  callbackInvoked = true;
+function doSetup() {
+  records = undefined;
+  observer = new Observer();
 }
 
-function doSetup() {}
 function doTeardown() {
-  callbackInvoked = false;
-  callbackArgs = undefined;
+  observer.unobserve(callback);
+  observer.dispose();
+  records = undefined;
+}
+
+function assertRecords(expectRecords, dontDeliver) {
+  if (!dontDeliver)
+    observer.deliver(callback);
+
+  if (expectRecords === records)
+    return;
+
+  assert.strictEqual(expectRecords.length, records.length);
+  for (var i = 0; i < expectRecords.length; i++) {
+    var expect = expectRecords[i];
+    var record = records[i];
+
+    assert.strictEqual(expect.object, record.object);
+    assert.strictEqual(expect.path, record.path);
+    assert.strictEqual(expect.oldValue, record.oldValue);
+    assert.strictEqual(expect.value, record.value);
+  }
+
+  records = undefined;
+}
+
+function assertPathChanges(value, oldValue, dontDeliver) {
+  assertRecords([{
+    object: obj,
+    path: path,
+    oldValue: oldValue,
+    value: value
+  }], dontDeliver);
 }
 
 function assertNoChanges() {
-  if (observer)
-    observer.deliver();
-  assert.isFalse(callbackInvoked);
-  assert.isUndefined(callbackArgs);
-}
-
-function assertPathChanges(expectNewValue, expectOldValue, dontDeliver) {
-  if (!dontDeliver)
-    observer.deliver();
-
-  assert.isTrue(callbackInvoked);
-
-  var newValue = callbackArgs[0];
-  var oldValue = callbackArgs[1];
-  assert.deepEqual(expectNewValue, newValue);
-  assert.deepEqual(expectOldValue, oldValue);
-
-  if (!dontDeliver) {
-    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
-                  window.dirtyCheckCycleCount === 1);
-  }
-
-  callbackArgs = undefined;
-  callbackInvoked = false;
-}
-
-function assertCompoundPathChanges(expectNewValues, expectOldValues,
-                                   expectObserved, dontDeliver) {
-  if (!dontDeliver)
-    observer.deliver();
-
-  assert.isTrue(callbackInvoked);
-
-  var newValues = callbackArgs[0];
-  var oldValues = callbackArgs[1];
-  var observed = callbackArgs[2];
-  assert.deepEqual(expectNewValues, newValues);
-  assert.deepEqual(expectOldValues, oldValues);
-  assert.deepEqual(expectObserved, observed);
-
-  if (!dontDeliver) {
-    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
-                  window.dirtyCheckCycleCount === 1);
-  }
-
-  callbackArgs = undefined;
-  callbackInvoked = false;
+  assertRecords(undefined);
 }
 
 var createObject = ('__proto__' in {}) ?
@@ -254,6 +247,7 @@ suite('Path', function() {
   });
 });
 
+/*
 suite('Basic Tests', function() {
 
   test('Exception Doesnt Stop Notification', function() {
@@ -443,7 +437,7 @@ suite('ObserverTransform', function() {
     observer.close();
   });
 })
-
+*/
 suite('PathObserver Tests', function() {
 
   setup(doSetup);
@@ -451,453 +445,282 @@ suite('PathObserver Tests', function() {
   teardown(doTeardown);
 
   test('Callback args', function() {
-    var obj = {
-      foo: 'bar'
-    };
-
-    var path = Path.get('foo');
-    var observer = new PathObserver(obj, path);
-
-    var args;
-    observer.open(function() {
-      args = Array.prototype.slice.apply(arguments);
-    });
-
+    init({ foo: 'bar' }, 'foo');
     obj.foo = 'baz';
-    observer.deliver();
-    assert.strictEqual(args.length, 3);
-    assert.strictEqual(args[0], 'baz');
-    assert.strictEqual(args[1], 'bar');
-    assert.strictEqual(args[2], observer);
-    assert.strictEqual(args[2].path, path);
-    observer.close();
-  });
-
-  test('PathObserver.path', function() {
-    var obj = {
-      foo: 'bar'
-    };
-
-    var path = Path.get('foo');
-    var observer = new PathObserver(obj, 'foo');
-    assert.strictEqual(observer.path, Path.get('foo'));
-  });
-
-
-  test('invalid', function() {
-    var observer = new PathObserver({ a: { b: 1 }} , 'a b');
-    observer.open(callback);
-    assert.strictEqual(undefined, observer.value);
-    observer.deliver();
-    assert.isFalse(callbackInvoked);
-  });
-
-  test('Optional target for callback', function() {
-    var target = {
-      changed: function(value, oldValue) {
-        this.called = true;
-      }
-    };
-    var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo');
-    observer.open(target.changed, target);
-    obj.foo = 2;
-    observer.deliver();
-    assert.isTrue(target.called);
-
-    observer.close();
+    assertPathChanges('baz', 'bar');
   });
 
   test('Delivery Until No Changes', function() {
     var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
-    var observer = new PathObserver(obj, 'foo . bar');
-    observer.open(function() {
+
+    function callback() {
       callbackCount++;
       if (!obj.foo.bar)
         return;
 
       obj.foo.bar--;
-    });
+    }
 
+    observer.observe(callback, obj, 'foo . bar');
     obj.foo.bar--;
-    observer.deliver();
+    observer.deliver(callback);
 
     assert.equal(5, callbackCount);
-
-    observer.close();
   });
 
   test('Path disconnect', function() {
-    var arr = {};
+    init({ foo: 'bar' }, 'foo');
+    obj.foo = 'baz';
+    assertPathChanges('baz', 'bar')
 
-    arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo');
-    observer.open(callback);
-    arr.foo = 'baz';
+    obj.foo = 'bar';
+    observer.unobserve(callback);
 
-    assertPathChanges('baz', 'bar');
-    arr.foo = 'bar';
-
-    observer.close();
-
-    arr.foo = 'boo';
+    obj.foo = 'boo';
     assertNoChanges();
   });
 
   test('Path discardChanges', function() {
-    var arr = {};
+    init({ foo: 'bar' }, 'foo');
+    obj.foo = 'baz';
+    assertPathChanges('baz', 'bar')
 
-    arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo');
-    observer.open(callback);
-    arr.foo = 'baz';
-
-    assertPathChanges('baz', 'bar');
-
-    arr.foo = 'bat';
-    observer.discardChanges();
+    obj.foo = 'bat';
+    observer.discardChanges(callback);
     assertNoChanges();
 
-    arr.foo = 'bag';
+    obj.foo = 'bag';
     assertPathChanges('bag', 'bat');
-    observer.close();
   });
 
   test('Path setValue', function() {
-    var obj = {};
-
-    obj.foo = 'bar';
-    observer = new PathObserver(obj, 'foo');
-    observer.open(callback);
+    init({ foo: 'bar' }, 'foo');
     obj.foo = 'baz';
 
-    observer.setValue('bat');
+    path.setValueFrom(obj, 'bat');
     assert.strictEqual(obj.foo, 'bat');
+
     assertPathChanges('bat', 'bar');
 
-    observer.setValue('bot');
-    observer.discardChanges();
+    path.setValueFrom(obj, 'bot');
+    observer.discardChanges(callback);
     assertNoChanges();
-
-    observer.close();
-  });
-
-  test('Degenerate Values', function() {
-    var emptyPath = Path.get();
-    observer = new PathObserver(null, '');
-    observer.open(callback);
-    assert.equal(null, observer.value);
-    observer.close();
-
-    var foo = {};
-    observer = new PathObserver(foo, '');
-    assert.equal(foo, observer.open(callback));
-    observer.close();
-
-    observer = new PathObserver(3, '');
-    assert.equal(3, observer.open(callback));
-    observer.close();
-
-    observer = new PathObserver(undefined, 'a');
-    assert.equal(undefined, observer.open(callback));
-    observer.close();
-
-    var bar = { id: 23 };
-    observer = new PathObserver(undefined, 'a/3!');
-    assert.equal(undefined, observer.open(callback));
-    observer.close();
   });
 
   test('Path NaN', function() {
-    var foo = { val: 1 };
-    observer = new PathObserver(foo, 'val');
-    observer.open(callback);
-    foo.val = 0/0;
+    init({ val: 1}, 'val');
+    obj.val = 0/0;
 
-    // Can't use assertSummary because deepEqual() will fail with NaN
-    observer.deliver();
-    assert.isTrue(callbackInvoked);
-    assert.isTrue(isNaN(callbackArgs[0]));
-    assert.strictEqual(1, callbackArgs[1]);
-    observer.close();
+    // Can't use assertRecords because NaN === NaN is false.
+    observer.deliver(callback);
+    assert.strictEqual(records.length, 1);
+    assert.isTrue(isNaN(records[0].value));
   });
 
   test('Path Set Value Back To Same', function() {
-    var obj = {};
-    var path = Path.get('foo');
-
-    path.setValueFrom(obj, 3);
-    assert.equal(3, obj.foo);
-
-    observer = new PathObserver(obj, 'foo');
-    assert.equal(3, observer.open(callback));
+    init({ foo: 1}, 'foo');
 
     path.setValueFrom(obj, 2);
-    assert.equal(2, observer.discardChanges());
-
-    path.setValueFrom(obj, 3);
-    assert.equal(3, observer.discardChanges());
-
+    observer.discardChanges(callback);
     assertNoChanges();
 
-    observer.close();
+    path.setValueFrom(obj, 3);
+    path.setValueFrom(obj, 2);
+    assertNoChanges();
   });
 
   test('Path Triple Equals', function() {
-    var model = { };
+    init({}, 'foo');
 
-    observer = new PathObserver(model, 'foo');
-    observer.open(callback);
-
-    model.foo = null;
+    obj.foo = null;
     assertPathChanges(null, undefined);
 
-    model.foo = undefined;
+    obj.foo = undefined;
     assertPathChanges(undefined, null);
-
-    observer.close();
   });
 
   test('Path Simple', function() {
-    var model = { };
+    init({ foo: null }, 'foo');
+    obj.foo = undefined;
 
-    observer = new PathObserver(model, 'foo');
-    observer.open(callback);
+    assertPathChanges(undefined, null);
 
-    model.foo = 1;
+    obj.foo = 1;
     assertPathChanges(1, undefined);
 
-    model.foo = 2;
+    obj.foo = 2;
     assertPathChanges(2, 1);
 
-    delete model.foo;
+    delete obj.foo;
     assertPathChanges(undefined, 2);
-
-    observer.close();
-  });
-
-  test('Path Simple - path object', function() {
-    var model = { };
-
-    var path = Path.get('foo');
-    observer = new PathObserver(model, path);
-    observer.open(callback);
-
-    model.foo = 1;
-    assertPathChanges(1, undefined);
-
-    model.foo = 2;
-    assertPathChanges(2, 1);
-
-    delete model.foo;
-    assertPathChanges(undefined, 2);
-
-    observer.close();
   });
 
   test('Path - root is initially null', function(done) {
-    var model = { };
+    init({}, 'foo.bar');
 
-    var path = Path.get('foo');
-    observer = new PathObserver(model, 'foo.bar');
-    observer.open(callback);
-
-    model.foo = { };
+    obj.foo = { };
     then(function() {
-      model.foo.bar = 1;
+      obj.foo.bar = 1;
 
     }).then(function() {
       assertPathChanges(1, undefined, true);
 
-      observer.close();
       done();
     });
   });
 
   test('Path With Indices', function() {
-    var model = [];
-
-    observer = new PathObserver(model, '[0]');
-    observer.open(callback);
-
-    model.push(1);
+    init([], '[0]');
+    obj.push(1);
     assertPathChanges(1, undefined);
-
-    observer.close();
   });
 
   test('Path Observation', function() {
-    var model = {
+    init({
       a: {
         b: {
           c: 'hello, world'
         }
       }
-    };
+    }, 'a.b.c');
 
-    observer = new PathObserver(model, 'a.b.c');
-    observer.open(callback);
-
-    model.a.b.c = 'hello, mom';
+    obj.a.b.c = 'hello, mom';
     assertPathChanges('hello, mom', 'hello, world');
 
-    model.a.b = {
+    obj.a.b = {
       c: 'hello, dad'
     };
     assertPathChanges('hello, dad', 'hello, mom');
 
-    model.a = {
+    obj.a = {
       b: {
         c: 'hello, you'
       }
     };
     assertPathChanges('hello, you', 'hello, dad');
 
-    model.a.b = 1;
+    obj.a.b = 1;
     assertPathChanges(undefined, 'hello, you');
 
     // Stop observing
-    observer.close();
+    observer.unobserve(callback);
 
-    model.a.b = {c: 'hello, back again -- but not observing'};
+    obj.a.b = {c: 'hello, back again -- but not observing'};
     assertNoChanges();
 
     // Resume observing
-    observer = new PathObserver(model, 'a.b.c');
-    observer.open(callback);
+    observer.observe(callback, obj, path);
 
-    model.a.b.c = 'hello. Back for reals';
+    obj.a.b.c = 'hello. Back for reals';
     assertPathChanges('hello. Back for reals',
         'hello, back again -- but not observing');
-
-    observer.close();
   });
 
   test('Path Set To Same As Prototype', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         id: 1
       }
-    });
+    }), 'id');
 
-    observer = new PathObserver(model, 'id');
-    observer.open(callback);
-    model.id = 1;
-
+    obj.id = 1;
     assertNoChanges();
-    observer.close();
   });
 
   test('Path Set Read Only', function() {
-    var model = {};
-    Object.defineProperty(model, 'x', {
+    var obj = {};
+    Object.defineProperty(obj, 'x', {
       configurable: true,
       writable: false,
       value: 1
     });
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
+    init(obj, 'x');
 
-    model.x = 2;
+    obj.x = 2;
 
     assertNoChanges();
-    observer.close();
   });
 
   test('Path Set Shadows', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         x: 1
       }
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    model.x = 2;
+    obj.x = 2;
     assertPathChanges(2, 1);
-    observer.close();
   });
 
   test('Delete With Same Value On Prototype', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         x: 1,
       },
       x: 1
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    delete model.x;
+
+    delete obj.x;
     assertNoChanges();
-    observer.close();
   });
 
   test('Delete With Different Value On Prototype', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         x: 1,
       },
       x: 2
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    delete model.x;
+    delete obj.x;
     assertPathChanges(1, 2);
-    observer.close();
   });
 
   test('Value Change On Prototype', function() {
     var proto = {
       x: 1
     }
-    var model = createObject({
+    init(createObject({
       __proto__: proto
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    model.x = 2;
+    obj.x = 2;
     assertPathChanges(2, 1);
 
-    delete model.x;
+    delete obj.x;
     assertPathChanges(1, 2);
 
     proto.x = 3;
     assertPathChanges(3, 1);
-    observer.close();
   });
 
   // FIXME: Need test of observing change on proto.
 
   test('Delete Of Non Configurable', function() {
-    var model = {};
-    Object.defineProperty(model, 'x', {
+    var obj = {};
+    Object.defineProperty(obj, 'x', {
       configurable: false,
       value: 1
     });
+    init(obj, 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-
-    delete model.x;
+    delete obj.x;
     assertNoChanges();
-    observer.close();
   });
 
   test('Notify', function() {
     if (typeof Object.getNotifier !== 'function')
       return;
 
-    var model = {
+    var obj = {
       a: {}
     }
 
     var _b = 2;
 
-    Object.defineProperty(model.a, 'b', {
+    Object.defineProperty(obj.a, 'b', {
       get: function() { return _b; },
       set: function(b) {
         Object.getNotifier(this).notify({
@@ -909,30 +732,27 @@ suite('PathObserver Tests', function() {
         _b = b;
       }
     });
+    init(obj, 'a.b');
 
-    observer = new PathObserver(model, 'a.b');
-    observer.open(callback);
     _b = 3;
     assertPathChanges(3, 2);
 
-    model.a.b = 4; // will be observed.
+    obj.a.b = 4; // will be observed.
     assertPathChanges(4, 3);
-
-    observer.close();
   });
 
   test('issue-161', function(done) {
     var model = { model: 'model' };
-    var ob1 = new PathObserver(model, 'obj.bar');
-    var called = false
-    ob1.open(function() {
+    function callback1() {
       called = true;
-    });
+    }
+    observer.observe(callback1, model, 'obj.bar');
+    var called = false
 
-    var obj2 = new PathObserver(model, 'obj');
-    obj2.open(function() {
+    function callback2() {
       model.obj.bar = true;
-    });
+    }
+    observer.observe(callback2, model, 'obj');
 
     model.obj = { 'obj': 'obj' };
     model.obj.foo = true;
@@ -944,7 +764,7 @@ suite('PathObserver Tests', function() {
   });
 });
 
-
+/*
 suite('CompoundObserver Tests', function() {
 
   setup(doSetup);
@@ -2088,3 +1908,4 @@ suite('ObjectObserver Tests', function() {
     observer.close();
   });
 });
+*/
