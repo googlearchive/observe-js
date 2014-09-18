@@ -270,7 +270,7 @@ suite('Basic Tests', function() {
       count++;
       throw 'ouch';
     }
-    observer.objectObserve(callback1, obj);
+    observer.observeObject(callback1, obj);
 
     function callback2() {
       count++;
@@ -282,7 +282,7 @@ suite('Basic Tests', function() {
       count++;
       throw 'ouch';
     }
-    observer.arrayObserve(callback3, obj);
+    observer.observeArray(callback3, obj);
 
     obj[0] = 2;
     obj[1] = 2;
@@ -716,12 +716,12 @@ suite('observe Tests', function() {
   });
 });
 
-suite('arrayObserve Tests', function() {
+suite('observeArray Tests', function() {
 
   function init(objValue, pathString) {
     obj = objValue,
     path = Path.get(pathString);
-    observer.arrayObserve(callback, obj, path);
+    observer.observeArray(callback, obj, path);
   }
 
   setup(doSetup);
@@ -818,7 +818,7 @@ suite('arrayObserve Tests', function() {
       obj.shift();
     }
 
-    observer.arrayObserve(callback, obj, path);
+    observer.observeArray(callback, obj, path);
 
     obj.shift();
     observer.deliver(callback);
@@ -1307,12 +1307,12 @@ suite('arrayObserve Tests', function() {
   });
 });
 
-suite('objectObserve Tests', function() {
+suite('observeObject Tests', function() {
 
   function init(objValue, pathString) {
     obj = objValue,
     path = Path.get(pathString);
-    observer.objectObserve(callback, obj, path);
+    observer.observeObject(callback, obj, path);
   }
 
   setup(doSetup);
@@ -1358,7 +1358,7 @@ suite('objectObserve Tests', function() {
       obj.foo--;
     }
 
-    observer.objectObserve(callback, obj);
+    observer.observeObject(callback, obj);
 
     obj.foo--;
     observer.deliver(callback);
@@ -1486,7 +1486,7 @@ suite('objectObserve Tests', function() {
     assertNoChanges();
 
     // Re-observe -- should see an new event again.
-    observer.objectObserve(callback, obj);
+    observer.observeObject(callback, obj);
     obj.id2 = 202;;
     assertObjectChanges({
       added: {

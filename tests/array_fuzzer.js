@@ -119,14 +119,14 @@ ArrayFuzzer.prototype.go = function() {
   var copy = this.copy = this.arr.slice();
   this.origCopy = this.copy.slice();
 
-  var observer = new ArrayObserver(this.arr);
-  observer.open(function(splices) {
-    ArrayObserver.applySplices(copy, orig, splices);
-  });
+  function callback(records) {
+    Observer.applySplices(copy, orig, records[0].splices);
+  }
+  var observer = new Observer();
+  observer.observeArray(callback, this.arr);
 
   this.ops = randomArrayOperations(this.arr, ArrayFuzzer.operationCount);
-  observer.deliver();
-  observer.close();
+  observer.deliver(callback);
 }
 
 global.ArrayFuzzer = ArrayFuzzer;
