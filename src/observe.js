@@ -390,7 +390,7 @@
           obj = obj[this[i - 1]];
         if (!isObject(obj))
           return;
-        observe(obj, this[0]);
+        observe(obj, this[i]);
       }
     },
 
@@ -663,14 +663,13 @@
     }
 
     var record = {
-      object: undefined,
       objects: objects,
+      get rootObject() { return rootObj; },
+      set rootObject(value) {
+        rootObj = value;
+        rootObjProps = {};
+      },
       open: function(obs, object) {
-        if (!rootObj) {
-          rootObj = object;
-          rootObjProps = {};
-        }
-
         observers.push(obs);
         observerCount++;
         obs.iterateObjects_(observe);
@@ -691,7 +690,9 @@
         rootObj = undefined;
         rootObjProps = undefined;
         observedSetCache.push(this);
-      }
+        if (lastObservedSet === this)
+          lastObservedSet = null;
+      },
     };
 
     return record;
@@ -700,9 +701,9 @@
   var lastObservedSet;
 
   function getObservedSet(observer, obj) {
-    if (!lastObservedSet || lastObservedSet.object !== obj) {
+    if (!lastObservedSet || lastObservedSet.rootObject !== obj) {
       lastObservedSet = observedSetCache.pop() || newObservedSet();
-      lastObservedSet.object = obj;
+      lastObservedSet.rootObject = obj;
     }
     lastObservedSet.open(observer, obj);
     return lastObservedSet;

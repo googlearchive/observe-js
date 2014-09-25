@@ -942,6 +942,26 @@ suite('PathObserver Tests', function() {
       done();
     });
   });
+
+  test('object cycle', function(done) {
+    var model = { a: {}, c: 1 };
+    model.a.b = model;
+
+    var called = 0;
+    new PathObserver(model, 'a.b.c').open(function() {
+      called++;
+    });
+
+    // This change should be detected, even though it's a change to the root
+    // object and isn't a change to `a`.
+    model.c = 42;
+
+    then(function() {
+      assert.equal(called, 1);
+      done();
+    });
+  });
+
 });
 
 
