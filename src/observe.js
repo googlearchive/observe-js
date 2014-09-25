@@ -608,6 +608,8 @@
 
   var observedSetCache = [];
 
+  var hasOwnProperty = Object.prototype.hasOwnProperty;
+
   function newObservedSet() {
     var observerCount = 0;
     var observers = [];
@@ -619,15 +621,24 @@
       if (!obj)
         return;
 
-      if (obj === rootObj)
+      var observeProto = true;
+      if (obj === rootObj) {
         rootObjProps[prop] = true;
+
+        // If we find the property on the root object, we can skip observing
+        // the prototype, which is expensive. This helps a common use case:
+        // when the user has <template repeat> over items that all share a
+        // prototype. See https://github.com/Polymer/polymer-dev/issues/101
+        observeProto = !hasOwnProperty.call(rootObj, prop);
+      }
 
       if (objects.indexOf(obj) < 0) {
         objects.push(obj);
         Object.observe(obj, callback);
       }
 
-      observe(Object.getPrototypeOf(obj), prop);
+      if (observeProto)
+        observe(Object.getPrototypeOf(obj), prop);
     }
 
     function allRootObjNonObservedProps(recs) {
