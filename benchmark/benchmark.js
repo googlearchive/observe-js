@@ -10,190 +10,171 @@
 (function(global) {
   'use strict';
 
-  var createObject = ('__proto__' in {}) ?
-    function(obj) { return obj; } :
-    function(obj) {
-      var proto = obj.__proto__;
-      if (!proto)
-        return obj;
-      var newObject = Object.create(proto);
-      Object.getOwnPropertyNames(obj).forEach(function(name) {
-        Object.defineProperty(newObject, name,
-                             Object.getOwnPropertyDescriptor(obj, name));
-      });
-      return newObject;
-    };
+  function now() {
+    return typeof performance.now == 'function' ? performance.now() : Date.now();
+  }
 
-  // IE10 & below don't have mutation observers. Just synchronously invoke
-  // callbackFn in this case. Each test iteration with unroll the stack with
-  // a setTimeout so that it doesn't get too deep.
-  var hasMutationObserver = typeof global.MutationObserver === 'function';
-
-  var hasForceGc = typeof global.gc === 'function';
-
-  function EndOfMicrotaskRunner(callbackFn) {
-    if (hasMutationObserver) {
-      var observer = new MutationObserver(callbackFn);
-      var div = document.createElement('div');
-      observer.observe(div, { attributes: true });
-      var pingPong = true;
+  function checkpoint() {
+    if (global.Platform &&
+        typeof Platform.performMicrotaskCheckpoint == 'function') {
+      Platform.performMicrotaskCheckpoint();
     }
-
-    this.schedule = function() {
-      if (hasMutationObserver) {
-        div.setAttribute('ping', pingPong);
-        pingPong = !pingPong;
-      } else {
-        callbackFn();
-      }
-    };
   }
 
-  function BenchmarkRunner(benchmark, tests, variants, completeFn, statusFn) {
-    this.benchmark = benchmark;
-    this.tests = tests;
-    this.variants = variants;
-    this.test = 0;
-    this.variant = 0;
-    this.completeFn = completeFn;
-    this.statusFn = statusFn;
-    this.results = [];
-    this.microtaskRunner =
-      new EndOfMicrotaskRunner(this.runFinished.bind(this));
+  var TESTING_TICKS = 400;
+  var TICKS_PER_FRAME = 16;
+  var MAX_RUNS = 50;
 
+  function Benchmark(testingTicks, ticksPerFrame, maxRuns) {
+    this.testingTicks = testingTicks || TESTING_TICKS;
+    this.ticksPerFrame = ticksPerFrame || TICKS_PER_FRAME;
+    this.maxRuns = maxRuns || 50;
+    this.average = 0;
   }
 
-  BenchmarkRunner.INIT = 0;
-  BenchmarkRunner.ESTIMATE = 1;
-  BenchmarkRunner.TESTING = 2;
-  BenchmarkRunner.maxTime = 400;
-  BenchmarkRunner.maxRuns = 50;
+  Benchmark.prototype = {
+    // Abstract API
+    setup: function(variation) {},
+    test: function() {
+      throw Error('Not test function found');
+    },
+    cleanup: function() {},
 
-  var hasPerformance = typeof global.performance === 'object' &&
-                       typeof global.performance.now === 'function'
+    runOne: function(variation) {
+      this.setup();
 
-  BenchmarkRunner.prototype = {
-    now: function() {
-      return hasPerformance ? performance.now() : Date.now();
+      var before = now();
+      this.test(variation);
+
+      var self = this;
+
+      return Promise.resolve().then(function() {
+        checkpoint();
+
+        var after = now();
+
+        self.cleanup();
+        return after - before;
+      });
     },
 
-    go: function() {
-      this.nextVariant();
+    runMany: function(count, variation) {
+      var self = this;
+
+      return new Promise(function(fulfill) {
+        var total = 0;
+
+        function next(time) {
+          if (!count) {
+            fulfill(total);
+            return;
+          }
+
+          self.runOne(variation).then(function(time) {
+            count--;
+            total += time;
+            next();
+          });
+        }
+
+        requestAnimationFrame(next);
+      });
     },
 
-    nextVariant: function() {
-      // Done with all
-      if (this.test === this.tests.length) {
-        this.benchmark.destroy();
+    runVariation: function(variation, reportFn) {
+      var self = this;
+      reportFn = reportFn || function() {}
 
-        var self = this;
-        setTimeout(function() {
-          Platform.performMicrotaskCheckpoint();
-          self.completeFn(self.results);
+      return new Promise(function(fulfill) {
+        self.runMany(3, variation).then(function(time) {
+          return time/3;
+        }).then(function(estimate) {
+          var runsPerFrame = Math.ceil(self.ticksPerFrame / estimate);
+          var frames = Math.ceil(self.testingTicks / self.ticksPerFrame);
+          var maxFrames = Math.ceil(self.maxRuns / runsPerFrame);
+
+          frames = Math.min(frames, maxFrames);
+          var count = 0;
+          var total = 0;
+
+          function next() {
+            if (!frames) {
+              self.average = total / count;
+              self.dispose();
+              fulfill(self.average);
+              return;
+            }
+
+            self.runMany(runsPerFrame, variation).then(function(time) {
+              frames--;
+              total += time;
+              count += runsPerFrame;
+              reportFn(variation, count);
+              next();
+            });
+          }
+
+          next();
         });
-        return;
-      }
-
-      // Configure this test.
-      if (this.variant === 0) {
-        this.times = [];
-        this.benchmark.setupTest(this.tests[this.test]);
-      }
-
-      this.benchmark.setupVariant(this.variants[this.variant]);
-
-      // Run the test once before timing.
-      this.runSeries(BenchmarkRunner.INIT, 1);
+      });
     },
 
-    variantComplete: function(duration) {
-      this.times.push(duration);
-
-      this.statusFn(this.tests[this.test], this.variants[this.variant],
-                    this.runCount);
-
-      this.benchmark.teardownVariant(this.variants[this.variant]);
-      this.variant++;
-
-      if (this.variant == this.variants.length) {
-        this.results.push(this.times);
-        this.benchmark.teardownTest(this.tests[this.test]);
-        this.test++;
-        this.variant = 0;
+    run: function(variations, reportFn) {
+      if (!Array.isArray(variations)) {
+        return this.runVariation(variations, reportFn);
       }
 
       var self = this;
-      setTimeout(function() {
-        Platform.performMicrotaskCheckpoint();
-        self.nextVariant();
-      }, 0);
-    },
+      variations = variations.slice();
+      return new Promise(function(fulfill) {
+        var results = [];
 
-    runSeries: function(state, count) {
-      this.state = state;
-      this.runCount = count;
-      this.remaining = count;
-      if (hasForceGc) {
-        global.gc();
-        global.gc();
-        global.gc();
-      }
-      this.start = this.now();
-      this.runOne();
-    },
+        function next() {
+          if (!variations.length) {
+            fulfill(results);
+            return;
+          }
 
-    runOne: function() {
-      this.benchmark.run(this.variants[this.variant], this);
-      this.microtaskRunner.schedule();
-    },
+          var variation = variations.shift();
+          self.runVariation(variation, reportFn).then(function(time) {
+            results.push(time);
+            next();
+          });
+        }
 
-    runFinished: function() {
-      Platform.performMicrotaskCheckpoint();
-
-      this.remaining--;
-      if (this.remaining > 0) {
-        this.runOne();
-        return;
-      }
-
-      var duration = (this.now() - this.start) / this.runCount;
-
-      switch (this.state) {
-        case BenchmarkRunner.INIT:
-          // Run the test twice to estimate its time.
-          this.runSeries(BenchmarkRunner.ESTIMATE, 2);
-          break;
-
-        case BenchmarkRunner.ESTIMATE:
-          // Run as many tests as will fit in maxTime.
-          var testingRuns =
-              Math.min(Math.round(BenchmarkRunner.maxTime/duration),
-                       BenchmarkRunner.maxRuns);
-
-          if (testingRuns >= 4)
-            this.runSeries(BenchmarkRunner.TESTING, testingRuns);
-          else
-            this.variantComplete(duration);
-          break;
-        case BenchmarkRunner.TESTING:
-          this.variantComplete(duration);
-          break;
-      }
+        next();
+      });
     }
-  }
-
-  function Benchmark() {}
-
-  Benchmark.prototype = {
-    setupTest: function(setup) {},
-    setupVariant: function(variant) {},
-    run: function(variant) {},
-    teardownVariant: function(variant) {},
-    teardownTest: function(test) {},
-    destroy: function() {}
   };
 
-  global.BenchmarkRunner = BenchmarkRunner;
+  function all(benchmarks, variations, statusFn) {
+    return new Promise(function(fulfill) {
+      var results = [];
+      var current;
+
+      function next() {
+        current = benchmarks.shift();
+
+        if (!current) {
+          fulfill(results);
+          return;
+        }
+
+        function update(variation, runs) {
+          statusFn(current, variation, runs);
+        }
+
+        current.run(variations, update).then(function(time) {
+          results.push(time);
+          next();
+        });
+      }
+
+      next();
+    });
+  }
+
   global.Benchmark = Benchmark;
+  global.Benchmark.all = all;
 
 })(this);
