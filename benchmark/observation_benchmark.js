@@ -38,16 +38,14 @@
       if (this.objects)
         return;
 
+      this.observer = new Observer();
       this.objects = [];
-      this.observers = [];
       this.objectIndex = 0;
 
       while (this.objects.length < this.objectCount) {
         var obj = this.newObject();
         this.objects.push(obj);
-        var observer = this.newObserver(obj);
-        observer.open(this.observerCallback, this);
-        this.observers.push(observer);
+        this.newObserver(obj);
       }
     },
 
@@ -61,28 +59,25 @@
           this.objectIndex = 0;
         }
       }
+
+      if (typeof Object.observe != 'function')
+        this.observer.deliverAll();
     },
 
     cleanup: function() {
       if (this.mutations !== 0)
-        alert('Error: mutationCount == ' + this.mutationCount);
+        alert('Error: mutations == ' + this.mutations);
 
       this.mutations = 0;
     },
 
     dispose: function() {
       this.objects = null;
-      while (this.observers.length) {
-        this.observers.pop().close();
-      }
-      this.observers = null;
-      if (Observer._allObserversCount != 0) {
-        alert('Observers leaked');
-      }
+      this.observer.dispose();
     },
 
-    observerCallback: function() {
-      this.mutations--;
+    observerCallback: function(recs) {
+      this.mutations -= recs.length;
     }
   });
 
@@ -97,8 +92,6 @@
     setup: function() {
       this.mutations = 0;
       this.objects = [];
-      this.observers = [];
-
       while (this.objects.length < this.objectCount) {
         var obj = this.newObject();
         this.objects.push(obj);
@@ -106,24 +99,20 @@
     },
 
     test: function() {
+      this.observer = new Observer();
       for (var i = 0; i < this.objects.length; i++) {
         var obj = this.objects[i];
-        var observer = this.newObserver(obj);
-        observer.open(this.observerCallback, this);
-        this.observers.push(observer);
+        this.newObserver(obj);
       }
     },
 
     cleanup: function() {
-      while (this.observers.length) {
-        this.observers.pop().close();
-      }
-      if (Observer._allObserversCount != 0) {
-        alert('Observers leaked');
-      }
+      this.observer.dispose();
+      this.observer = null;
       this.objects = null;
-      this.observers = null;
+    },
 
+    observerCallback: function() {
     },
 
     dispose: function() {
@@ -152,8 +141,8 @@
       return obj;
     },
 
-    newObserver: function(obj) {
-      return new ObjectObserver(obj);
+    newObserver: function(obj, callback) {
+      this.observer.observeObject(obj, '', this.observerCallback, this);
     },
 
     mutateObject: function(obj) {
@@ -188,8 +177,8 @@
       return obj;
     },
 
-    newObserver: function(obj) {
-      return new ObjectObserver(obj);
+    newObserver: function(obj, callback) {
+      this.observer.observeObject(obj, '', this.observerCallback, this);
     }
   });
 
@@ -214,7 +203,7 @@
     },
 
     newObserver: function(array) {
-      return new ArrayObserver(array);
+      this.observer.observeArray(array, '', this.observerCallback, this);
     },
 
     mutateObject: function(array) {
@@ -259,8 +248,8 @@
       return array;
     },
 
-    newObserver: function(array) {
-      return new ArrayObserver(array);
+    newObserver: function(array, callback) {
+      this.observer.observeArray(array, '', this.observerCallback, this);
     }
   });
 
@@ -296,8 +285,8 @@
       return this.newPath(this.path, 1);
     },
 
-    newObserver: function(obj) {
-      return new PathObserver(obj, this.path);
+    newObserver: function(object) {
+      this.observer.observeValue(object, this.path, this.observerCallback, this);
     },
 
     mutateObject: function(obj) {
@@ -342,8 +331,8 @@
       return this.newPath(this.path, 1);
     },
 
-    newObserver: function(obj) {
-      return new PathObserver(obj, this.path);
+    newObserver: function(obj, callback) {
+      this.observer.observeValue(obj, this.path, this.observerCallback, this);
     }
   });
 

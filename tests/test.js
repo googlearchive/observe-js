@@ -8,12 +8,17 @@
  */
 
 var observer;
-var callbackArgs = undefined;
-var callbackInvoked = false;
+var path;
+var obj;
+var records;
+
+function callback(recs) {
+  records = recs;
+};
 
 function then(fn) {
   setTimeout(function() {
-    Platform.performMicrotaskCheckpoint();
+    observer.deliverAll();
     fn();
   }, 0);
 
@@ -24,67 +29,63 @@ function then(fn) {
   };
 }
 
-function noop() {}
-
-function callback() {
-  callbackArgs = Array.prototype.slice.apply(arguments);
-  callbackInvoked = true;
+function doSetup() {
+  records = undefined;
+  observer = new Observer();
 }
 
-function doSetup() {}
 function doTeardown() {
-  callbackInvoked = false;
-  callbackArgs = undefined;
+  observer.unobserve(callback);
+  observer.dispose();
+  records = undefined;
+}
+
+function assertRecords(expectRecords, dontDeliver) {
+  if (!dontDeliver)
+    observer.deliver(callback);
+
+  if (expectRecords === records)
+    return;
+
+  assert.strictEqual(expectRecords.length, records.length);
+  for (var i = 0; i < expectRecords.length; i++) {
+    var expect = expectRecords[i];
+    var record = records[i];
+
+    assert.strictEqual(expect.object, record.object);
+    assert.strictEqual(expect.path, record.path);
+    assert.strictEqual(expect.oldValue, record.oldValue);
+    assert.strictEqual(expect.value, record.value);
+  }
+
+  records = undefined;
+}
+
+function assertPathChanges(value, oldValue, dontDeliver) {
+  assertRecords([{
+    object: obj,
+    path: path,
+    oldValue: oldValue,
+    value: value
+  }], dontDeliver);
+}
+
+function assertCompoundPathChanges(values, oldValues, paths) {
+  var records = [];
+  for (var i = 0; i < values.length; i++) {
+    records.push({
+      object: obj,
+      path: Path.get(paths[i]),
+      oldValue: oldValues[i],
+      value: values[i]
+    });
+  }
+
+  assertRecords(records);
 }
 
 function assertNoChanges() {
-  if (observer)
-    observer.deliver();
-  assert.isFalse(callbackInvoked);
-  assert.isUndefined(callbackArgs);
-}
-
-function assertPathChanges(expectNewValue, expectOldValue, dontDeliver) {
-  if (!dontDeliver)
-    observer.deliver();
-
-  assert.isTrue(callbackInvoked);
-
-  var newValue = callbackArgs[0];
-  var oldValue = callbackArgs[1];
-  assert.deepEqual(expectNewValue, newValue);
-  assert.deepEqual(expectOldValue, oldValue);
-
-  if (!dontDeliver) {
-    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
-                  window.dirtyCheckCycleCount === 1);
-  }
-
-  callbackArgs = undefined;
-  callbackInvoked = false;
-}
-
-function assertCompoundPathChanges(expectNewValues, expectOldValues,
-                                   expectObserved, dontDeliver) {
-  if (!dontDeliver)
-    observer.deliver();
-
-  assert.isTrue(callbackInvoked);
-
-  var newValues = callbackArgs[0];
-  var oldValues = callbackArgs[1];
-  var observed = callbackArgs[2];
-  assert.deepEqual(expectNewValues, newValues);
-  assert.deepEqual(expectOldValues, oldValues);
-  assert.deepEqual(expectObserved, observed);
-
-  if (!dontDeliver) {
-    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
-                  window.dirtyCheckCycleCount === 1);
-  }
-
-  callbackArgs = undefined;
-  callbackInvoked = false;
+  assertRecords(undefined);
 }
 
 var createObject = ('__proto__' in {}) ?
@@ -117,6 +118,7 @@ function assertInvalidPath(pathString) {
 }
 
 suite('Path', function() {
+
   test('constructor throws', function() {
     assert.throws(function() {
       new Path('foo')
@@ -256,72 +258,44 @@ suite('Path', function() {
 
 suite('Basic Tests', function() {
 
+  setup(doSetup);
+
+  teardown(doTeardown);
+
   test('Exception Doesnt Stop Notification', function() {
-    var model = [1];
+    var obj = [1];
     var count = 0;
 
-    var observer1 = new ObjectObserver(model);
-    observer1.open(function() {
+    function callback1() {
       count++;
       throw 'ouch';
-    });
+    }
+    observer.observeObject(obj, '', callback1);
 
-    var observer2 = new PathObserver(model, '[0]');
-    observer2.open(function() {
+    function callback2() {
       count++;
       throw 'ouch';
-    });
+    }
+    observer.observeValue(obj, '[0]', callback2);
 
-    var observer3 = new ArrayObserver(model);
-    observer3.open(function() {
+    function callback3() {
       count++;
       throw 'ouch';
-    });
+    }
+    observer.observeArray(obj, '', callback3);
 
-    model[0] = 2;
-    model[1] = 2;
+    obj[0] = 2;
+    obj[1] = 2;
 
-    observer1.deliver();
-    observer2.deliver();
-    observer3.deliver();
+    observer.deliver(callback1);
+    observer.deliver(callback2);
+    observer.deliver(callback3);
 
     assert.equal(3, count);
-
-    observer1.close();
-    observer2.close();
-    observer3.close();
   });
 
-  test('Can only open once', function() {
-    observer = new PathObserver({ id: 1 }, 'id');
-    observer.open(callback);
-    assert.throws(function() {
-      observer.open(callback);
-    });
-    observer.close();
-
-    observer = new CompoundObserver();
-    observer.open(callback);
-    assert.throws(function() {
-      observer.open(callback);
-    });
-    observer.close();
-
-    observer = new ObjectObserver({}, 'id');
-    observer.open(callback);
-    assert.throws(function() {
-      observer.open(callback);
-    });
-    observer.close();
-
-    observer = new ArrayObserver([], 'id');
-    observer.open(callback);
-    assert.throws(function() {
-      observer.open(callback);
-    });
-    observer.close();
-
-  });
+/*
+FIXME: !!!
 
   test('No Object.observe performMicrotaskCheckpoint', function() {
     if (typeof Object.observe == 'function')
@@ -355,549 +329,298 @@ suite('Basic Tests', function() {
     observer2.close();
     observer3.close();
   });
+*/
 });
 
-suite('ObserverTransform', function() {
+suite('observe Tests', function() {
 
-  test('Close Invokes Close', function() {
-    var count = 0;
-    var observer = {
-      open: function() {},
-      close: function() { count++; }
-    };
-
-    var observer = new ObserverTransform(observer);
-    observer.open();
-    observer.close();
-    assert.strictEqual(1, count);
-  });
-
-  test('valueFn/setValueFn', function() {
-    var obj = { foo: 1 };
-
-    function valueFn(value) { return value * 2; }
-
-    function setValueFn(value) { return value / 2; }
-
-    observer = new ObserverTransform(new PathObserver(obj, 'foo'),
-                                     valueFn,
-                                     setValueFn);
-    observer.open(callback);
-
-    obj.foo = 2;
-
-    assert.strictEqual(4, observer.discardChanges());
-    assertNoChanges();
-
-    observer.setValue(2);
-    assert.strictEqual(obj.foo, 1);
-    assertPathChanges(2, 4);
-
-    obj.foo = 10;
-    assertPathChanges(20, 2);
-
-    observer.close();
-  });
-
-  test('valueFn - object literal', function() {
-    var model = {};
-
-    function valueFn(value) {
-      return [ value ];
-    }
-
-    observer = new ObserverTransform(new PathObserver(model, 'foo'), valueFn);
-    observer.open(callback);
-
-    model.foo = 1;
-    assertPathChanges([1], [undefined]);
-
-    model.foo = 3;
-    assertPathChanges([3], [1]);
-
-    observer.close();
-  });
-
-  test('CompoundObserver - valueFn reduction', function() {
-    var model = { a: 1, b: 2, c: 3 };
-
-    function valueFn(values) {
-      return values.reduce(function(last, cur) {
-        return typeof cur === 'number' ? last + cur : undefined;
-      }, 0);
-    }
-
-    var compound = new CompoundObserver();
-    compound.addPath(model, 'a');
-    compound.addPath(model, 'b');
-    compound.addPath(model, Path.get('c'));
-
-    observer = new ObserverTransform(compound, valueFn);
-    assert.strictEqual(6, observer.open(callback));
-
-    model.a = -10;
-    model.b = 20;
-    model.c = 30;
-    assertPathChanges(40, 6);
-
-    observer.close();
-  });
-})
-
-suite('PathObserver Tests', function() {
+  function init(objValue, pathString) {
+    obj = objValue,
+    path = Path.get(pathString || '');
+    observer.observeValue(obj, path, callback);
+  }
 
   setup(doSetup);
 
   teardown(doTeardown);
 
   test('Callback args', function() {
-    var obj = {
-      foo: 'bar'
-    };
-
-    var path = Path.get('foo');
-    var observer = new PathObserver(obj, path);
-
-    var args;
-    observer.open(function() {
-      args = Array.prototype.slice.apply(arguments);
-    });
-
+    init({ foo: 'bar' }, 'foo');
     obj.foo = 'baz';
-    observer.deliver();
-    assert.strictEqual(args.length, 3);
-    assert.strictEqual(args[0], 'baz');
-    assert.strictEqual(args[1], 'bar');
-    assert.strictEqual(args[2], observer);
-    assert.strictEqual(args[2].path, path);
-    observer.close();
-  });
-
-  test('PathObserver.path', function() {
-    var obj = {
-      foo: 'bar'
-    };
-
-    var path = Path.get('foo');
-    var observer = new PathObserver(obj, 'foo');
-    assert.strictEqual(observer.path, Path.get('foo'));
-  });
-
-
-  test('invalid', function() {
-    var observer = new PathObserver({ a: { b: 1 }} , 'a b');
-    observer.open(callback);
-    assert.strictEqual(undefined, observer.value);
-    observer.deliver();
-    assert.isFalse(callbackInvoked);
-  });
-
-  test('Optional target for callback', function() {
-    var target = {
-      changed: function(value, oldValue) {
-        this.called = true;
-      }
-    };
-    var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo');
-    observer.open(target.changed, target);
-    obj.foo = 2;
-    observer.deliver();
-    assert.isTrue(target.called);
-
-    observer.close();
+    assertPathChanges('baz', 'bar');
   });
 
   test('Delivery Until No Changes', function() {
     var obj = { foo: { bar: 5 }};
     var callbackCount = 0;
-    var observer = new PathObserver(obj, 'foo . bar');
-    observer.open(function() {
+
+    function callback() {
       callbackCount++;
       if (!obj.foo.bar)
         return;
 
       obj.foo.bar--;
-    });
+    }
 
+    observer.observeValue(obj, 'foo . bar', callback);
     obj.foo.bar--;
-    observer.deliver();
+    observer.deliver(callback);
 
     assert.equal(5, callbackCount);
-
-    observer.close();
   });
 
   test('Path disconnect', function() {
-    var arr = {};
+    init({ foo: 'bar' }, 'foo');
+    obj.foo = 'baz';
+    assertPathChanges('baz', 'bar')
 
-    arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo');
-    observer.open(callback);
-    arr.foo = 'baz';
+    obj.foo = 'bar';
+    observer.unobserve(callback);
 
-    assertPathChanges('baz', 'bar');
-    arr.foo = 'bar';
-
-    observer.close();
-
-    arr.foo = 'boo';
+    obj.foo = 'boo';
     assertNoChanges();
   });
 
   test('Path discardChanges', function() {
-    var arr = {};
+    init({ foo: 'bar' }, 'foo');
+    obj.foo = 'baz';
+    assertPathChanges('baz', 'bar')
 
-    arr.foo = 'bar';
-    observer = new PathObserver(arr, 'foo');
-    observer.open(callback);
-    arr.foo = 'baz';
-
-    assertPathChanges('baz', 'bar');
-
-    arr.foo = 'bat';
-    observer.discardChanges();
+    obj.foo = 'bat';
+    observer.discardChanges(callback);
     assertNoChanges();
 
-    arr.foo = 'bag';
+    obj.foo = 'bag';
     assertPathChanges('bag', 'bat');
-    observer.close();
   });
 
   test('Path setValue', function() {
-    var obj = {};
-
-    obj.foo = 'bar';
-    observer = new PathObserver(obj, 'foo');
-    observer.open(callback);
+    init({ foo: 'bar' }, 'foo');
     obj.foo = 'baz';
 
-    observer.setValue('bat');
+    path.setValueFrom(obj, 'bat');
     assert.strictEqual(obj.foo, 'bat');
+
     assertPathChanges('bat', 'bar');
 
-    observer.setValue('bot');
-    observer.discardChanges();
+    path.setValueFrom(obj, 'bot');
+    observer.discardChanges(callback);
     assertNoChanges();
-
-    observer.close();
-  });
-
-  test('Degenerate Values', function() {
-    var emptyPath = Path.get();
-    observer = new PathObserver(null, '');
-    observer.open(callback);
-    assert.equal(null, observer.value);
-    observer.close();
-
-    var foo = {};
-    observer = new PathObserver(foo, '');
-    assert.equal(foo, observer.open(callback));
-    observer.close();
-
-    observer = new PathObserver(3, '');
-    assert.equal(3, observer.open(callback));
-    observer.close();
-
-    observer = new PathObserver(undefined, 'a');
-    assert.equal(undefined, observer.open(callback));
-    observer.close();
-
-    var bar = { id: 23 };
-    observer = new PathObserver(undefined, 'a/3!');
-    assert.equal(undefined, observer.open(callback));
-    observer.close();
   });
 
   test('Path NaN', function() {
-    var foo = { val: 1 };
-    observer = new PathObserver(foo, 'val');
-    observer.open(callback);
-    foo.val = 0/0;
+    init({ val: 1}, 'val');
+    obj.val = 0/0;
 
-    // Can't use assertSummary because deepEqual() will fail with NaN
-    observer.deliver();
-    assert.isTrue(callbackInvoked);
-    assert.isTrue(isNaN(callbackArgs[0]));
-    assert.strictEqual(1, callbackArgs[1]);
-    observer.close();
+    // Can't use assertRecords because NaN === NaN is false.
+    observer.deliver(callback);
+    assert.strictEqual(records.length, 1);
+    assert.isTrue(isNaN(records[0].value));
   });
 
   test('Path Set Value Back To Same', function() {
-    var obj = {};
-    var path = Path.get('foo');
-
-    path.setValueFrom(obj, 3);
-    assert.equal(3, obj.foo);
-
-    observer = new PathObserver(obj, 'foo');
-    assert.equal(3, observer.open(callback));
+    init({ foo: 1}, 'foo');
 
     path.setValueFrom(obj, 2);
-    assert.equal(2, observer.discardChanges());
-
-    path.setValueFrom(obj, 3);
-    assert.equal(3, observer.discardChanges());
-
+    observer.discardChanges(callback);
     assertNoChanges();
 
-    observer.close();
+    path.setValueFrom(obj, 3);
+    path.setValueFrom(obj, 2);
+    assertNoChanges();
   });
 
   test('Path Triple Equals', function() {
-    var model = { };
+    init({}, 'foo');
 
-    observer = new PathObserver(model, 'foo');
-    observer.open(callback);
-
-    model.foo = null;
+    obj.foo = null;
     assertPathChanges(null, undefined);
 
-    model.foo = undefined;
+    obj.foo = undefined;
     assertPathChanges(undefined, null);
-
-    observer.close();
   });
 
   test('Path Simple', function() {
-    var model = { };
+    init({ foo: null }, 'foo');
+    obj.foo = undefined;
 
-    observer = new PathObserver(model, 'foo');
-    observer.open(callback);
+    assertPathChanges(undefined, null);
 
-    model.foo = 1;
+    obj.foo = 1;
     assertPathChanges(1, undefined);
 
-    model.foo = 2;
+    obj.foo = 2;
     assertPathChanges(2, 1);
 
-    delete model.foo;
+    delete obj.foo;
     assertPathChanges(undefined, 2);
-
-    observer.close();
-  });
-
-  test('Path Simple - path object', function() {
-    var model = { };
-
-    var path = Path.get('foo');
-    observer = new PathObserver(model, path);
-    observer.open(callback);
-
-    model.foo = 1;
-    assertPathChanges(1, undefined);
-
-    model.foo = 2;
-    assertPathChanges(2, 1);
-
-    delete model.foo;
-    assertPathChanges(undefined, 2);
-
-    observer.close();
   });
 
   test('Path - root is initially null', function(done) {
-    var model = { };
+    init({}, 'foo.bar');
 
-    var path = Path.get('foo');
-    observer = new PathObserver(model, 'foo.bar');
-    observer.open(callback);
-
-    model.foo = { };
+    obj.foo = { };
     then(function() {
-      model.foo.bar = 1;
+      obj.foo.bar = 1;
 
     }).then(function() {
       assertPathChanges(1, undefined, true);
 
-      observer.close();
       done();
     });
   });
 
   test('Path With Indices', function() {
-    var model = [];
-
-    observer = new PathObserver(model, '[0]');
-    observer.open(callback);
-
-    model.push(1);
+    init([], '[0]');
+    obj.push(1);
     assertPathChanges(1, undefined);
-
-    observer.close();
   });
 
   test('Path Observation', function() {
-    var model = {
+    init({
       a: {
         b: {
           c: 'hello, world'
         }
       }
-    };
+    }, 'a.b.c');
 
-    observer = new PathObserver(model, 'a.b.c');
-    observer.open(callback);
-
-    model.a.b.c = 'hello, mom';
+    obj.a.b.c = 'hello, mom';
     assertPathChanges('hello, mom', 'hello, world');
 
-    model.a.b = {
+    obj.a.b = {
       c: 'hello, dad'
     };
     assertPathChanges('hello, dad', 'hello, mom');
 
-    model.a = {
+    obj.a = {
       b: {
         c: 'hello, you'
       }
     };
     assertPathChanges('hello, you', 'hello, dad');
 
-    model.a.b = 1;
+    obj.a.b = 1;
     assertPathChanges(undefined, 'hello, you');
 
     // Stop observing
-    observer.close();
+    observer.unobserve(callback);
 
-    model.a.b = {c: 'hello, back again -- but not observing'};
+    obj.a.b = {c: 'hello, back again -- but not observing'};
     assertNoChanges();
 
     // Resume observing
-    observer = new PathObserver(model, 'a.b.c');
-    observer.open(callback);
+    observer.observeValue(obj, path, callback);
 
-    model.a.b.c = 'hello. Back for reals';
+    obj.a.b.c = 'hello. Back for reals';
     assertPathChanges('hello. Back for reals',
         'hello, back again -- but not observing');
-
-    observer.close();
   });
 
   test('Path Set To Same As Prototype', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         id: 1
       }
-    });
+    }), 'id');
 
-    observer = new PathObserver(model, 'id');
-    observer.open(callback);
-    model.id = 1;
-
+    obj.id = 1;
     assertNoChanges();
-    observer.close();
   });
 
   test('Path Set Read Only', function() {
-    var model = {};
-    Object.defineProperty(model, 'x', {
+    var obj = {};
+    Object.defineProperty(obj, 'x', {
       configurable: true,
       writable: false,
       value: 1
     });
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
+    init(obj, 'x');
 
-    model.x = 2;
+    obj.x = 2;
 
     assertNoChanges();
-    observer.close();
   });
 
   test('Path Set Shadows', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         x: 1
       }
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    model.x = 2;
+    obj.x = 2;
     assertPathChanges(2, 1);
-    observer.close();
   });
 
   test('Delete With Same Value On Prototype', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         x: 1,
       },
       x: 1
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    delete model.x;
+
+    delete obj.x;
     assertNoChanges();
-    observer.close();
   });
 
   test('Delete With Different Value On Prototype', function() {
-    var model = createObject({
+    init(createObject({
       __proto__: {
         x: 1,
       },
       x: 2
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    delete model.x;
+    delete obj.x;
     assertPathChanges(1, 2);
-    observer.close();
   });
 
   test('Value Change On Prototype', function() {
     var proto = {
       x: 1
     }
-    var model = createObject({
+    init(createObject({
       __proto__: proto
-    });
+    }), 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-    model.x = 2;
+    obj.x = 2;
     assertPathChanges(2, 1);
 
-    delete model.x;
+    delete obj.x;
     assertPathChanges(1, 2);
 
     proto.x = 3;
     assertPathChanges(3, 1);
-    observer.close();
   });
 
   // FIXME: Need test of observing change on proto.
 
   test('Delete Of Non Configurable', function() {
-    var model = {};
-    Object.defineProperty(model, 'x', {
+    var obj = {};
+    Object.defineProperty(obj, 'x', {
       configurable: false,
       value: 1
     });
+    init(obj, 'x');
 
-    observer = new PathObserver(model, 'x');
-    observer.open(callback);
-
-    delete model.x;
+    delete obj.x;
     assertNoChanges();
-    observer.close();
   });
 
   test('Notify', function() {
     if (typeof Object.getNotifier !== 'function')
       return;
 
-    var model = {
+    var obj = {
       a: {}
     }
 
     var _b = 2;
 
-    Object.defineProperty(model.a, 'b', {
+    Object.defineProperty(obj.a, 'b', {
       get: function() { return _b; },
       set: function(b) {
         Object.getNotifier(this).notify({
@@ -909,30 +632,27 @@ suite('PathObserver Tests', function() {
         _b = b;
       }
     });
+    init(obj, 'a.b');
 
-    observer = new PathObserver(model, 'a.b');
-    observer.open(callback);
     _b = 3;
     assertPathChanges(3, 2);
 
-    model.a.b = 4; // will be observed.
+    obj.a.b = 4; // will be observed.
     assertPathChanges(4, 3);
-
-    observer.close();
   });
 
   test('issue-161', function(done) {
     var model = { model: 'model' };
-    var ob1 = new PathObserver(model, 'obj.bar');
-    var called = false
-    ob1.open(function() {
+    function callback1() {
       called = true;
-    });
+    }
+    observer.observeValue(model, 'obj.bar', callback1);
+    var called = false
 
-    var obj2 = new PathObserver(model, 'obj');
-    obj2.open(function() {
+    function callback2() {
       model.obj.bar = true;
-    });
+    }
+    observer.observeValue(model, 'obj', callback2);
 
     model.obj = { 'obj': 'obj' };
     model.obj.foo = true;
@@ -948,9 +668,10 @@ suite('PathObserver Tests', function() {
     model.a.b = model;
 
     var called = 0;
-    new PathObserver(model, 'a.b.c').open(function() {
+    function callback() {
       called++;
-    });
+    }
+    observer.observeValue(model, 'a.b.c', callback);
 
     // This change should be detected, even though it's a change to the root
     // object and isn't a change to `a`.
@@ -962,246 +683,78 @@ suite('PathObserver Tests', function() {
     });
   });
 
-});
-
-
-suite('CompoundObserver Tests', function() {
-
-  setup(doSetup);
-
-  teardown(doTeardown);
-
-  test('Simple', function() {
-    var model = { a: 1, b: 2, c: 3 };
-
-    observer = new CompoundObserver();
-    observer.addPath(model, 'a');
-    observer.addPath(model, 'b');
-    observer.addPath(model, Path.get('c'));
-    observer.open(callback);
+  test('Multiple', function() {
+    init({ a: 1, b: 2, c: 3 }, 'a');
+    observer.observeValue(obj, 'b', callback);
+    observer.observeValue(obj, Path.get('c'), callback);
     assertNoChanges();
 
-    var observerCallbackArg = [model, Path.get('a'),
-                               model, Path.get('b'),
-                               model, Path.get('c')];
-    model.a = -10;
-    model.b = 20;
-    model.c = 30;
+    obj.a = -10;
+    obj.b = 20;
+    obj.c = 30;
+
     assertCompoundPathChanges([-10, 20, 30], [1, 2, 3],
-                              observerCallbackArg);
+                              ['a', 'b', 'c']);
 
-    model.a = 'a';
-    model.c = 'c';
-    assertCompoundPathChanges(['a', 20, 'c'], [-10,, 30],
-                              observerCallbackArg);
+    obj.a = 'a';
+    obj.c = 'c';
+    assertCompoundPathChanges(['a', 'c'], [-10, 30],
+                              ['a', 'c']);
 
-    model.a = 2;
-    model.b = 3;
-    model.c = 4;
+    obj.a = 2;
+    obj.b = 3;
+    obj.c = 4;
 
     assertCompoundPathChanges([2, 3, 4], ['a', 20, 'c'],
-                              observerCallbackArg);
+                              ['a', 'b', 'c']);
 
-    model.a = 'z';
-    model.b = 'y';
-    model.c = 'x';
-    assert.deepEqual(['z', 'y', 'x'], observer.discardChanges());
+    obj.a = 'z';
+    obj.b = 'y';
+    obj.c = 'x';
+    observer.discardChanges(callback);
     assertNoChanges();
 
-    assert.strictEqual('z', model.a);
-    assert.strictEqual('y', model.b);
-    assert.strictEqual('x', model.c);
+    assert.strictEqual('z', obj.a);
+    assert.strictEqual('y', obj.b);
+    assert.strictEqual('x', obj.c);
     assertNoChanges();
-
-    observer.close();
   });
 
-  test('reportChangesOnOpen', function() {
-    var model = { a: 1, b: 2, c: 3 };
+  test('Report Changes From Observe', function() {
+    init({ a: 1, b: 2, c: 3 }, 'a');
 
-    observer = new CompoundObserver(true);
-    observer.addPath(model, 'a');
-    observer.addPath(model, 'b');
-    observer.addPath(model, Path.get('c'));
+    obj.a = -10;
+    obj.b = 20;
+    observer.observeValue(obj, 'b', callback);
+    assertCompoundPathChanges([-10], [1],['a']);
 
-    model.a = -10;
-    model.b = 20;
-    observer.open(callback);
-    var observerCallbackArg = [model, Path.get('a'),
-                               model, Path.get('b'),
-                               model, Path.get('c')];
-    assertCompoundPathChanges([-10, 20, 3], [1, 2, ],
-                              observerCallbackArg, true);
-    observer.close();
+    obj.a = -20;
+    obj.b = 40;
+    obj.c = 50;
+    observer.observeValue(obj, 'c', callback);
+    assertCompoundPathChanges([-20, 40], [-10, 20],['a', 'b']);
   });
-
-  test('All Observers', function() {
-    function ident(value) { return value; }
-
-    var model = { a: 1, b: 2, c: 3 };
-
-    observer = new CompoundObserver();
-    var pathObserver1 = new PathObserver(model, 'a');
-    var pathObserver2 = new PathObserver(model, 'b');
-    var pathObserver3 = new PathObserver(model, Path.get('c'));
-
-    observer.addObserver(pathObserver1);
-    observer.addObserver(pathObserver2);
-    observer.addObserver(pathObserver3);
-    observer.open(callback);
-
-    var observerCallbackArg = [Observer.observerSentinel_, pathObserver1,
-                               Observer.observerSentinel_, pathObserver2,
-                               Observer.observerSentinel_, pathObserver3];
-    model.a = -10;
-    model.b = 20;
-    model.c = 30;
-    assertCompoundPathChanges([-10, 20, 30], [1, 2, 3],
-                              observerCallbackArg);
-
-    model.a = 'a';
-    model.c = 'c';
-    assertCompoundPathChanges(['a', 20, 'c'], [-10,, 30],
-                              observerCallbackArg);
-
-    observer.close();
-  });
-
-  test('Degenerate Values', function() {
-    var model = {};
-    observer = new CompoundObserver();
-    observer.addPath({}, '.'); // invalid path
-    observer.addPath('obj-value', ''); // empty path
-    observer.addPath({}, 'foo'); // unreachable
-    observer.addPath(3, 'bar'); // non-object with non-empty path
-    var values = observer.open(callback);
-    assert.strictEqual(4, values.length);
-    assert.strictEqual(undefined, values[0]);
-    assert.strictEqual('obj-value', values[1]);
-    assert.strictEqual(undefined, values[2]);
-    assert.strictEqual(undefined, values[3]);
-    observer.close();
-  });
-
-  test('valueFn - return object literal', function() {
-    var model = { a: 1};
-
-    function valueFn(values) {
-      return {};
-    }
-
-    observer = new CompoundObserver(valueFn);
-
-    observer.addPath(model, 'a');
-    observer.open(callback);
-    model.a = 2;
-
-    observer.deliver();
-    assert.isTrue(window.dirtyCheckCycleCount === undefined ||
-                  window.dirtyCheckCycleCount === 1);
-    observer.close();
-  });
-
-  test('reset', function() {
-    var model = { a: 1, b: 2, c: 3 };
-    var callCount = 0;
-    function callback() {
-      callCount++;
-    }
-
-    observer = new CompoundObserver();
-
-    observer.addPath(model, 'a');
-    observer.addPath(model, 'b');
-    assert.deepEqual([1, 2], observer.open(callback));
-
-    model.a = 2;
-    observer.deliver();
-    assert.strictEqual(1, callCount);
-
-    model.b = 3;
-    observer.deliver();
-    assert.strictEqual(2, callCount);
-
-    model.c = 4;
-    observer.deliver();
-    assert.strictEqual(2, callCount);
-
-    observer.startReset();
-    observer.addPath(model, 'b');
-    observer.addPath(model, 'c');
-    assert.deepEqual([3, 4], observer.finishReset())
-
-    model.a = 3;
-    observer.deliver();
-    assert.strictEqual(2, callCount);
-
-    model.b = 4;
-    observer.deliver();
-    assert.strictEqual(3, callCount);
-
-    model.c = 5;
-    observer.deliver();
-    assert.strictEqual(4, callCount);
-
-    observer.close();
-  });
-
-  test('Heterogeneous', function() {
-    var model = { a: 1, b: 2 };
-    var otherModel = { c: 3 };
-
-    function valueFn(value) { return value * 2; }
-    function setValueFn(value) { return value / 2; }
-
-    var compound = new CompoundObserver;
-    compound.addPath(model, 'a');
-    compound.addObserver(new ObserverTransform(new PathObserver(model, 'b'),
-                                               valueFn, setValueFn));
-    compound.addObserver(new PathObserver(otherModel, 'c'));
-
-    function combine(values) {
-      return values[0] + values[1] + values[2];
-    };
-    observer = new ObserverTransform(compound, combine);
-    assert.strictEqual(8, observer.open(callback));
-
-    model.a = 2;
-    model.b = 4;
-    assertPathChanges(13, 8);
-
-    model.b = 10;
-    otherModel.c = 5;
-    assertPathChanges(27, 13);
-
-    model.a = 20;
-    model.b = 1;
-    otherModel.c = 5;
-    assertNoChanges();
-
-    observer.close();
-  })
 });
 
-suite('ArrayObserver Tests', function() {
+suite('observeArray Tests', function() {
+
+  function init(objValue, pathString) {
+    obj = objValue,
+    path = Path.get(pathString);
+    observer.observeArray(obj, path, callback);
+  }
 
   setup(doSetup);
 
   teardown(doTeardown);
 
-  function ensureNonSparse(arr) {
-    for (var i = 0; i < arr.length; i++) {
-      if (i in arr)
-        continue;
-      arr[i] = undefined;
-    }
-  }
+  function assertArrayChanges(expectSplices, dontDeliver) {
+    if (!dontDeliver)
+      observer.deliver(callback);
 
-  function assertArrayChanges(expectSplices) {
-    observer.deliver();
-    var splices = callbackArgs[0];
+    assert.strictEqual(records.length, 1);
 
-    assert.isTrue(callbackInvoked);
+    var splices = records[0].splices;
 
     splices.forEach(function(splice) {
       ensureNonSparse(splice.removed);
@@ -1212,103 +765,91 @@ suite('ArrayObserver Tests', function() {
     });
 
     assert.deepEqual(expectSplices, splices);
-    callbackArgs = undefined;
-    callbackInvoked = false;
+    records = undefined;
+  }
+
+  function ensureNonSparse(arr) {
+    for (var i = 0; i < arr.length; i++) {
+      if (i in arr)
+        continue;
+      arr[i] = undefined;
+    }
   }
 
   function applySplicesAndAssertDeepEqual(orig, copy) {
-    observer.deliver();
-    if (callbackInvoked) {
-      var splices = callbackArgs[0];
-      ArrayObserver.applySplices(copy, orig, splices);
+    observer.deliver(callback);
+
+    if (records) {
+      var splices = records[0].splices;
+      Observer.applySplices(copy, orig, splices);
     }
 
     ensureNonSparse(orig);
     ensureNonSparse(copy);
     assert.deepEqual(orig, copy);
-    callbackArgs = undefined;
-    callbackInvoked = false;
+    records = undefined;
   }
 
   function assertEditDistance(orig, expectDistance) {
-    observer.deliver();
-    var splices = callbackArgs[0];
+    observer.deliver(callback);
+    var splices = records[0].splices;
     var actualDistance = 0;
 
-    if (callbackInvoked) {
+    if (records) {
       splices.forEach(function(splice) {
         actualDistance += splice.addedCount + splice.removed.length;
       });
     }
 
     assert.deepEqual(expectDistance, actualDistance);
-    callbackArgs = undefined;
-    callbackInvoked = false;
+    records = undefined;
   }
 
-  function arrayMutationTest(arr, operations) {
-    var copy = arr.slice();
-    observer = new ArrayObserver(arr);
-    observer.open(callback);
+  function arrayMutationTest(obj, operations) {
+    var copy = obj.slice();
+    init(obj);
+
     operations.forEach(function(op) {
       switch(op.name) {
         case 'delete':
-          delete arr[op.index];
+          delete obj[op.index];
           break;
 
         case 'update':
-          arr[op.index] = op.value;
+          obj[op.index] = op.value;
           break;
 
         default:
-          arr[op.name].apply(arr, op.args);
+          obj[op.name].apply(obj, op.args);
           break;
       }
     });
 
-    applySplicesAndAssertDeepEqual(arr, copy);
-    observer.close();
+    applySplicesAndAssertDeepEqual(obj, copy);
   }
 
-  test('Optional target for callback', function() {
-    var target = {
-      changed: function(splices) {
-        this.called = true;
-      }
-    };
-    var obj = [];
-    var observer = new ArrayObserver(obj);
-    observer.open(target.changed, target);
-    obj.length = 1;
-    observer.deliver();
-    assert.isTrue(target.called);
-    observer.close();
-  });
-
   test('Delivery Until No Changes', function() {
-    var arr = [0, 1, 2, 3, 4];
-    var callbackCount = 0;
-    var observer = new ArrayObserver(arr);
-    observer.open(function() {
-      callbackCount++;
-      arr.shift();
-    });
+    obj = [0, 1, 2, 3, 4];
+    path = Path.get('');
 
-    arr.shift();
-    observer.deliver();
+    var callbackCount = 0;
+    function callback() {
+      callbackCount++;
+      obj.shift();
+    }
+
+    observer.observeArray(obj, path, callback);
+
+    obj.shift();
+    observer.deliver(callback);
 
     assert.equal(5, callbackCount);
-
-    observer.close();
   });
 
-  test('Array disconnect', function() {
-    var arr = [ 0 ];
+  test('Ref new array', function() {
+    init({ arr: [0] }, 'arr');
 
-    observer = new ArrayObserver(arr);
-    observer.open(callback);
-
-    arr[0] = 1;
+    obj.arr[0] = 1;
 
     assertArrayChanges([{
       index: 0,
@@ -1316,45 +857,74 @@ suite('ArrayObserver Tests', function() {
       addedCount: 1
     }]);
 
-    observer.close();
-    arr[1] = 2;
+    obj.arr = [1];
+    assertNoChanges();
+
+    obj.arr = [2, 3];
+    assertArrayChanges([{
+      index: 0,
+      removed: [1],
+      addedCount: 2
+    }]);
+
+    obj.arr.pop();
+    assertArrayChanges([{
+      index: 1,
+      removed: [3],
+      addedCount: 0
+    }]);
+
+    obj.arr = [2, 4];
+    assertArrayChanges([{
+      index: 1,
+      removed: [],
+      addedCount: 1
+    }]);
+  });
+
+  test('Array disconnect', function() {
+    init([0]);
+
+    obj[0] = 1;
+
+    assertArrayChanges([{
+      index: 0,
+      removed: [0],
+      addedCount: 1
+    }]);
+
+    observer.unobserve(callback);
+
+    obj[1] = 2;
     assertNoChanges();
   });
 
   test('Array discardChanges', function() {
-    var arr = [];
+    init([1]);
 
-    arr.push(1);
-    observer = new ArrayObserver(arr);
-    observer.open(callback);
-    arr.push(2);
-
+    obj.push(2);
     assertArrayChanges([{
       index: 1,
       removed: [],
       addedCount: 1
     }]);
 
-    arr.push(3);
-    observer.discardChanges();
+    obj.push(3);
+    observer.discardChanges(callback);
     assertNoChanges();
 
-    arr.pop();
+    obj.pop();
     assertArrayChanges([{
       index: 2,
       removed: [3],
       addedCount: 0
     }]);
-    observer.close();
   });
 
   test('Array', function() {
-    var model = [0, 1];
+    init([0, 1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model[0] = 2;
+    obj[0] = 2;
 
     assertArrayChanges([{
       index: 0,
@@ -1362,249 +932,194 @@ suite('ArrayObserver Tests', function() {
       addedCount: 1
     }]);
 
-    model[1] = 3;
+    obj[1] = 3;
     assertArrayChanges([{
       index: 1,
       removed: [1],
       addedCount: 1
     }]);
-
-    observer.close();
-  });
-
-  test('Array observe non-array throws', function() {
-    assert.throws(function () {
-      observer = new ArrayObserver({});
-    });
   });
 
   test('Array Set Same', function() {
-    var model = [1];
+    init([1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model[0] = 1;
-    observer.deliver();
-    assert.isFalse(callbackInvoked);
-    observer.close();
+    obj[0] = 1;
+    assertNoChanges();
   });
 
   test('Array Splice', function() {
-    var model = [0, 1]
+    init([0, 1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.splice(1, 1, 2, 3); // [0, 2, 3]
+    obj.splice(1, 1, 2, 3); // [0, 2, 3]
     assertArrayChanges([{
       index: 1,
       removed: [1],
       addedCount: 2
     }]);
 
-    model.splice(0, 1); // [2, 3]
+    obj.splice(0, 1); // [2, 3]
     assertArrayChanges([{
       index: 0,
       removed: [0],
       addedCount: 0
     }]);
 
-    model.splice();
+    obj.splice();
     assertNoChanges();
 
-    model.splice(0, 0);
+    obj.splice(0, 0);
     assertNoChanges();
 
-    model.splice(0, -1);
+    obj.splice(0, -1);
     assertNoChanges();
 
-    model.splice(-1, 0, 1.5); // [2, 1.5, 3]
+    obj.splice(-1, 0, 1.5); // [2, 1.5, 3]
     assertArrayChanges([{
       index: 1,
       removed: [],
       addedCount: 1
     }]);
 
-    model.splice(3, 0, 0); // [2, 1.5, 3, 0]
+    obj.splice(3, 0, 0); // [2, 1.5, 3, 0]
     assertArrayChanges([{
       index: 3,
       removed: [],
       addedCount: 1
     }]);
 
-    model.splice(0); // []
+    obj.splice(0); // []
     assertArrayChanges([{
       index: 0,
       removed: [2, 1.5, 3, 0],
       addedCount: 0
     }]);
-
-    observer.close();
   });
 
   test('Array Splice Truncate And Expand With Length', function() {
-    var model = ['a', 'b', 'c', 'd', 'e'];
+    init(['a', 'b', 'c', 'd', 'e']);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.length = 2;
-
+    obj.length = 2;
     assertArrayChanges([{
       index: 2,
       removed: ['c', 'd', 'e'],
       addedCount: 0
     }]);
 
-    model.length = 5;
-
+    obj.length = 5;
     assertArrayChanges([{
       index: 2,
       removed: [],
       addedCount: 3
     }]);
-
-    observer.close();
   });
 
   test('Array Splice Delete Too Many', function() {
-    var model = ['a', 'b', 'c'];
+    init(['a', 'b', 'c']);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.splice(2, 3); // ['a', 'b']
+    obj.splice(2, 3); // ['a', 'b']
     assertArrayChanges([{
       index: 2,
       removed: ['c'],
       addedCount: 0
     }]);
-
-    observer.close();
   });
 
   test('Array Length', function() {
-    var model = [0, 1];
+    init([0, 1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.length = 5; // [0, 1, , , ,];
+    obj.length = 5; // [0, 1, , , ,];
     assertArrayChanges([{
       index: 2,
       removed: [],
       addedCount: 3
     }]);
 
-    model.length = 1;
+    obj.length = 1;
     assertArrayChanges([{
         index: 1,
         removed: [1, , , ,],
         addedCount: 0
     }]);
 
-    model.length = 1;
+    obj.length = 1;
     assertNoChanges();
-
-    observer.close();
   });
 
   test('Array Push', function() {
-    var model = [0, 1];
+    init([0, 1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.push(2, 3); // [0, 1, 2, 3]
+    obj.push(2, 3); // [0, 1, 2, 3]
     assertArrayChanges([{
       index: 2,
       removed: [],
       addedCount: 2
     }]);
 
-    model.push();
+    obj.push();
     assertNoChanges();
-
-    observer.close();
   });
 
   test('Array Pop', function() {
-    var model = [0, 1];
+    init([0, 1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.pop(); // [0]
+    obj.pop(); // [0]
     assertArrayChanges([{
       index: 1,
       removed: [1],
       addedCount: 0
     }]);
 
-    model.pop(); // []
+    obj.pop(); // []
     assertArrayChanges([{
       index: 0,
       removed: [0],
       addedCount: 0
     }]);
 
-    model.pop();
+    obj.pop();
     assertNoChanges();
-
-    observer.close();
   });
 
   test('Array Shift', function() {
-    var model = [0, 1];
+    init([0, 1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.shift(); // [1]
+    obj.shift(); // [1]
     assertArrayChanges([{
       index: 0,
       removed: [0],
       addedCount: 0
     }]);
 
-    model.shift(); // []
+    obj.shift(); // []
     assertArrayChanges([{
       index: 0,
       removed: [1],
       addedCount: 0
     }]);
 
-    model.shift();
+    obj.shift();
     assertNoChanges();
-
-    observer.close();
   });
 
   test('Array Unshift', function() {
-    var model = [0, 1];
+    init([0, 1]);
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-
-    model.unshift(-1); // [-1, 0, 1]
+    obj.unshift(-1); // [-1, 0, 1]
     assertArrayChanges([{
       index: 0,
       removed: [],
       addedCount: 1
     }]);
 
-    model.unshift(-3, -2); // []
+    obj.unshift(-3, -2); // []
     assertArrayChanges([{
       index: 0,
       removed: [],
       addedCount: 2
     }]);
 
-    model.unshift();
+    obj.unshift();
     assertNoChanges();
-
-    observer.close();
   });
 
   test('Array Tracker Contained', function() {
@@ -1739,45 +1254,36 @@ suite('ArrayObserver Tests', function() {
   });
 
   test('Array Random Case 1', function() {
-    var model = ['a','b'];
-    var copy = model.slice();
+    init(['a','b']);
+    var copy = obj.slice();
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
+    obj.splice(0, 1, 'c', 'd', 'e');
+    obj.splice(4,0,'f');
+    obj.splice(3,2);
 
-    model.splice(0, 1, 'c', 'd', 'e');
-    model.splice(4,0,'f');
-    model.splice(3,2);
-
-    applySplicesAndAssertDeepEqual(model, copy);
+    applySplicesAndAssertDeepEqual(obj, copy);
   });
 
   test('Array Random Case 2', function() {
-    var model = [3,4];
-    var copy = model.slice();
+    init([3,4]);
+    var copy = obj.slice();
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
+    obj.splice(2,0,8);
+    obj.splice(0,1,0,5);
+    obj.splice(2,2);
 
-    model.splice(2,0,8);
-    model.splice(0,1,0,5);
-    model.splice(2,2);
-
-    applySplicesAndAssertDeepEqual(model, copy);
+    applySplicesAndAssertDeepEqual(obj, copy);
   });
 
   test('Array Random Case 3', function() {
-    var model = [1,3,6];
-    var copy = model.slice();
+    init([1,3,6]);
+    var copy = obj.slice();
 
-    observer = new ArrayObserver(model);
-    observer.open(callback);
+    obj.splice(1,1);
+    obj.splice(0,2,1,7);
+    obj.splice(1,0,3,7);
 
-    model.splice(1,1);
-    model.splice(0,2,1,7);
-    model.splice(1,0,3,7);
-
-    applySplicesAndAssertDeepEqual(model, copy);
+    applySplicesAndAssertDeepEqual(obj, copy);
   });
 
   test('Array Tracker Fuzzer', function() {
@@ -1796,48 +1302,52 @@ suite('ArrayObserver Tests', function() {
     }
   });
 
-  test('Array Tracker No Proxies Edits', function() {
-    model = [];
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-    model.length = 0;
-    model.push(1, 2, 3);
-    assertEditDistance(model, 3);
-    observer.close();
+  test('Array Tracker No Proxies Edits 1', function() {
+    init([]);
 
-    model = ['x', 'x', 'x', 'x', '1', '2', '3'];
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-    model.length = 0;
-    model.push('1', '2', '3', 'y', 'y', 'y', 'y');
-    assertEditDistance(model, 8);
-    observer.close();
+    obj.length = 0;
+    obj.push(1, 2, 3);
+    assertEditDistance(obj, 3);
+  });
 
-    model = ['1', '2', '3', '4', '5'];
-    observer = new ArrayObserver(model);
-    observer.open(callback);
-    model.length = 0;
-    model.push('a', '2', 'y', 'y', '4', '5', 'z', 'z');
-    assertEditDistance(model, 7);
-    observer.close();
+  test('Array Tracker No Proxies Edits 2', function() {
+    init(['x', 'x', 'x', 'x', '1', '2', '3']);
+
+    obj.length = 0;
+    obj.push('1', '2', '3', 'y', 'y', 'y', 'y');
+    assertEditDistance(obj, 8);
+  });
+
+  test('Array Tracker No Proxies Edits 3', function() {
+    init(['1', '2', '3', '4', '5']);
+
+    obj.length = 0;
+    obj.push('a', '2', 'y', 'y', '4', '5', 'z', 'z');
+    assertEditDistance(obj, 7);
   });
 });
 
-suite('ObjectObserver Tests', function() {
+suite('observeObject Tests', function() {
+
+  function init(objValue, pathString) {
+    obj = objValue,
+    path = Path.get(pathString);
+    observer.observeObject(obj, path, callback);
+  }
 
   setup(doSetup);
 
   teardown(doTeardown);
 
   function assertObjectChanges(expect) {
-    observer.deliver();
+    observer.deliver(callback);
 
-    assert.isTrue(callbackInvoked);
+    assert.strictEqual(records.length, 1);
 
-    var added = callbackArgs[0];
-    var removed = callbackArgs[1];
-    var changed = callbackArgs[2];
-    var getOldValue = callbackArgs[3];
+    var added = records[0].added;
+    var removed = records[0].removed;
+    var changed = records[0].changed;
+    var getOldValue = records[0].getOldValue;
     var oldValues = {};
 
     function collectOldValues(type) {
@@ -1854,52 +1364,30 @@ suite('ObjectObserver Tests', function() {
     assert.deepEqual(expect.changed, changed);
     assert.deepEqual(expect.oldValues, oldValues);
 
-    callbackArgs = undefined;
-    callbackInvoked = false;
+    records = undefined;
   }
-
-  test('Optional target for callback', function() {
-    var target = {
-      changed: function(value, oldValue) {
-        this.called = true;
-      }
-    };
-    var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo');
-    observer.open(target.changed, target);
-    obj.foo = 2;
-    observer.deliver();
-    assert.isTrue(target.called);
-
-    observer.close();
-  });
 
   test('Delivery Until No Changes', function() {
     var obj = { foo: 5 };
     var callbackCount = 0;
-    var observer = new ObjectObserver(obj);
-    observer.open(function() {
+    function callback() {
       callbackCount++;
       if (!obj.foo)
         return;
 
       obj.foo--;
-    });
+    }
+
+    observer.observeObject(obj, '', callback);
 
     obj.foo--;
-    observer.deliver();
+    observer.deliver(callback);
 
     assert.equal(5, callbackCount);
-
-    observer.close();
   });
 
   test('Object disconnect', function() {
-    var obj = {};
-
-    obj.foo = 'bar';
-    observer = new ObjectObserver(obj);
-    observer.open(callback);
+    init({ foo: 'bar' });
 
     obj.foo = 'baz';
     obj.bat = 'bag';
@@ -1924,20 +1412,15 @@ suite('ObjectObserver Tests', function() {
 
     obj.foo = 'blarg';
 
-    observer.close();
+    observer.unobserve(callback);
 
     obj.bar = 'blaz';
-    assertNoChanges();
   });
 
   test('Object discardChanges', function() {
-    var obj = {};
+    init({ foo: 'bar' });
 
-    obj.foo = 'bar';
-    observer = new ObjectObserver(obj);
-    observer.open(callback);
     obj.foo = 'baz';
-
     assertObjectChanges({
       added: {},
       removed: {},
@@ -1950,7 +1433,7 @@ suite('ObjectObserver Tests', function() {
     });
 
     obj.blaz = 'bat';
-    observer.discardChanges();
+    observer.discardChanges(callback);
     assertNoChanges();
 
     obj.bat = 'bag';
@@ -1964,18 +1447,14 @@ suite('ObjectObserver Tests', function() {
         bat: undefined
       }
     });
-    observer.close();
   });
 
   test('Object observe array', function() {
-    var arr = [];
+    init([]);
 
-    observer = new ObjectObserver(arr);
-    observer.open(callback);
-
-    arr.length = 5;
-    arr.foo = 'bar';
-    arr[3] = 'baz';
+    obj.length = 5;
+    obj.foo = 'bar';
+    obj[3] = 'baz';
 
     assertObjectChanges({
       added: {
@@ -1992,16 +1471,12 @@ suite('ObjectObserver Tests', function() {
         '3': undefined
       }
     });
-
-    observer.close();
   });
 
   test('Object', function() {
-    var model = {};
+    init({});
 
-    observer = new ObjectObserver(model);
-    observer.open(callback);
-    model.id = 0;
+    obj.id = 0;
     assertObjectChanges({
       added: {
         id: 0
@@ -2013,7 +1488,7 @@ suite('ObjectObserver Tests', function() {
       }
     });
 
-    delete model.id;
+    delete obj.id;
     assertObjectChanges({
       added: {},
       removed: {
@@ -2026,14 +1501,13 @@ suite('ObjectObserver Tests', function() {
     });
 
     // Stop observing -- shouldn't see an event
-    observer.close();
-    model.id = 101;
+    observer.unobserve(callback);
+    obj.id = 101;
     assertNoChanges();
 
     // Re-observe -- should see an new event again.
-    observer = new ObjectObserver(model);
-    observer.open(callback);
-    model.id2 = 202;;
+    observer.observeObject(obj, '', callback);
+    obj.id2 = 202;;
     assertObjectChanges({
       added: {
         id2: 202
@@ -2044,18 +1518,13 @@ suite('ObjectObserver Tests', function() {
         id2: undefined
       }
     });
-
-    observer.close();
   });
 
   test('Object Delete Add Delete', function() {
-    var model = { id: 1 };
-
-    observer = new ObjectObserver(model);
-    observer.open(callback);
+    init({ id: 1 });
 
     // If mutation occurs in seperate "runs", two events fire.
-    delete model.id;
+    delete obj.id;
     assertObjectChanges({
       added: {},
       removed: {
@@ -2067,7 +1536,7 @@ suite('ObjectObserver Tests', function() {
       }
     });
 
-    model.id = 1;
+    obj.id = 1;
     assertObjectChanges({
       added: {
         id: 1
@@ -2080,20 +1549,15 @@ suite('ObjectObserver Tests', function() {
     });
 
     // If mutation occurs in the same "run", no events fire (nothing changed).
-    delete model.id;
-    model.id = 1;
+    delete obj.id;
+    obj.id = 1;
     assertNoChanges();
-
-    observer.close();
   });
 
   test('Object Set Undefined', function() {
-    var model = {};
+    init({});
 
-    observer = new ObjectObserver(model);
-    observer.open(callback);
-
-    model.x = undefined;
+    obj.x = undefined;
     assertObjectChanges({
       added: {
         x: undefined
@@ -2104,7 +1568,5 @@ suite('ObjectObserver Tests', function() {
         x: undefined
       }
     });
-
-    observer.close();
   });
 });
