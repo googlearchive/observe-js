@@ -31,22 +31,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
 <select id="benchmarkSelect">
   <option>ObjectBenchmark</option>
+  <option>SetupObjectBenchmark</option>
   <option>ArrayBenchmark</option>
+  <option>SetupArrayBenchmark</option>
   <option>PathBenchmark</option>
+  <option>SetupPathBenchmark</option>
 </select>
 <select id="configSelect">
 </select>
 
 <button id="go">Run Benchmarks</button>
 
-<span id="objectCountSpan"></span>
-<span id="mutationCountSpan"></span>
-<span id="runCountSpan"></span><br>
-
 <span>Object Count: </span>
-<input id="objectCountInput" style="width: 200px" value="4000, 8000, 16000, 32000, 64000"><br>
+<input id="objectCountInput" style="width: 200px" value="4000, 8000, 16000, 32000"><br>
 <span>Mutation Count: </span>
 <input id="mutationCountInput" style="width: 200px" value="0, 100, 200, 400, 800, 1600"><br>
+<br>
+<span id="status"></span>
 
 <section style="width: 100%">
   <article>
@@ -70,10 +71,7 @@ var goButton = document.getElementById('go');
 var objectCountInput = document.getElementById('objectCountInput');
 var mutationCountInput = document.getElementById('mutationCountInput');
 
-
-var objectCountSpan = document.getElementById('objectCountSpan');
-var mutationCountSpan = document.getElementById('mutationCountSpan');
-var runCountSpan = document.getElementById('runCountSpan');
+var statusSpan = document.getElementById('status');
 
 var timesCanvas = document.getElementById('times');
 var benchmarkSelect = document.getElementById('benchmarkSelect');
@@ -87,6 +85,8 @@ function changeBenchmark() {
     option.textContent = config;
     configSelect.appendChild(option);
   });
+
+  document.title = benchmarkSelect.value;
 }
 
 benchmarkSelect.addEventListener('change', changeBenchmark);
@@ -123,18 +123,20 @@ goButton.addEventListener('click', function() {
     ul.appendChild(li);
   });
 
-  function benchmarkComplete(results) {
-    if (Observer._allObserversCount !== 0)
-      alert('Error. All Observer Count: ' + Observer._allObserversCount);
+  var results = [];
 
-    datasets = [];
+  function benchmarkComplete(times) {
+    timesArray = [];
+    var index = 0;
 
-    var timesArray = [];
-    for (var i = 0; i < results[0].length; i++) {
-      timesArray.push(results.map(function(result) {
-        return result[i];
-      }));
-    }
+
+    mutationCounts.forEach(function(mutationCount, i) {
+      timesArray.push([]);
+      objectCounts.forEach(function(objectCount, j) {
+        timesArray[i][j] = times[j][i];
+      });
+    });
+
     timesCanvas.height = 400;
     timesCanvas.width = 800;
     timesCanvas.setAttribute('style', '');
@@ -157,21 +159,23 @@ goButton.addEventListener('click', function() {
 
     goButton.disabled = false;
     goButton.textContent = 'Run Benchmarks';
-    updateStatus();
+    statusSpan.textContent = '';
   }
 
-  function updateStatus(setup, variant, runCount) {
-    objectCountSpan.textContent = setup ? setup + ' objects' : '';
-    mutationCountSpan.textContent = setup ? variant + ' mutations' : '';
-    runCountSpan.textContent = setup ? runCount + ' runs' : '';
+  function updateStatus(benchmark, mutationCount, count) {
+    statusSpan.textContent = 'Testing: ' +
+        benchmark.objectCount + ' objects, ' +
+        mutationCount + ' mutations ... ' +
+        count + ' runs';
   }
 
-  var test = new benchmark(configSelect.value);
-  var runner = new BenchmarkRunner(test, objectCounts,
-                                  mutationCounts,
-                                  benchmarkComplete,
-                                  updateStatus);
-  runner.go();
+  var benchmarks = [];
+  objectCounts.forEach(function(objectCount) {
+    benchmarks.push(new benchmark(configSelect.value, objectCount));
+  });
+
+  Benchmark.all(benchmarks, mutationCounts, updateStatus)
+    .then(benchmarkComplete);
 });
 </script>
 </body>

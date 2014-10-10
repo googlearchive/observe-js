@@ -24,19 +24,25 @@
       return newObject;
     };
 
-  function ObservationBenchmark() {
+  function ObservationBenchmark(objectCount) {
     Benchmark.call(this);
-    this.objects = [];
-    this.observers = []
-    this.index = 0;
-    this.mutationCount = 0;
+    this.objectCount = objectCount;
   }
 
   ObservationBenchmark.prototype = createObject({
     __proto__: Benchmark.prototype,
 
-    setupTest: function(objectCount) {
-      while (this.objects.length < objectCount) {
+    setup: function() {
+      this.mutations = 0;
+
+      if (this.objects)
+        return;
+
+      this.objects = [];
+      this.observers = [];
+      this.objectIndex = 0;
+
+      while (this.objects.length < this.objectCount) {
         var obj = this.newObject();
         this.objects.push(obj);
         var observer = this.newObserver(obj);
@@ -45,36 +51,87 @@
       }
     },
 
-    run: function(mutationCount) {
+    test: function(mutationCount) {
       while (mutationCount > 0) {
-        var obj = this.objects[this.index];
-        mutationCount += -this.mutateObject(obj, mutationCount);
-        this.mutationCount++;
-        this.index++;
-        if (this.index >= this.objects.length)
-          this.index = 0;
+        var obj = this.objects[this.objectIndex];
+        mutationCount -= this.mutateObject(obj);
+        this.mutations++;
+        this.objectIndex++;
+        if (this.objectIndex == this.objects.length) {
+          this.objectIndex = 0;
+        }
       }
     },
 
-    teardownVariant: function() {
-      if (this.mutationCount !== 0)
+    cleanup: function() {
+      if (this.mutations !== 0)
         alert('Error: mutationCount == ' + this.mutationCount);
+
+      this.mutations = 0;
+    },
+
+    dispose: function() {
+      this.objects = null;
+      while (this.observers.length) {
+        this.observers.pop().close();
+      }
+      this.observers = null;
+      if (Observer._allObserversCount != 0) {
+        alert('Observers leaked');
+      }
     },
 
     observerCallback: function() {
-      this.mutationCount--;
-    },
-
-    destroy: function() {
-      for (var i = 0; i < this.observers.length; i++) {
-        var observer = this.observers[i];
-        observer.close();
-      }
+      this.mutations--;
     }
   });
 
-  function ObjectBenchmark() {
-    ObservationBenchmark.call(this);
+  function SetupObservationBenchmark(objectCount) {
+    Benchmark.call(this);
+    this.objectCount = objectCount;
+  }
+
+  SetupObservationBenchmark.prototype = createObject({
+    __proto__: Benchmark.prototype,
+
+    setup: function() {
+      this.mutations = 0;
+      this.objects = [];
+      this.observers = [];
+
+      while (this.objects.length < this.objectCount) {
+        var obj = this.newObject();
+        this.objects.push(obj);
+      }
+    },
+
+    test: function() {
+      for (var i = 0; i < this.objects.length; i++) {
+        var obj = this.objects[i];
+        var observer = this.newObserver(obj);
+        observer.open(this.observerCallback, this);
+        this.observers.push(observer);
+      }
+    },
+
+    cleanup: function() {
+      while (this.observers.length) {
+        this.observers.pop().close();
+      }
+      if (Observer._allObserversCount != 0) {
+        alert('Observers leaked');
+      }
+      this.objects = null;
+      this.observers = null;
+
+    },
+
+    dispose: function() {
+    }
+  });
+
+  function ObjectBenchmark(config, objectCount) {
+    ObservationBenchmark.call(this, objectCount);
     this.properties = [];
     for (var i = 0; i < ObjectBenchmark.propertyCount; i++) {
       this.properties.push(String.fromCharCode(97 + i));
@@ -109,8 +166,35 @@
     }
   });
 
-  function ArrayBenchmark(config) {
-    ObservationBenchmark.call(this);
+  function SetupObjectBenchmark(config, objectCount) {
+    SetupObservationBenchmark.call(this, objectCount);
+    this.properties = [];
+    for (var i = 0; i < ObjectBenchmark.propertyCount; i++) {
+      this.properties.push(String.fromCharCode(97 + i));
+    }
+  }
+
+  SetupObjectBenchmark.configs = [];
+  SetupObjectBenchmark.propertyCount = 15;
+
+  SetupObjectBenchmark.prototype = createObject({
+    __proto__: SetupObservationBenchmark.prototype,
+
+    newObject: function() {
+      var obj = {};
+      for (var j = 0; j < SetupObjectBenchmark.propertyCount; j++)
+        obj[this.properties[j]] = j;
+
+      return obj;
+    },
+
+    newObserver: function(obj) {
+      return new ObjectObserver(obj);
+    }
+  });
+
+  function ArrayBenchmark(config, objectCount) {
+    ObservationBenchmark.call(this, objectCount);
     var tokens = config.split('/');
     this.operation = tokens[0];
     this.undo = tokens[1];
@@ -158,8 +242,30 @@
     }
   });
 
-  function PathBenchmark(config) {
-    ObservationBenchmark.call(this);
+  function SetupArrayBenchmark(config, objectCount) {
+    ObservationBenchmark.call(this, objectCount);
+  };
+
+  SetupArrayBenchmark.configs = [];
+  SetupArrayBenchmark.propertyCount = 15;
+
+  SetupArrayBenchmark.prototype = createObject({
+    __proto__: SetupObservationBenchmark.prototype,
+
+    newObject: function() {
+      var array = [];
+      for (var i = 0; i < ArrayBenchmark.elementCount; i++)
+        array.push(i);
+      return array;
+    },
+
+    newObserver: function(array) {
+      return new ArrayObserver(array);
+    }
+  });
+
+  function PathBenchmark(config, objectCount) {
+    ObservationBenchmark.call(this, objectCount);
     this.leaf = config === 'leaf';
     this.path = Path.get('foo.bar.baz');
     this.firstPathProp = Path.get(this.path[0]);
@@ -206,8 +312,46 @@
     }
   });
 
+  function SetupPathBenchmark(config, objectCount) {
+    ObservationBenchmark.call(this, objectCount);
+    this.path = Path.get('foo.bar.baz');
+  }
+
+  SetupPathBenchmark.configs = [];
+
+  SetupPathBenchmark.prototype = createObject({
+    __proto__: SetupObservationBenchmark.prototype,
+
+    newPath: function(parts, value) {
+      var obj = {};
+      var ref = obj;
+      var prop;
+      for (var i = 0; i < parts.length - 1; i++) {
+        prop = parts[i];
+        ref[prop] = {};
+        ref = ref[prop];
+      }
+
+      prop = parts[parts.length - 1];
+      ref[prop] = value;
+
+      return obj;
+    },
+
+    newObject: function() {
+      return this.newPath(this.path, 1);
+    },
+
+    newObserver: function(obj) {
+      return new PathObserver(obj, this.path);
+    }
+  });
+
   global.ObjectBenchmark = ObjectBenchmark;
+  global.SetupObjectBenchmark = SetupObjectBenchmark;
   global.ArrayBenchmark = ArrayBenchmark;
+  global.SetupArrayBenchmark = SetupArrayBenchmark;
   global.PathBenchmark = PathBenchmark;
+  global.SetupPathBenchmark = SetupPathBenchmark;
 
 })(this);
