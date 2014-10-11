@@ -395,6 +395,25 @@
     },
 
     compiledGetValueFromFn: function() {
+      var str = 'var unreachable = obj == null;';
+      var pathString = 'obj';
+      var i = 0;
+      var key;
+      for (; i < (this.length - 1); i++) {
+        key = this[i];
+        pathString += isIdent(key) ? '.' + key : formatAccessor(key);
+        str += '\nif (!unreachable && ' + pathString + ' == null) unreachable = true;';
+        str += '\nif (fn) fn(' + i + ', unreachable ? undefined : ' + pathString + ');';
+      }
+
+      var key = this[i];
+      pathString += isIdent(key) ? '.' + key : formatAccessor(key);
+
+      str += '\nreturn unreachable ? undefined : ' + pathString + ';';
+      return new Function('obj, fn', str);
+    },
+/*
+    compiledGetValueFromFn: function() {
       var str = '';
       var pathString = 'obj';
       str += 'if (obj != null';
@@ -412,7 +431,7 @@
 
       str += '  return ' + pathString + ';\nelse\n  return undefined;';
       return new Function('obj', str);
-    },
+    },*/
 
     setValueFrom: function(obj, value) {
       if (!this.length)
@@ -594,107 +613,69 @@
     return dir;
   }
 
-  var observedSetCache = [];
+  function ObservedSet() {
+    this.count = 0;
+    this.observers = [];
 
-  function newObservedSet() {
-    var observerCount = 0;
-    var observers = [];
-    var objects = [];
-    var rootObj;
-    var rootObjProps;
-
-    function observe(obj, prop) {
-      if (!obj)
-        return;
-
-      if (obj === rootObj)
-        rootObjProps[prop] = true;
-
-      if (objects.indexOf(obj) < 0) {
-        objects.push(obj);
-        Object.observe(obj, callback);
-      }
-
-      observe(Object.getPrototypeOf(obj), prop);
-    }
-
-    function allRootObjNonObservedProps(recs) {
-      for (var i = 0; i < recs.length; i++) {
-        var rec = recs[i];
-        if (rec.object !== rootObj ||
-            rootObjProps[rec.name] ||
-            rec.type === 'setPrototype') {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    function callback(recs) {
-      if (allRootObjNonObservedProps(recs))
-        return;
-
+    var self = this;
+    this.callback = function(records) {
       var observer;
-      for (var i = 0; i < observers.length; i++) {
-        observer = observers[i];
-        if (observer.state_ == OPENED) {
-          observer.iterateObjects_(observe);
-        }
-      }
-
-      for (var i = 0; i < observers.length; i++) {
-        observer = observers[i];
+      for (var i = 0; i < self.observers.length; i++) {
+        observer = self.observers[i];
         if (observer.state_ == OPENED) {
           observer.check_();
         }
       }
-    }
-
-    var record = {
-      objects: objects,
-      get rootObject() { return rootObj; },
-      set rootObject(value) {
-        rootObj = value;
-        rootObjProps = {};
-      },
-      open: function(obs, object) {
-        observers.push(obs);
-        observerCount++;
-        obs.iterateObjects_(observe);
-      },
-      close: function(obs) {
-        observerCount--;
-        if (observerCount > 0) {
-          return;
-        }
-
-        for (var i = 0; i < objects.length; i++) {
-          Object.unobserve(objects[i], callback);
-          Observer.unobservedCount++;
-        }
-
-        observers.length = 0;
-        objects.length = 0;
-        rootObj = undefined;
-        rootObjProps = undefined;
-        observedSetCache.push(this);
-        if (lastObservedSet === this)
-          lastObservedSet = null;
-      },
     };
-
-    return record;
   }
 
-  var lastObservedSet;
+  ObservedSet.prototype = {
+    observe: function(obj) {
+      if (obj == null || typeof obj != 'object') {
+        return;
+      }
 
-  function getObservedSet(observer, obj) {
-    if (!lastObservedSet || lastObservedSet.rootObject !== obj) {
-      lastObservedSet = observedSetCache.pop() || newObservedSet();
-      lastObservedSet.rootObject = obj;
+      Object.observe(obj, this.callback);
+      var proto = Object.getPrototypeOf(obj);
+      while (proto != null) {
+        Object.observe(proto, this.callback);
+        proto = Object.getPrototypeOf(proto);
+      }
+    },
+
+    open: function(observer) {
+      this.observers.push(observer);
+      this.count++;
+    },
+
+    close: function(obs) {
+      this.count--;
+      if (this.count > this.observers.length / 2) {
+        return;
+      }
+
+      // compact
+      var self = this;
+      runEOM(function() {
+        var old = self.observers;
+        var observers = self.observers = [];
+        for (var i = 0; i < old.length; i++) {
+          if (old[i].state_ != CLOSED) {
+            observers.push(old[i]);
+          }
+        }
+      });
     }
-    lastObservedSet.open(observer, obj);
-    return lastObservedSet;
+  }
+
+  var observedSet;
+
+  function getObservedSet(observer) {
+    if (!observedSet) {
+      observedSet = new ObservedSet();
+    }
+    observedSet.open(observer);
+    return observedSet;
   }
 
   var UNOPENED = 0;
@@ -989,8 +970,19 @@
     },
 
     connect_: function() {
-      if (hasObserve)
-        this.directObserver_ = getObservedSet(this, this.object_);
+      if (hasObserve) {
+        this.directObserver_ = getObservedSet(this);
+        this.directObserver_.observe(this.object_);
+        this.pathObjects_ = [];
+
+        var self = this;
+        this.observeFn = function(i, obj) {
+          if (self.pathObjects_[i] !== obj) {
+            self.pathObjects_[i] = obj;
+            self.directObserver_.observe(obj);
+          }
+        }
+      }
 
       this.check_(undefined, true);
     },
@@ -1010,7 +1002,7 @@
 
     check_: function(changeRecords, skipChanges) {
       var oldValue = this.value_;
-      this.value_ = this.path_.getValueFrom(this.object_);
+      this.value_ = this.path_.getValueFrom(this.object_, this.observeFn);
       if (skipChanges || areSameValue(this.value_, oldValue))
         return false;
 
