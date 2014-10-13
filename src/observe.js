@@ -511,21 +511,9 @@
   }
 
   var runEOM = hasObserve ? (function(){
-    var eomObj = { pingPong: true };
-    var eomRunScheduled = false;
-
-    Object.observe(eomObj, function() {
-      runEOMTasks();
-      eomRunScheduled = false;
-    });
-
     return function(fn) {
-      eomTasks.push(fn);
-      if (!eomRunScheduled) {
-        eomRunScheduled = true;
-        eomObj.pingPong = !eomObj.pingPong;
-      }
-    };
+      return Promise.resolve().then(fn);
+    }
   })() :
   (function() {
     return function(fn) {

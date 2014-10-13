@@ -169,9 +169,8 @@ goButton.addEventListener('click', function() {
         count + ' runs';
   }
 
-  var benchmarks = [];
-  objectCounts.forEach(function(objectCount) {
-    benchmarks.push(new benchmark(configSelect.value, objectCount));
+  var benchmarks = objectCounts.map(function(objectCount) {
+    return new benchmark(configSelect.value, objectCount));
   });
 
   Benchmark.all(benchmarks, mutationCounts, updateStatus)
