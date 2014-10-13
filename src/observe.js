@@ -981,9 +981,9 @@
         this.directObserver_ = getObservedSet(this);
         if (this.path_.length) {
           this.directObserver_.observe(this.object_, this.path_[0]);
+          this.pathObjects_ = [];
         }
 
-        this.pathObjects_ = [];
 
         var self = this;
         this.observeFn = function(i, obj, prop) {
@@ -1003,6 +1003,9 @@
       if (this.directObserver_) {
         this.directObserver_.close(this);
         this.directObserver_ = undefined;
+        if (this.pathObjects_) {
+          this.pathObjects = undefined;
+        }
       }
     },
 
