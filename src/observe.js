@@ -399,14 +399,16 @@
       var pathString = 'obj';
       var i = 0;
       var key;
+      var nextKey = this[i];
       for (; i < (this.length - 1); i++) {
-        key = this[i];
+        key = nextKey;
+        nextKey = this[i + 1];
         pathString += isIdent(key) ? '.' + key : formatAccessor(key);
         str += '\nif (!unreachable && ' + pathString + ' == null) unreachable = true;';
-        str += '\nif (fn) fn(' + i + ', unreachable ? undefined : ' + pathString + ');';
+        str += '\nif (fn) fn(' + i + ', unreachable ? undefined : ' + pathString + ',  "' + nextKey + '");';
       }
 
-      var key = this[i];
+      key = nextKey;
       pathString += isIdent(key) ? '.' + key : formatAccessor(key);
 
       str += '\nreturn unreachable ? undefined : ' + pathString + ';';
@@ -629,13 +631,18 @@
     };
   }
 
+  var hasOwnProperty = Object.prototype.hasOwnProperty;
+
   ObservedSet.prototype = {
-    observe: function(obj) {
+    observe: function(obj, prop) {
       if (obj == null || typeof obj != 'object') {
         return;
       }
 
       Object.observe(obj, this.callback);
+      if (hasOwnProperty.call(obj, prop))
+        return;
+
       var proto = Object.getPrototypeOf(obj);
       while (proto != null) {
         Object.observe(proto, this.callback);
@@ -972,14 +979,17 @@
     connect_: function() {
       if (hasObserve) {
         this.directObserver_ = getObservedSet(this);
-        this.directObserver_.observe(this.object_);
+        if (this.path_.length) {
+          this.directObserver_.observe(this.object_, this.path_[0]);
+        }
+
         this.pathObjects_ = [];
 
         var self = this;
-        this.observeFn = function(i, obj) {
+        this.observeFn = function(i, obj, prop) {
           if (self.pathObjects_[i] !== obj) {
             self.pathObjects_[i] = obj;
-            self.directObserver_.observe(obj);
+            self.directObserver_.observe(obj, prop);
           }
         }
       }
