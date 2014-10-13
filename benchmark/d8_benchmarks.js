@@ -24,7 +24,7 @@ function reportResults(times) {
 }
 
 function reportStatus(b, variation, count) {
-  console.log(count);
+  console.log(b.objectCount + ' objects, ' + count + ' runs.');
 }
 
 var objectCounts = [ 4000, 8000, 16000 ];
