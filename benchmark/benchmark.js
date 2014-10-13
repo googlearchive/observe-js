@@ -44,7 +44,7 @@
     cleanup: function() {},
 
     runOne: function(variation) {
-      this.setup();
+      this.setup(variation);
 
       var before = now();
       this.test(variation);
@@ -56,7 +56,7 @@
 
         var after = now();
 
-        self.cleanup();
+        self.cleanup(variation);
         return after - before;
       });
     },
