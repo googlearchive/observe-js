@@ -170,7 +170,7 @@ goButton.addEventListener('click', function() {
   }
 
   var benchmarks = objectCounts.map(function(objectCount) {
-    return new benchmark(configSelect.value, objectCount));
+    return new benchmark(configSelect.value, objectCount);
   });
 
   Benchmark.all(benchmarks, mutationCounts, updateStatus)
