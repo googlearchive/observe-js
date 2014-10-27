@@ -1679,19 +1679,33 @@
     return splices;
   }
 
-  global.Observer = Observer;
-  global.Observer.runEOM_ = runEOM;
-  global.Observer.observerSentinel_ = observerSentinel; // for testing.
-  global.Observer.hasObjectObserve = hasObserve;
-  global.ArrayObserver = ArrayObserver;
-  global.ArrayObserver.calculateSplices = function(current, previous) {
+  // Export the observe-js object for **Node.js**, with
+  // backwards-compatibility for the old `require()` API. If we're in
+  // the browser, export as a global object.
+
+  var expose = global;
+
+  if (typeof exports !== 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) {
+      expose = exports = module.exports;
+    }
+    expose = exports;
+  } 
+
+  expose.Observer = Observer;
+  expose.Observer.runEOM_ = runEOM;
+  expose.Observer.observerSentinel_ = observerSentinel; // for testing.
+  expose.Observer.hasObjectObserve = hasObserve;
+  expose.ArrayObserver = ArrayObserver;
+  expose.ArrayObserver.calculateSplices = function(current, previous) {
     return arraySplice.calculateSplices(current, previous);
   };
 
-  global.ArraySplice = ArraySplice;
-  global.ObjectObserver = ObjectObserver;
-  global.PathObserver = PathObserver;
-  global.CompoundObserver = CompoundObserver;
-  global.Path = Path;
-  global.ObserverTransform = ObserverTransform;
+  expose.ArraySplice = ArraySplice;
+  expose.ObjectObserver = ObjectObserver;
+  expose.PathObserver = PathObserver;
+  expose.CompoundObserver = CompoundObserver;
+  expose.Path = Path;
+  expose.ObserverTransform = ObserverTransform;
+  
 })(typeof global !== 'undefined' && global && typeof module !== 'undefined' && module ? global : this || window);
