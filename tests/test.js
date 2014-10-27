@@ -13,7 +13,6 @@ var callbackInvoked = false;
 
 function then(fn) {
   setTimeout(function() {
-    Platform.performMicrotaskCheckpoint();
     fn();
   }, 0);
 
@@ -260,12 +259,6 @@ suite('Basic Tests', function() {
     var model = [1];
     var count = 0;
 
-    var observer1 = new ObjectObserver(model);
-    observer1.open(function() {
-      count++;
-      throw 'ouch';
-    });
-
     var observer2 = new PathObserver(model, '[0]');
     observer2.open(function() {
       count++;
@@ -281,13 +274,11 @@ suite('Basic Tests', function() {
     model[0] = 2;
     model[1] = 2;
 
-    observer1.deliver();
     observer2.deliver();
     observer3.deliver();
 
-    assert.equal(3, count);
+    assert.equal(2, count);
 
-    observer1.close();
     observer2.close();
     observer3.close();
   });
@@ -307,13 +298,6 @@ suite('Basic Tests', function() {
     });
     observer.close();
 
-    observer = new ObjectObserver({}, 'id');
-    observer.open(callback);
-    assert.throws(function() {
-      observer.open(callback);
-    });
-    observer.close();
-
     observer = new ArrayObserver([], 'id');
     observer.open(callback);
     assert.throws(function() {
@@ -323,38 +307,6 @@ suite('Basic Tests', function() {
 
   });
 
-  test('No Object.observe performMicrotaskCheckpoint', function() {
-    if (typeof Object.observe == 'function')
-      return;
-
-    var model = [1];
-    var count = 0;
-
-    var observer1 = new ObjectObserver(model);
-    observer1.open(function() {
-      count++;
-    });
-
-    var observer2 = new PathObserver(model, '[0]');
-    observer2.open(function() {
-      count++;
-    });
-
-    var observer3 = new ArrayObserver(model);
-    observer3.open(function() {
-      count++;
-    });
-
-    model[0] = 2;
-    model[1] = 2;
-
-    Platform.performMicrotaskCheckpoint();
-    assert.equal(3, count);
-
-    observer1.close();
-    observer2.close();
-    observer3.close();
-  });
 });
 
 suite('ObserverTransform', function() {
@@ -1819,292 +1771,6 @@ suite('ArrayObserver Tests', function() {
     model.length = 0;
     model.push('a', '2', 'y', 'y', '4', '5', 'z', 'z');
     assertEditDistance(model, 7);
-    observer.close();
-  });
-});
-
-suite('ObjectObserver Tests', function() {
-
-  setup(doSetup);
-
-  teardown(doTeardown);
-
-  function assertObjectChanges(expect) {
-    observer.deliver();
-
-    assert.isTrue(callbackInvoked);
-
-    var added = callbackArgs[0];
-    var removed = callbackArgs[1];
-    var changed = callbackArgs[2];
-    var getOldValue = callbackArgs[3];
-    var oldValues = {};
-
-    function collectOldValues(type) {
-      Object.keys(type).forEach(function(prop) {
-        oldValues[prop] = getOldValue(prop);
-      });
-    };
-    collectOldValues(added);
-    collectOldValues(removed);
-    collectOldValues(changed);
-
-    assert.deepEqual(expect.added, added);
-    assert.deepEqual(expect.removed, removed);
-    assert.deepEqual(expect.changed, changed);
-    assert.deepEqual(expect.oldValues, oldValues);
-
-    callbackArgs = undefined;
-    callbackInvoked = false;
-  }
-
-  test('Optional target for callback', function() {
-    var target = {
-      changed: function(value, oldValue) {
-        this.called = true;
-      }
-    };
-    var obj = { foo: 1 };
-    var observer = new PathObserver(obj, 'foo');
-    observer.open(target.changed, target);
-    obj.foo = 2;
-    observer.deliver();
-    assert.isTrue(target.called);
-
-    observer.close();
-  });
-
-  test('Delivery Until No Changes', function() {
-    var obj = { foo: 5 };
-    var callbackCount = 0;
-    var observer = new ObjectObserver(obj);
-    observer.open(function() {
-      callbackCount++;
-      if (!obj.foo)
-        return;
-
-      obj.foo--;
-    });
-
-    obj.foo--;
-    observer.deliver();
-
-    assert.equal(5, callbackCount);
-
-    observer.close();
-  });
-
-  test('Object disconnect', function() {
-    var obj = {};
-
-    obj.foo = 'bar';
-    observer = new ObjectObserver(obj);
-    observer.open(callback);
-
-    obj.foo = 'baz';
-    obj.bat = 'bag';
-    obj.blaz = 'foo';
-
-    delete obj.foo;
-    delete obj.blaz;
-
-    assertObjectChanges({
-      added: {
-        'bat': 'bag'
-      },
-      removed: {
-        'foo': undefined
-      },
-      changed: {},
-      oldValues: {
-        'foo': 'bar',
-        'bat': undefined
-      }
-    });
-
-    obj.foo = 'blarg';
-
-    observer.close();
-
-    obj.bar = 'blaz';
-    assertNoChanges();
-  });
-
-  test('Object discardChanges', function() {
-    var obj = {};
-
-    obj.foo = 'bar';
-    observer = new ObjectObserver(obj);
-    observer.open(callback);
-    obj.foo = 'baz';
-
-    assertObjectChanges({
-      added: {},
-      removed: {},
-      changed: {
-        foo: 'baz'
-      },
-      oldValues: {
-        foo: 'bar'
-      }
-    });
-
-    obj.blaz = 'bat';
-    observer.discardChanges();
-    assertNoChanges();
-
-    obj.bat = 'bag';
-    assertObjectChanges({
-      added: {
-        bat: 'bag'
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        bat: undefined
-      }
-    });
-    observer.close();
-  });
-
-  test('Object observe array', function() {
-    var arr = [];
-
-    observer = new ObjectObserver(arr);
-    observer.open(callback);
-
-    arr.length = 5;
-    arr.foo = 'bar';
-    arr[3] = 'baz';
-
-    assertObjectChanges({
-      added: {
-        foo: 'bar',
-        '3': 'baz'
-      },
-      removed: {},
-      changed: {
-        'length': 5
-      },
-      oldValues: {
-        length: 0,
-        foo: undefined,
-        '3': undefined
-      }
-    });
-
-    observer.close();
-  });
-
-  test('Object', function() {
-    var model = {};
-
-    observer = new ObjectObserver(model);
-    observer.open(callback);
-    model.id = 0;
-    assertObjectChanges({
-      added: {
-        id: 0
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        id: undefined
-      }
-    });
-
-    delete model.id;
-    assertObjectChanges({
-      added: {},
-      removed: {
-        id: undefined
-      },
-      changed: {},
-      oldValues: {
-        id: 0
-      }
-    });
-
-    // Stop observing -- shouldn't see an event
-    observer.close();
-    model.id = 101;
-    assertNoChanges();
-
-    // Re-observe -- should see an new event again.
-    observer = new ObjectObserver(model);
-    observer.open(callback);
-    model.id2 = 202;;
-    assertObjectChanges({
-      added: {
-        id2: 202
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        id2: undefined
-      }
-    });
-
-    observer.close();
-  });
-
-  test('Object Delete Add Delete', function() {
-    var model = { id: 1 };
-
-    observer = new ObjectObserver(model);
-    observer.open(callback);
-
-    // If mutation occurs in seperate "runs", two events fire.
-    delete model.id;
-    assertObjectChanges({
-      added: {},
-      removed: {
-        id: undefined
-      },
-      changed: {},
-      oldValues: {
-        id: 1
-      }
-    });
-
-    model.id = 1;
-    assertObjectChanges({
-      added: {
-        id: 1
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        id: undefined
-      }
-    });
-
-    // If mutation occurs in the same "run", no events fire (nothing changed).
-    delete model.id;
-    model.id = 1;
-    assertNoChanges();
-
-    observer.close();
-  });
-
-  test('Object Set Undefined', function() {
-    var model = {};
-
-    observer = new ObjectObserver(model);
-    observer.open(callback);
-
-    model.x = undefined;
-    assertObjectChanges({
-      added: {
-        x: undefined
-      },
-      removed: {},
-      changed: {},
-      oldValues: {
-        x: undefined
-      }
-    });
-
     observer.close();
   });
 });

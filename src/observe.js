@@ -12,49 +12,6 @@
 
   var testingExposeCycleCount = global.testingExposeCycleCount;
 
-  // Detect and do basic sanity checking on Object/Array.observe.
-  function detectObjectObserve() {
-    if (typeof Object.observe !== 'function' ||
-        typeof Array.observe !== 'function') {
-      return false;
-    }
-
-    var records = [];
-
-    function callback(recs) {
-      records = recs;
-    }
-
-    var test = {};
-    var arr = [];
-    Object.observe(test, callback);
-    Array.observe(arr, callback);
-    test.id = 1;
-    test.id = 2;
-    delete test.id;
-    arr.push(1, 2);
-    arr.length = 0;
-
-    Object.deliverChangeRecords(callback);
-    if (records.length !== 5)
-      return false;
-
-    if (records[0].type != 'add' ||
-        records[1].type != 'update' ||
-        records[2].type != 'delete' ||
-        records[3].type != 'splice' ||
-        records[4].type != 'splice') {
-      return false;
-    }
-
-    Object.unobserve(test, callback);
-    Array.unobserve(arr, callback);
-
-    return true;
-  }
-
-  var hasObserve = detectObjectObserve();
-
   function detectEval() {
     // Don't test for eval if we're running in a Chrome App environment.
     // We check for APIs set that only exist in a Chrome App context.
@@ -449,77 +406,9 @@
     return cycles > 0;
   }
 
-  function objectIsEmpty(object) {
-    for (var prop in object)
-      return false;
-    return true;
+  function runEOM(fn) {
+    return Promise.resolve().then(fn);
   }
-
-  function diffIsEmpty(diff) {
-    return objectIsEmpty(diff.added) &&
-           objectIsEmpty(diff.removed) &&
-           objectIsEmpty(diff.changed);
-  }
-
-  function diffObjectFromOldObject(object, oldObject) {
-    var added = {};
-    var removed = {};
-    var changed = {};
-
-    for (var prop in oldObject) {
-      var newValue = object[prop];
-
-      if (newValue !== undefined && newValue === oldObject[prop])
-        continue;
-
-      if (!(prop in object)) {
-        removed[prop] = undefined;
-        continue;
-      }
-
-      if (newValue !== oldObject[prop])
-        changed[prop] = newValue;
-    }
-
-    for (var prop in object) {
-      if (prop in oldObject)
-        continue;
-
-      added[prop] = object[prop];
-    }
-
-    if (Array.isArray(object) && object.length !== oldObject.length)
-      changed.length = object.length;
-
-    return {
-      added: added,
-      removed: removed,
-      changed: changed
-    };
-  }
-
-  var eomTasks = [];
-  function runEOMTasks() {
-    if (!eomTasks.length)
-      return false;
-
-    for (var i = 0; i < eomTasks.length; i++) {
-      eomTasks[i]();
-    }
-    eomTasks.length = 0;
-    return true;
-  }
-
-  var runEOM = hasObserve ? (function(){
-    return function(fn) {
-      return Promise.resolve().then(fn);
-    }
-  })() :
-  (function() {
-    return function(fn) {
-      eomTasks.push(fn);
-    };
-  })();
 
   var observedObjectCache = [];
 
@@ -718,7 +607,6 @@
       if (this.state_ != UNOPENED)
         throw Error('Observer has already been opened.');
 
-      addToAll(this);
       this.callback_ = callback;
       this.target_ = target;
       this.connect_();
@@ -730,7 +618,6 @@
       if (this.state_ != OPENED)
         return;
 
-      removeFromAll(this);
       this.disconnect_();
       this.value_ = undefined;
       this.callback_ = undefined;
@@ -761,155 +648,50 @@
     }
   }
 
-  var collectObservers = !hasObserve;
-  var allObservers;
-  Observer._allObserversCount = 0;
-
-  if (collectObservers) {
-    allObservers = [];
-  }
-
-  function addToAll(observer) {
-    Observer._allObserversCount++;
-    if (!collectObservers)
-      return;
-
-    allObservers.push(observer);
-  }
-
-  function removeFromAll(observer) {
-    Observer._allObserversCount--;
-  }
-
-  var runningMicrotaskCheckpoint = false;
-
-  global.Platform = global.Platform || {};
-
-  global.Platform.performMicrotaskCheckpoint = function() {
-    if (runningMicrotaskCheckpoint)
-      return;
-
-    if (!collectObservers)
-      return;
-
-    runningMicrotaskCheckpoint = true;
-
-    var cycles = 0;
-    var anyChanged, toCheck;
-
-    do {
-      cycles++;
-      toCheck = allObservers;
-      allObservers = [];
-      anyChanged = false;
-
-      for (var i = 0; i < toCheck.length; i++) {
-        var observer = toCheck[i];
-        if (observer.state_ != OPENED)
-          continue;
-
-        if (observer.check_())
-          anyChanged = true;
-
-        allObservers.push(observer);
-      }
-      if (runEOMTasks())
-        anyChanged = true;
-    } while (cycles < MAX_DIRTY_CHECK_CYCLES && anyChanged);
-
-    if (testingExposeCycleCount)
-      global.dirtyCheckCycleCount = cycles;
-
-    runningMicrotaskCheckpoint = false;
-  };
-
-  if (collectObservers) {
-    global.Platform.clearObservers = function() {
-      allObservers = [];
-    };
-  }
-
-  function ObjectObserver(object) {
+  function ArrayObserver(array) {
+    if (!Array.isArray(array))
+      throw Error('Provided object is not an Array');
     Observer.call(this);
-    this.value_ = object;
+    this.value_ = array;
     this.oldObject_ = undefined;
   }
 
-  ObjectObserver.prototype = createObject({
+  ArrayObserver.prototype = createObject({
+
     __proto__: Observer.prototype,
 
-    arrayObserve: false,
-
     connect_: function(callback, target) {
-      if (hasObserve) {
-        this.directObserver_ = getObservedObject(this, this.value_,
-                                                 this.arrayObserve);
-      } else {
-        this.oldObject_ = this.copyObject(this.value_);
-      }
-
+      this.directObserver_ = getObservedObject(this, this.value_,
+                                               true /* arrayObserve */);
     },
 
-    copyObject: function(object) {
-      var copy = Array.isArray(object) ? [] : {};
-      for (var prop in object) {
-        copy[prop] = object[prop];
-      };
-      if (Array.isArray(object))
-        copy.length = object.length;
-      return copy;
+    copyObject: function(arr) {
+      return arr.slice();
     },
 
-    check_: function(changeRecords, skipChanges) {
-      var diff;
-      var oldValues;
-      if (hasObserve) {
-        if (!changeRecords)
-          return false;
+    check_: function(changeRecords) {
+      var splices;
+      if (!changeRecords)
+        return false;
+      splices = projectArraySplices(this.value_, changeRecords);
 
-        oldValues = {};
-        diff = diffObjectFromChangeRecords(this.value_, changeRecords,
-                                           oldValues);
-      } else {
-        oldValues = this.oldObject_;
-        diff = diffObjectFromOldObject(this.value_, this.oldObject_);
-      }
-
-      if (diffIsEmpty(diff))
+      if (!splices || !splices.length)
         return false;
 
-      if (!hasObserve)
-        this.oldObject_ = this.copyObject(this.value_);
-
-      this.report_([
-        diff.added || {},
-        diff.removed || {},
-        diff.changed || {},
-        function(property) {
-          return oldValues[property];
-        }
-      ]);
-
+      this.report_([splices]);
       return true;
     },
 
     disconnect_: function() {
-      if (hasObserve) {
-        this.directObserver_.close();
-        this.directObserver_ = undefined;
-      } else {
-        this.oldObject_ = undefined;
-      }
+      this.directObserver_.close();
+      this.directObserver_ = undefined;
     },
 
     deliver: function() {
       if (this.state_ != OPENED)
         return;
 
-      if (hasObserve)
-        this.directObserver_.deliver(false);
-      else
-        dirtyCheck(this);
+      this.directObserver_.deliver(false);
     },
 
     discardChanges: function() {
@@ -919,44 +701,6 @@
         this.oldObject_ = this.copyObject(this.value_);
 
       return this.value_;
-    }
-  });
-
-  function ArrayObserver(array) {
-    if (!Array.isArray(array))
-      throw Error('Provided object is not an Array');
-    ObjectObserver.call(this, array);
-  }
-
-  ArrayObserver.prototype = createObject({
-
-    __proto__: ObjectObserver.prototype,
-
-    arrayObserve: true,
-
-    copyObject: function(arr) {
-      return arr.slice();
-    },
-
-    check_: function(changeRecords) {
-      var splices;
-      if (hasObserve) {
-        if (!changeRecords)
-          return false;
-        splices = projectArraySplices(this.value_, changeRecords);
-      } else {
-        splices = calcSplices(this.value_, 0, this.value_.length,
-                              this.oldObject_, 0, this.oldObject_.length);
-      }
-
-      if (!splices || !splices.length)
-        return false;
-
-      if (!hasObserve)
-        this.oldObject_ = this.copyObject(this.value_);
-
-      this.report_([splices]);
-      return true;
     }
   });
 
@@ -989,9 +733,7 @@
     },
 
     connect_: function() {
-      if (hasObserve)
-        this.directObserver_ = getObservedSet(this, this.object_);
-
+      this.directObserver_ = getObservedSet(this, this.object_);
       this.check_(undefined, true);
     },
 
@@ -1039,20 +781,18 @@
     __proto__: Observer.prototype,
 
     connect_: function() {
-      if (hasObserve) {
-        var object;
-        var needsDirectObserver = false;
-        for (var i = 0; i < this.observed_.length; i += 2) {
-          object = this.observed_[i]
-          if (object !== observerSentinel) {
-            needsDirectObserver = true;
-            break;
-          }
+      var object;
+      var needsDirectObserver = false;
+      for (var i = 0; i < this.observed_.length; i += 2) {
+        object = this.observed_[i]
+        if (object !== observerSentinel) {
+          needsDirectObserver = true;
+          break;
         }
-
-        if (needsDirectObserver)
-          this.directObserver_ = getObservedSet(this, object);
       }
+
+      if (needsDirectObserver)
+        this.directObserver_ = getObservedSet(this, object);
 
       this.check_(undefined, !this.reportChangesOnOpen_);
     },
@@ -1216,71 +956,6 @@
       this.getValueFn_ = undefined;
       this.setValueFn_ = undefined;
     }
-  }
-
-  var expectedRecordTypes = {
-    add: true,
-    update: true,
-    delete: true
-  };
-
-  function diffObjectFromChangeRecords(object, changeRecords, oldValues) {
-    var added = {};
-    var removed = {};
-
-    for (var i = 0; i < changeRecords.length; i++) {
-      var record = changeRecords[i];
-      if (!expectedRecordTypes[record.type]) {
-        console.error('Unknown changeRecord type: ' + record.type);
-        console.error(record);
-        continue;
-      }
-
-      if (!(record.name in oldValues))
-        oldValues[record.name] = record.oldValue;
-
-      if (record.type == 'update')
-        continue;
-
-      if (record.type == 'add') {
-        if (record.name in removed)
-          delete removed[record.name];
-        else
-          added[record.name] = true;
-
-        continue;
-      }
-
-      // type = 'delete'
-      if (record.name in added) {
-        delete added[record.name];
-        delete oldValues[record.name];
-      } else {
-        removed[record.name] = true;
-      }
-    }
-
-    for (var prop in added)
-      added[prop] = object[prop];
-
-    for (var prop in removed)
-      removed[prop] = undefined;
-
-    var changed = {};
-    for (var prop in oldValues) {
-      if (prop in added || prop in removed)
-        continue;
-
-      var newValue = object[prop];
-      if (oldValues[prop] !== newValue)
-        changed[prop] = newValue;
-    }
-
-    return {
-      added: added,
-      removed: removed,
-      changed: changed
-    };
   }
 
   function newSplice(index, removed, addedCount) {
@@ -1682,14 +1357,12 @@
   global.Observer = Observer;
   global.Observer.runEOM_ = runEOM;
   global.Observer.observerSentinel_ = observerSentinel; // for testing.
-  global.Observer.hasObjectObserve = hasObserve;
   global.ArrayObserver = ArrayObserver;
   global.ArrayObserver.calculateSplices = function(current, previous) {
     return arraySplice.calculateSplices(current, previous);
   };
 
   global.ArraySplice = ArraySplice;
-  global.ObjectObserver = ObjectObserver;
   global.PathObserver = PathObserver;
   global.CompoundObserver = CompoundObserver;
   global.Path = Path;
