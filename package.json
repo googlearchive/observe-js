@@ -1,7 +1,7 @@
 {
   "name": "observe-js",
-  "version": "0.0.0",
-  "description": "ObserveJS =============",
+  "version": "0.4.2",
+  "description": "observe-js is a library for observing changes on JavaScript objects/arrays",
   "main": "src/observe.js",
   "directories": {
     "example": "examples",
@@ -12,12 +12,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Polymer/ObserveJS.git"
+    "url": "https://github.com/Polymer/observe-js.git"
   },
-  "author": "",
+  "author": "The Polymer Authors",
   "license": "BSD",
   "readmeFilename": "README.md",
-  "gitHead": "123e411687c6199c240b709d582b0e939cb14080",
   "devDependencies": {
     "chai": "*",
     "mocha": "*",
