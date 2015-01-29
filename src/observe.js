@@ -1685,7 +1685,8 @@
 
   var expose = global;
 
-  if (typeof exports !== 'undefined') {
+  if (typeof exports !== 'undefined' && exports + '' === '[object Object]' &&
+      Object.keys(exports).length === 0) {
     if (typeof module !== 'undefined' && module.exports) {
       expose = exports = module.exports;
     }
