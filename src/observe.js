@@ -1679,18 +1679,18 @@
     return splices;
   }
 
-  // Export the observe-js object for **Node.js**, with
-  // backwards-compatibility for the old `require()` API. If we're in
-  // the browser, export as a global object.
+  // Export the observe-js object for **Node.js**, with backwards-compatibility
+  // for the old `require()` API. Also ensure `exports` is not a DOM Element.
+  // If we're in the browser, export as a global object.
 
   var expose = global;
 
-  if (typeof exports !== 'undefined') {
+  if (typeof exports !== 'undefined' && !exports.nodeType) {
     if (typeof module !== 'undefined' && module.exports) {
-      expose = exports = module.exports;
+      exports = module.exports;
     }
     expose = exports;
-  } 
+  }
 
   expose.Observer = Observer;
   expose.Observer.runEOM_ = runEOM;
