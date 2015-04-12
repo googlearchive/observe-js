@@ -181,7 +181,7 @@ A path is an ECMAScript expression consisting only of identifiers (`myVal`), mem
 
 ```JavaScript
 {
-  // Returns the current of the path from the provided object. If eval() is available, a compiled getter will be
+  // Returns the current value of the path from the provided object. If eval() is available, a compiled getter will be
   // used for better performance.
   getValueFrom: function(obj) { }
 
