@@ -342,7 +342,7 @@
     if (!parts)
       return invalidPath;
 
-    var path = new Path(parts, constructorIsPrivate);
+    path = new Path(parts, constructorIsPrivate);
     pathCache[pathString] = path;
     return path;
   }
