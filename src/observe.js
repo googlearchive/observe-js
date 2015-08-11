@@ -375,11 +375,12 @@
       return pathString;
     },
 
-    getValueFrom: function(obj, directObserver) {
+    getValueFrom: function(obj, defaultValue) {
       for (var i = 0; i < this.length; i++) {
-        if (obj == null)
-          return;
-        obj = obj[this[i]];
+        var key = this[i];
+        if (obj == null || !(key in obj))
+          return defaultValue;
+        obj = obj[key];
       }
       return obj;
     },
@@ -403,15 +404,17 @@
       for (; i < (this.length - 1); i++) {
         key = this[i];
         pathString += isIdent(key) ? '.' + key : formatAccessor(key);
-        str += ' &&\n     ' + pathString + ' != null';
+        str += ' &&\n    ' + pathString + ' != null';
       }
-      str += ')\n';
 
       var key = this[i];
-      pathString += isIdent(key) ? '.' + key : formatAccessor(key);
+      var keyIsIdent = isIdent(key);
+      var keyForInOperator = keyIsIdent ? '"' + key.replace(/"/g, '\\"') + '"' : key;
+      str += ' &&\n    ' + keyForInOperator + ' in ' + pathString + ')\n';
+      pathString += keyIsIdent ? '.' + key : formatAccessor(key);
 
-      str += '  return ' + pathString + ';\nelse\n  return undefined;';
-      return new Function('obj', str);
+      str += '  return ' + pathString + ';\nelse\n  return defaultValue;';
+      return new Function('obj', 'defaultValue', str);
     },
 
     setValueFrom: function(obj, value) {
@@ -973,11 +976,12 @@
     });
   };
 
-  function PathObserver(object, path) {
+  function PathObserver(object, path, defaultValue) {
     Observer.call(this);
 
     this.object_ = object;
     this.path_ = getPath(path);
+    this.defaultValue_ = defaultValue;
     this.directObserver_ = undefined;
   }
 
@@ -1010,7 +1014,7 @@
 
     check_: function(changeRecords, skipChanges) {
       var oldValue = this.value_;
-      this.value_ = this.path_.getValueFrom(this.object_);
+      this.value_ = this.path_.getValueFrom(this.object_, this.defaultValue_);
       if (skipChanges || areSameValue(this.value_, oldValue))
         return false;
 
