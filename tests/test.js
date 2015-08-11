@@ -224,6 +224,9 @@ suite('Path', function() {
     };
     assert.strictEqual(undefined, p3.getValueFrom(obj));
     assert.strictEqual(4, p2.getValueFrom(obj));
+
+    var defaultValue = 42;
+    assert.strictEqual(defaultValue, p3.getValueFrom(obj, defaultValue));
   });
 
   test('Path.setValueFrom', function() {
