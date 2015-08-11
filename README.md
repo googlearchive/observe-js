@@ -12,8 +12,8 @@ observe-js implements a set of observers (PathObserver, ArrayObserver, ObjectObs
 
 ```JavaScript
 {
-  // Begins observation. Value changes will be reported by invoking |changeFn| with |opt_receiver| as
-  // the target, if provided. Returns the initial value of the observation.
+  // Begins observation. Value changes will be reported by invoking |changeFn| with
+  // |opt_receiver| as the target, if provided. Returns the initial value of the observation.
   open: function(changeFn, opt_receiver) {},
 
   // Report any changes now (does nothing if there are no changes to report).
@@ -33,7 +33,8 @@ PathObserver observes a "value-at-a-path" from a given object:
 
 ```JavaScript
 var obj = { foo: { bar: 'baz' } };
-var observer = new PathObserver(obj, 'foo.bar');
+var defaultValue = 42;
+var observer = new PathObserver(obj, 'foo.bar', defaultValue);
 observer.open(function(newValue, oldValue) {
   // respond to obj.foo.bar having changed value.
 });
@@ -49,7 +50,7 @@ assert(obj.foo.bar == 'boo');
 ```
 
 Notes:
- * If the path is ever unreachable, the value is considered to be `undefined`.
+ * If the path is ever unreachable, the value is considered to be `undefined` (unless you pass an overriding `defaultValue` to `new PathObserver(...)` as shown in the above example).
  * If the path is empty (e.g. `''`), it is said to be the empty path and its value is its root object.
  * PathObservation respects values on the prototype chain
 
@@ -63,8 +64,8 @@ var observer = new ArrayObserver(arr);
 observer.open(function(splices) {
   // respond to changes to the elements of arr.
   splices.forEach(function(splice) {
-    splice.index; // index position that the change occurred.
-    splice.removed; // an array of values representing the sequence of elements which were removed
+    splice.index; // the index position that the change occurred.
+    splice.removed; // an array of values representing the sequence of removed elements
     splice.addedCount; // the number of elements which were inserted.
   });
 });
@@ -117,10 +118,11 @@ var observer = new CompoundObserver();
 observer.addPath(obj, 'a');
 observer.addObserver(new PathObserver(obj, 'b'));
 observer.addPath(otherObj, 'c');
+var logTemplate = 'The %sth value before & after:';
 observer.open(function(newValues, oldValues) {
-  // Use for-in to iterte which values have changed.
+  // Use for-in to iterate which values have changed.
   for (var i in oldValues) {
-    console.log('The ' + i + 'th value changed from: ' + newValues[i] + ' to: ' + oldValues[i]);
+    console.log(logTemplate, i, oldValues[i], newValues[i]);
   }
 });
 ```
@@ -181,13 +183,13 @@ A path is an ECMAScript expression consisting only of identifiers (`myVal`), mem
 
 ```JavaScript
 {
-  // Returns the current value of the path from the provided object. If eval() is available, a compiled getter will be
-  // used for better performance.
-  getValueFrom: function(obj) { }
+  // Returns the current value of the path from the provided object. If eval() is available,
+  // a compiled getter will be used for better performance. Like PathObserver above, undefined
+  // is returned unless you provide an overriding defaultValue.
+  getValueFrom: function(obj, defaultValue) { },
 
-
-  // Attempts to set the value of the path from the provided object. Returns true IFF the path was reachable and
-  // set.
+  // Attempts to set the value of the path from the provided object. Returns true IFF the path
+  // was reachable and set.
   setValueFrom: function(obj, newValue) { }
 }
 ```
