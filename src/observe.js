@@ -93,7 +93,7 @@
 
   var numberIsNaN = global.Number.isNaN || function(value) {
     return typeof value === 'number' && global.isNaN(value);
-  }
+  };
 
   function areSameValue(left, right) {
     if (left === right)
@@ -229,7 +229,7 @@
       'ws': ['afterElement'],
       ']': ['inPath', 'push']
     }
-  }
+  };
 
   function noop() {}
 
@@ -249,7 +249,7 @@
 
       append: function() {
         if (key === undefined)
-          key = newChar
+          key = newChar;
         else
           key += newChar;
       }
@@ -407,7 +407,7 @@
         str += ' &&\n    ' + pathString + ' != null';
       }
 
-      var key = this[i];
+      key = this[i];
       var keyIsIdent = isIdent(key);
       var keyForInOperator = keyIsIdent ? '"' + key.replace(/"/g, '\\"') + '"' : key;
       str += ' &&\n    ' + keyForInOperator + ' in ' + pathString + ')\n';
@@ -468,8 +468,9 @@
     var added = {};
     var removed = {};
     var changed = {};
+    var prop;
 
-    for (var prop in oldObject) {
+    for (prop in oldObject) {
       var newValue = object[prop];
 
       if (newValue !== undefined && newValue === oldObject[prop])
@@ -484,7 +485,7 @@
         changed[prop] = newValue;
     }
 
-    for (var prop in object) {
+    for (prop in object) {
       if (prop in oldObject)
         continue;
 
@@ -516,7 +517,7 @@
   var runEOM = hasObserve ? (function(){
     return function(fn) {
       return Promise.resolve().then(fn);
-    }
+    };
   })() :
   (function() {
     return function(fn) {
@@ -637,15 +638,15 @@
       if (allRootObjNonObservedProps(recs))
         return;
 
-      var observer;
-      for (var i = 0; i < observers.length; i++) {
+      var i, observer;
+      for (i = 0; i < observers.length; i++) {
         observer = observers[i];
         if (observer.state_ == OPENED) {
           observer.iterateObjects_(observe);
         }
       }
 
-      for (var i = 0; i < observers.length; i++) {
+      for (i = 0; i < observers.length; i++) {
         observer = observers[i];
         if (observer.state_ == OPENED) {
           observer.check_();
@@ -762,7 +763,7 @@
       this.check_(undefined, true);
       return this.value_;
     }
-  }
+  };
 
   var collectObservers = !hasObserve;
   var allObservers;
@@ -857,7 +858,7 @@
       var copy = Array.isArray(object) ? [] : {};
       for (var prop in object) {
         copy[prop] = object[prop];
-      };
+      }
       if (Array.isArray(object))
         copy.length = object.length;
       return copy;
@@ -1047,7 +1048,7 @@
         var object;
         var needsDirectObserver = false;
         for (var i = 0; i < this.observed_.length; i += 2) {
-          object = this.observed_[i]
+          object = this.observed_[i];
           if (object !== observerSentinel) {
             needsDirectObserver = true;
             break;
@@ -1079,7 +1080,7 @@
       if (this.state_ != UNOPENED && this.state_ != RESETTING)
         throw Error('Cannot add paths once started.');
 
-      var path = getPath(path);
+      path = getPath(path);
       this.observed_.push(object, path);
       if (!this.reportChangesOnOpen_)
         return;
@@ -1118,9 +1119,9 @@
     iterateObjects_: function(observe) {
       var object;
       for (var i = 0; i < this.observed_.length; i += 2) {
-        object = this.observed_[i]
+        object = this.observed_[i];
         if (object !== observerSentinel)
-          this.observed_[i + 1].iterateObjects(object, observe)
+          this.observed_[i + 1].iterateObjects(object, observe);
       }
     },
 
@@ -1220,7 +1221,7 @@
       this.getValueFn_ = undefined;
       this.setValueFn_ = undefined;
     }
-  }
+  };
 
   var expectedRecordTypes = {
     add: true,
@@ -1264,14 +1265,15 @@
       }
     }
 
-    for (var prop in added)
+    var prop;
+    for (prop in added)
       added[prop] = object[prop];
 
-    for (var prop in removed)
+    for (prop in removed)
       removed[prop] = undefined;
 
     var changed = {};
-    for (var prop in oldValues) {
+    for (prop in oldValues) {
       if (prop in added || prop in removed)
         continue;
 
@@ -1322,18 +1324,20 @@
       var columnCount = currentEnd - currentStart + 1;
       var distances = new Array(rowCount);
 
+      var i, j;
+
       // "Addition" rows. Initialize null column.
-      for (var i = 0; i < rowCount; i++) {
+      for (i = 0; i < rowCount; i++) {
         distances[i] = new Array(columnCount);
         distances[i][0] = i;
       }
 
       // Initialize null row
-      for (var j = 0; j < columnCount; j++)
+      for (j = 0; j < columnCount; j++)
         distances[0][j] = j;
 
-      for (var i = 1; i < rowCount; i++) {
-        for (var j = 1; j < columnCount; j++) {
+      for (i = 1; i < rowCount; i++) {
+        for (j = 1; j < columnCount; j++) {
           if (this.equals(current[currentStart + j - 1], old[oldStart + i - 1]))
             distances[i][j] = distances[i - 1][j - 1];
           else {
@@ -1444,8 +1448,9 @@
       if (currentEnd - currentStart == 0 && oldEnd - oldStart == 0)
         return [];
 
+      var splice;
       if (currentStart == currentEnd) {
-        var splice = newSplice(currentStart, [], 0);
+        splice = newSplice(currentStart, [], 0);
         while (oldStart < oldEnd)
           splice.removed.push(old[oldStart++]);
 
@@ -1457,7 +1462,6 @@
           this.calcEditDistances(current, currentStart, currentEnd,
                                  old, oldStart, oldEnd));
 
-      var splice = undefined;
       var splices = [];
       var index = currentStart;
       var oldIndex = oldStart;
@@ -1599,7 +1603,7 @@
           // merged splice is a noop. discard.
           inserted = true;
         } else {
-          var removed = current.removed;
+          removed = current.removed;
 
           if (splice.index < current.index) {
             // some prefix of splice.removed is prepended to current.removed.
@@ -1627,7 +1631,7 @@
         splices.splice(i, 0, splice);
         i++;
 
-        var offset = splice.addedCount - splice.removed.length
+        var offset = splice.addedCount - splice.removed.length;
         current.index += offset;
         insertionOffset += offset;
       }
@@ -1673,8 +1677,8 @@
         if (splice.removed[0] !== array[splice.index])
           splices.push(splice);
 
-        return
-      };
+        return;
+      }
 
       splices = splices.concat(calcSplices(array, splice.index, splice.index + splice.addedCount,
                                            splice.removed, 0, splice.removed.length));
@@ -1711,5 +1715,5 @@
   expose.CompoundObserver = CompoundObserver;
   expose.Path = Path;
   expose.ObserverTransform = ObserverTransform;
-  
+
 })(typeof global !== 'undefined' && global && typeof module !== 'undefined' && module ? global : this || window);
