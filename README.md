@@ -1,4 +1,4 @@
-[![Build status](http://www.polymer-project.org/build/observe-js/status.png "Build status")](http://build.chromium.org/p/client.polymer/waterfall) [![Analytics](https://ga-beacon.appspot.com/UA-39334307-2/Polymer/observe-js/README)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-39334307-2/Polymer/observe-js/README)](https://github.com/igrigorik/ga-beacon)
 
 ## Learn the tech
 
